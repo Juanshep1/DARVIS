@@ -1,3 +1,5 @@
+import { getStore } from "@netlify/blobs";
+
 export default async (req) => {
   if (req.method !== "POST") {
     return new Response("Method not allowed", { status: 405 });
@@ -9,29 +11,43 @@ export default async (req) => {
   }
 
   const ELEVENLABS_KEY = Netlify.env.get("ELEVENLABS_API_KEY");
-  const VOICE_ID = Netlify.env.get("DARVIS_VOICE_ID") || "kPtEHAvRnjUJFv7SK9WI";
+
+  // Load persisted voice setting
+  const store = getStore("darvis-settings");
+  let VOICE_ID = Netlify.env.get("DARVIS_VOICE_ID") || "kPtEHAvRnjUJFv7SK9WI";
+  try {
+    const s = await store.get("current", { type: "json" });
+    if (s?.voice_id) VOICE_ID = s.voice_id;
+  } catch {}
 
   // Clean text for speech
   let clean = text.replace(/[*_`#\[\]()]/g, "").replace(/\n+/g, ". ");
   if (clean.length > 2000) clean = clean.substring(0, 2000);
 
   try {
-    const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "xi-api-key": ELEVENLABS_KEY,
-        "Accept": "audio/mpeg",
-      },
-      body: JSON.stringify({
-        text: clean,
-        model_id: "eleven_multilingual_v2",
-        voice_settings: { stability: 0.5, similarity_boost: 0.75, style: 0.3 },
-      }),
-    });
+    const res = await fetch(
+      `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "xi-api-key": ELEVENLABS_KEY,
+          Accept: "audio/mpeg",
+        },
+        body: JSON.stringify({
+          text: clean,
+          model_id: "eleven_multilingual_v2",
+          voice_settings: {
+            stability: 0.5,
+            similarity_boost: 0.75,
+            style: 0.3,
+          },
+        }),
+      }
+    );
 
     if (!res.ok) {
-      return new Response(null, { status: 204 }); // No audio, frontend handles gracefully
+      return new Response(null, { status: 204 });
     }
 
     const audioBuffer = await res.arrayBuffer();

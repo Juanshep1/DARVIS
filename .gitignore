@@ -4,3 +4,14 @@ __pycache__/
 *.pyc
 *.mp3
 memory.json
+history.json
+
+# Local Netlify folder
+.netlify
+
+# Node
+site/node_modules/
+site/package-lock.json
+
+# Claude Code
+.claude/

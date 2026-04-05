@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0a0a0f">
 <title>D.A.R.V.I.S.</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔵</text></svg>">
 <style>
@@ -17,6 +20,7 @@ body {
     align-items: center;
     overflow: hidden;
     -webkit-tap-highlight-color: transparent;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
 }
 
 .title {
@@ -140,6 +144,65 @@ body {
 .mic-btn:hover { border-color: rgba(80, 180, 255, 0.7); }
 .mic-btn.recording { border-color: #ff4444; color: #ff4444; }
 
+/* Settings */
+.settings-toggle {
+    position: fixed;
+    top: 15px; right: 15px;
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    border: 1px solid rgba(80, 140, 255, 0.3);
+    background: rgba(15, 15, 25, 0.9);
+    color: #4a90d9;
+    font-size: 1rem;
+    cursor: pointer;
+    z-index: 100;
+    transition: all 0.3s;
+    padding-top: env(safe-area-inset-top);
+}
+.settings-toggle:hover { border-color: rgba(80, 180, 255, 0.7); }
+.settings-panel {
+    position: fixed;
+    top: 60px; right: 15px;
+    background: rgba(10, 10, 20, 0.95);
+    border: 1px solid rgba(80, 140, 255, 0.2);
+    border-radius: 12px;
+    padding: 20px;
+    width: 280px;
+    z-index: 100;
+    display: none;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+.settings-panel.open { display: block; }
+.settings-panel label {
+    display: block;
+    font-size: 0.75rem;
+    color: #4a90d9;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin: 12px 0 6px;
+}
+.settings-panel label:first-child { margin-top: 0; }
+.settings-panel select {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid rgba(80, 140, 255, 0.3);
+    border-radius: 8px;
+    background: rgba(15, 15, 25, 0.9);
+    color: #e0e0e0;
+    font-family: inherit;
+    font-size: 0.85rem;
+    outline: none;
+    -webkit-appearance: none;
+}
+.settings-panel select:focus { border-color: rgba(80, 180, 255, 0.7); }
+.settings-status {
+    margin-top: 12px;
+    font-size: 0.75rem;
+    color: #5a5;
+    min-height: 1.2em;
+}
+
 .status {
     position: fixed;
     bottom: 6px;
@@ -147,9 +210,34 @@ body {
     color: #333;
     letter-spacing: 1px;
 }
+
+/* Mobile */
+@media (max-width: 480px) {
+    .orb { width: 140px; height: 140px; }
+    .title { padding: 16px 0 0; font-size: 0.6rem; letter-spacing: 3px; }
+    .response { font-size: 0.85rem; max-height: 140px; padding: 10px; width: 95%; }
+    .input-area { padding: 12px 12px calc(env(safe-area-inset-bottom, 0px) + 16px); }
+    .input-area input { padding: 12px 16px; font-size: 0.95rem; }
+    .settings-panel { width: calc(100vw - 30px); right: 15px; }
+}
+@media (max-height: 600px) {
+    .orb { width: 120px; height: 120px; }
+    .response { max-height: 100px; }
+    .title { padding: 8px 0 0; }
+    .input-area { padding: 8px 12px 12px; }
+}
 </style>
 </head>
 <body>
+
+<button class="settings-toggle" onclick="toggleSettings()">&#9881;</button>
+<div class="settings-panel" id="settingsPanel">
+    <label>Model</label>
+    <select id="modelSelect" onchange="setModel(this.value)"></select>
+    <label>Voice</label>
+    <select id="voiceSelect" onchange="setVoice(this.value)"></select>
+    <div class="settings-status" id="settingsStatus"></div>
+</div>
 
 <div class="title">D . A . R . V . I . S .</div>
 
@@ -174,39 +262,75 @@ const micBtn = document.getElementById('micBtn');
 let recognition = null;
 let isRecording = false;
 let currentAudio = null;
+let silenceTimer = null;
+const SILENCE_DELAY = 3000; // 3 seconds of silence before auto-send
 
-// Unlock audio on first interaction
+// Unlock audio on first interaction — create a persistent Audio element
+// that we reuse for all TTS playback so the browser trusts it
 let audioCtx = null;
+let persistentAudio = new Audio();
+persistentAudio.setAttribute('playsinline', '');
 function unlockAudio() {
     if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         audioCtx.resume();
     }
+    // Prime the audio element with a silent play so the browser marks it as user-activated
+    persistentAudio.src = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAABhkVuHQgAAAAAAAAAAAAAAAAAAP/7UGQAAAALS0gBQRAAANIKCAoYgAABAAH+AAAJAAADSAAAABAAAAAAACqf/LAAAAAARFRJJF//sqRA';
+    persistentAudio.play().then(() => { persistentAudio.pause(); }).catch(() => {});
 }
-document.addEventListener('click', unlockAudio, { once: true });
-document.addEventListener('touchstart', unlockAudio, { once: true });
+document.addEventListener('click', unlockAudio, { once: false });
+document.addEventListener('touchstart', unlockAudio, { once: false });
 
-// Web Speech API
+// Web Speech API — continuous mode with silence timeout
 if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     recognition = new SR();
-    recognition.continuous = false;
-    recognition.interimResults = false;
+    recognition.continuous = true;
+    recognition.interimResults = true;
     recognition.lang = 'en-US';
+
     recognition.onresult = (e) => {
-        const text = e.results[0][0].transcript;
-        inputEl.value = text;
-        orb.classList.remove('listening');
-        send();
+        // Build full transcript from all results
+        let finalText = '';
+        let interimText = '';
+        for (let i = 0; i < e.results.length; i++) {
+            const transcript = e.results[i][0].transcript;
+            if (e.results[i].isFinal) {
+                finalText += transcript;
+            } else {
+                interimText += transcript;
+            }
+        }
+        // Show what the user is saying in real time
+        inputEl.value = (finalText + interimText).trim();
+
+        // Reset the silence timer every time we get new speech
+        clearTimeout(silenceTimer);
+        silenceTimer = setTimeout(() => {
+            // No new speech for SILENCE_DELAY — stop and send
+            if (isRecording) {
+                recognition.stop();
+            }
+        }, SILENCE_DELAY);
     };
+
     recognition.onend = () => {
+        clearTimeout(silenceTimer);
+        const hadText = inputEl.value.trim().length > 0;
         isRecording = false;
         micBtn.classList.remove('recording');
-        if (!orb.classList.contains('thinking') && !orb.classList.contains('speaking')) {
+        if (hadText) {
+            send();
+        } else if (!orb.classList.contains('thinking') && !orb.classList.contains('speaking')) {
             orb.className = 'orb';
         }
     };
-    recognition.onerror = () => {
+
+    recognition.onerror = (e) => {
+        clearTimeout(silenceTimer);
+        // 'no-speech' just means silence — not a real error
+        if (e.error === 'no-speech') return;
         isRecording = false;
         micBtn.classList.remove('recording');
         orb.className = 'orb';
@@ -219,14 +343,27 @@ function toggleMic() {
         return;
     }
     if (isRecording) {
+        // Manual stop — send whatever we have
+        clearTimeout(silenceTimer);
         recognition.stop();
-        orb.className = 'orb';
     } else {
         isRecording = true;
         micBtn.classList.add('recording');
         orb.className = 'orb listening';
+        inputEl.value = '';
         recognition.start();
     }
+}
+
+// Detect if user likely wants to open something — reserve a blank tab NOW
+// while we're still inside the user gesture, so the browser allows it
+function looksLikeOpenRequest(text) {
+    const lower = text.toLowerCase();
+    const triggers = [
+        'open ', 'go to ', 'pull up ', 'navigate to ', 'take me to ',
+        'show me ', 'launch ', 'bring up ', 'load ', 'google ',
+    ];
+    return triggers.some(t => lower.startsWith(t) || lower.includes('open '));
 }
 
 async function send() {
@@ -234,7 +371,13 @@ async function send() {
     if (!text) return;
     inputEl.value = '';
 
-    if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+    if (currentAudio) { persistentAudio.pause(); persistentAudio.currentTime = 0; currentAudio = null; }
+
+    // Pre-open a blank tab during the user gesture so the browser doesn't block it
+    let pendingTab = null;
+    if (looksLikeOpenRequest(text)) {
+        pendingTab = window.open('about:blank', '_blank');
+    }
 
     orb.className = 'orb thinking';
     responseEl.textContent = '';
@@ -249,7 +392,32 @@ async function send() {
         const data = await res.json();
         responseEl.textContent = data.reply;
 
-        // Get TTS audio
+        // Execute any client-side actions (open URLs, etc.)
+        if (data.actions) {
+            let usedPending = false;
+            data.actions.forEach(act => {
+                if (act.action === 'open_url' && act.url) {
+                    if (pendingTab && !usedPending) {
+                        // Redirect the pre-opened tab
+                        pendingTab.location.href = act.url;
+                        usedPending = true;
+                    } else {
+                        window.open(act.url, '_blank');
+                    }
+                }
+            });
+            // Close the blank tab if it wasn't used
+            if (pendingTab && !usedPending) {
+                pendingTab.close();
+            }
+            pendingTab = null;
+        } else if (pendingTab) {
+            // No actions came back — close the blank tab
+            pendingTab.close();
+            pendingTab = null;
+        }
+
+        // Get TTS audio — use persistent audio element for reliable mobile playback
         try {
             const ttsRes = await fetch('/api/tts', {
                 method: 'POST',
@@ -257,19 +425,33 @@ async function send() {
                 body: JSON.stringify({ text: data.reply }),
             });
 
-            if (ttsRes.ok && ttsRes.status === 200) {
+            const contentType = ttsRes.headers.get('content-type') || '';
+            if (ttsRes.ok && contentType.includes('audio')) {
                 const audioBlob = await ttsRes.blob();
-                if (audioBlob.size > 0) {
+                if (audioBlob.size > 100) {
+                    // Revoke any old URL
+                    if (currentAudio) {
+                        const oldSrc = currentAudio;
+                        if (oldSrc._blobUrl) URL.revokeObjectURL(oldSrc._blobUrl);
+                    }
                     const audioUrl = URL.createObjectURL(audioBlob);
-                    currentAudio = new Audio(audioUrl);
-                    currentAudio.onended = () => {
+                    // Reuse the persistent audio element (already user-gesture-primed)
+                    persistentAudio.pause();
+                    persistentAudio.currentTime = 0;
+                    persistentAudio._blobUrl = audioUrl;
+                    persistentAudio.src = audioUrl;
+                    persistentAudio.onended = () => {
                         orb.className = 'orb';
-                        currentAudio = null;
                         URL.revokeObjectURL(audioUrl);
+                        currentAudio = null;
                     };
-                    currentAudio.onerror = () => { orb.className = 'orb'; };
+                    persistentAudio.onerror = () => {
+                        console.warn('Audio playback error');
+                        orb.className = 'orb';
+                    };
+                    currentAudio = persistentAudio;
                     orb.className = 'orb speaking';
-                    await currentAudio.play();
+                    await persistentAudio.play();
                     return;
                 }
             }
@@ -284,6 +466,82 @@ async function send() {
     }
 }
 
+// ── Settings ──
+function toggleSettings() {
+    document.getElementById('settingsPanel').classList.toggle('open');
+}
+
+async function loadSettings() {
+    const status = document.getElementById('settingsStatus');
+    // Load models
+    try {
+        const res = await fetch('/api/models');
+        const data = await res.json();
+        const sel = document.getElementById('modelSelect');
+        sel.innerHTML = '';
+        data.models.forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m; opt.textContent = m;
+            if (m === data.current) opt.selected = true;
+            sel.appendChild(opt);
+        });
+    } catch(e) { console.warn('Failed to load models', e); }
+
+    // Load voices
+    try {
+        const res = await fetch('/api/voices');
+        const data = await res.json();
+        const sel = document.getElementById('voiceSelect');
+        sel.innerHTML = '';
+        data.voices.forEach(v => {
+            const opt = document.createElement('option');
+            opt.value = v.id;
+            opt.textContent = v.name + (v.category ? ' (' + v.category + ')' : '');
+            if (v.id === data.current) opt.selected = true;
+            sel.appendChild(opt);
+        });
+    } catch(e) { console.warn('Failed to load voices', e); }
+
+    status.textContent = 'Settings loaded';
+    setTimeout(() => { status.textContent = ''; }, 2000);
+}
+
+async function setModel(model) {
+    const status = document.getElementById('settingsStatus');
+    status.textContent = 'Switching model...';
+    try {
+        await fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model }),
+        });
+        status.textContent = 'Model: ' + model;
+    } catch(e) { status.textContent = 'Error switching model'; }
+}
+
+async function setVoice(voice_id) {
+    const status = document.getElementById('settingsStatus');
+    status.textContent = 'Switching voice...';
+    try {
+        await fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ voice_id }),
+        });
+        status.textContent = 'Voice updated';
+    } catch(e) { status.textContent = 'Error switching voice'; }
+}
+
+// Close settings when clicking outside
+document.addEventListener('click', (e) => {
+    const panel = document.getElementById('settingsPanel');
+    const toggle = document.querySelector('.settings-toggle');
+    if (panel.classList.contains('open') && !panel.contains(e.target) && !toggle.contains(e.target)) {
+        panel.classList.remove('open');
+    }
+});
+
+loadSettings();
 inputEl.focus();
 </script>
 </body>

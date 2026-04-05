@@ -77,7 +77,9 @@ When the user asks you to remember something, respond with:
 
 When asked about current events, say you'd need to check but can't browse from the web dashboard yet."""
 
-history = []
+from history import load_history, save_history
+
+history = load_history()
 
 def call_ollama(user_input: str) -> str:
     global history
@@ -102,6 +104,14 @@ def call_ollama(user_input: str) -> str:
         reply = data["message"]["content"]
 
     history.append({"role": "assistant", "content": reply})
+
+    # Sync history to cloud in background
+    def _sync():
+        try:
+            save_history(history)
+        except Exception:
+            pass
+    threading.Thread(target=_sync, daemon=True).start()
 
     # Handle command blocks
     pattern = r'```command\s*\n(.*?)\n```'

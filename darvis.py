@@ -267,7 +267,9 @@ SAFARI WORKFLOW: When the user asks you to "click the first link" or interact wi
 1. First use get_page_info to see what's on the page
 2. Then use click_link with the right index or text
 3. Then optionally read_page to see what loaded
-Always chain these steps."""
+Always chain these steps.
+
+CRITICAL: When the user asks "what tab is open", "what's on my screen", "what page am I on", "what site is this", "read my Safari", "what am I looking at", or ANYTHING about the current Safari page/tab, you MUST use get_page_info. Do NOT say you can't see the screen — you CAN read Safari tabs. ALWAYS use the safari command block."""
 
 ANDROID_BROWSER_SECTION = """## 9. Browser (Android)
 You can open URLs in the user's default Android browser (Chrome, Firefox, etc.):
@@ -472,11 +474,13 @@ class Ear:
         self._mic_available = False
         self._lock = threading.Lock()
         self._use_termux = IS_TERMUX
+        self.suppressed = False  # Set True to block listen() calls entirely
         if HAS_SR:
             self.recognizer = sr.Recognizer()
             self.recognizer.energy_threshold = 300
             self.recognizer.dynamic_energy_threshold = True
-            self.recognizer.pause_threshold = 0.8
+            self.recognizer.pause_threshold = 2.0
+            self.recognizer.non_speaking_duration = 1.0
 
     def init_mic(self):
         if self._use_termux:
@@ -518,7 +522,7 @@ class Ear:
             return False
 
     def listen(self) -> str | None:
-        if not self._mic_available:
+        if not self._mic_available or self.suppressed:
             return None
 
         if self._use_termux:
@@ -1097,6 +1101,12 @@ class Brain:
         self.api_key = api_key
         self.model = model
         self.history: list[dict] = []
+        # Load conversation history from cloud on startup
+        try:
+            from history import load_history
+            self.history = load_history()
+        except Exception:
+            pass
 
     def _call_ollama(self, messages: list[dict]) -> str:
         payload = json.dumps({
@@ -1127,7 +1137,8 @@ class Brain:
         if context:
             content += f"\n\n[System output from previous command:\n{context}]"
 
-        self.history.append({"role": "user", "content": content})
+        user_msg = {"role": "user", "content": content}
+        self.history.append(user_msg)
 
         if len(self.history) > MAX_HISTORY * 2:
             self.history = self.history[-(MAX_HISTORY * 2):]
@@ -1138,7 +1149,18 @@ class Brain:
         messages = [{"role": "system", "content": prompt}] + self.history
 
         reply = self._call_ollama(messages)
-        self.history.append({"role": "assistant", "content": reply})
+        assistant_msg = {"role": "assistant", "content": reply}
+        self.history.append(assistant_msg)
+
+        # Sync to cloud in background
+        def _sync():
+            try:
+                from history import save_history
+                save_history(self.history)
+            except Exception:
+                pass
+        threading.Thread(target=_sync, daemon=True).start()
+
         return reply
 
 
@@ -1599,7 +1621,34 @@ def main():
                 )
                 console.print()
 
+                # Suppress mic entirely while speaking so it can't hear itself
+                ear.suppressed = True
+                was_listening = listening_active
+                if was_listening:
+                    listening_active = False
+                # Drain anything the mic picked up during thinking
+                try:
+                    while not speech_queue.empty():
+                        speech_queue.get_nowait()
+                except queue.Empty:
+                    pass
+
                 tts.speak(display_text)
+                tts.wait_for_speech()
+
+                # Wait for any in-flight listen() to finish, then drain
+                import time
+                time.sleep(1.5)
+                try:
+                    while not speech_queue.empty():
+                        speech_queue.get_nowait()
+                except queue.Empty:
+                    pass
+
+                # Re-enable mic
+                ear.suppressed = False
+                if was_listening:
+                    listening_active = True
 
         except KeyboardInterrupt:
             tts.stop_speaking()

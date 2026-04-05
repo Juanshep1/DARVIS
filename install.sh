@@ -70,19 +70,19 @@ echo ""
 echo "  ✓ DARVIS installed at $INSTALL_DIR"
 echo "  ✓ API keys configured"
 echo ""
-echo "  To run DARVIS:"
+echo "  Commands:"
 echo ""
-echo "    cd ~/DARVIS && python3 darvis.py"
-echo ""
-echo "  Or just type:  darvis"
+echo "    darvis        — terminal mode"
+echo "    darvis-web    — web dashboard (http://localhost:3000)"
 echo ""
 
-# Create shortcut alias
+# Create shortcut aliases
 SHELL_RC="$HOME/.bashrc"
 [ -f "$HOME/.zshrc" ] && SHELL_RC="$HOME/.zshrc"
 if ! grep -q "alias darvis=" "$SHELL_RC" 2>/dev/null; then
     echo "alias darvis='cd $INSTALL_DIR && python3 darvis.py'" >> "$SHELL_RC"
-    echo "  ✓ Added 'darvis' shortcut to $SHELL_RC"
+    echo "alias darvis-web='cd $INSTALL_DIR && python3 web.py'" >> "$SHELL_RC"
+    echo "  ✓ Added 'darvis' and 'darvis-web' shortcuts to $SHELL_RC"
 fi
 
 echo "  Starting DARVIS..."

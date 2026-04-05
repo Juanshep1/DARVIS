@@ -196,6 +196,20 @@ To open a URL in the browser:
 CRITICAL: When the user says "open" a file, you MUST use the open_file action. Do NOT just say you opened it — actually open it.
 When you create a file and the user asked you to open it, use BOTH create_file AND open_file actions.
 
+## 10. Memory — Remember & Forget
+When the user says "remember that..." or "don't forget...", save it:
+```command
+{"action": "remember", "content": "User prefers dark mode", "category": "preference"}
+```
+Categories: preference, fact, task, contact, general
+
+When the user says "forget about..." or "delete that memory":
+```command
+{"action": "forget", "id": 0}
+```
+
+Memories persist across sessions and devices. They are automatically included in your context.
+
 PLATFORM_BROWSER_SECTION
 
 IMPORTANT RULES:
@@ -1020,6 +1034,21 @@ def extract_and_run_commands(response_text: str) -> list[str]:
                 if output:
                     console.print(f"  [dim]{output[:400]}[/dim]")
 
+            elif action == "remember" and "content" in data:
+                from memory import add_memory
+                cat = data.get("category", "general")
+                console.print(f"  [dim]Remembering:[/dim] {data['content']}")
+                output = add_memory(data["content"], cat)
+                results.append(output)
+                console.print(f"  [dim]{output}[/dim]")
+
+            elif action == "forget" and "id" in data:
+                from memory import forget_memory
+                console.print(f"  [dim]Forgetting memory #{data['id']}[/dim]")
+                output = forget_memory(int(data["id"]))
+                results.append(output)
+                console.print(f"  [dim]{output}[/dim]")
+
         except json.JSONDecodeError:
             pass
     return results
@@ -1095,7 +1124,9 @@ class Brain:
         if len(self.history) > MAX_HISTORY * 2:
             self.history = self.history[-(MAX_HISTORY * 2):]
 
+        from memory import get_memory_context
         prompt = SYSTEM_PROMPT.replace("HOME_DIR", HOME_DIR)
+        prompt += get_memory_context()
         messages = [{"role": "system", "content": prompt}] + self.history
 
         reply = self._call_ollama(messages)
@@ -1349,37 +1380,30 @@ def main():
         mic_thread = threading.Thread(target=_background_listener, daemon=True)
         mic_thread.start()
 
-    def _get_input_listen_mode() -> str | None:
-        """In listen mode: wait for either voice or keyboard, whichever comes first."""
+    def _get_input() -> str | None:
+        """Get input from user — text prompt always works, voice arrives via queue."""
+        if not listening_active:
+            # Pure text mode — drain any stale voice and show prompt
+            try:
+                while not speech_queue.empty():
+                    speech_queue.get_nowait()
+            except queue.Empty:
+                pass
+            return console.input(f"  [bold {GOLD}]You:[/bold {GOLD}] ").strip() or None
+
         if IS_TERMUX:
-            # Termux: simple approach — show prompt, use input() with a thread
-            # checking the speech queue in parallel
-            console.print(f"  [{BLUE}]● Mic on[/{BLUE}] [dim](listening... type or speak)[/dim]")
-            input_result = [None]
-            got_input = threading.Event()
+            # Termux listen mode: just use normal input, check voice queue after
+            console.print(f"  [{BLUE}]● Mic on[/{BLUE}]", end="")
+            text = console.input(f" [bold {GOLD}]You:[/bold {GOLD}] ").strip()
+            if text:
+                return text
+            # User pressed enter with no text — check if voice got something
+            try:
+                return speech_queue.get_nowait()
+            except queue.Empty:
+                return None
 
-            def _wait_for_text():
-                try:
-                    input_result[0] = console.input(f"  [bold {GOLD}]You:[/bold {GOLD}] ").strip()
-                except EOFError:
-                    input_result[0] = None
-                got_input.set()
-
-            text_thread = threading.Thread(target=_wait_for_text, daemon=True)
-            text_thread.start()
-
-            # Poll speech queue while waiting for text input
-            while not got_input.is_set():
-                try:
-                    voice_text = speech_queue.get(timeout=0.3)
-                    console.print(f"  [bold {GOLD}]You (voice):[/bold {GOLD}] {voice_text}")
-                    return voice_text
-                except queue.Empty:
-                    continue
-
-            return input_result[0] if input_result[0] else None
-
-        # macOS/Linux: use raw terminal for responsive dual input
+        # macOS/Linux: raw terminal — poll both stdin and voice queue
         sys.stdout.write(f"\r  \033[94m● Mic on\033[0m  \033[33mYou:\033[0m ")
         sys.stdout.flush()
         typed_chars = []
@@ -1421,18 +1445,7 @@ def main():
 
     while True:
         try:
-            user_input = None
-
-            if listening_active:
-                user_input = _get_input_listen_mode()
-            else:
-                # Drain stale voice queue
-                try:
-                    while not speech_queue.empty():
-                        speech_queue.get_nowait()
-                except queue.Empty:
-                    pass
-                user_input = console.input(f"  [bold {GOLD}]You:[/bold {GOLD}] ").strip()
+            user_input = _get_input()
 
             if not user_input:
                 continue

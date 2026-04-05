@@ -1343,6 +1343,29 @@ def main():
     # Save settings for next run
     save_settings({"model": model, "voice_id": voice_id})
 
+    # Start web dashboard in background
+    try:
+        from web import DarvisHandler, ReusableHTTPServer
+        from http.server import HTTPServer
+        WEB_PORT = 2414
+        def _run_web():
+            try:
+                # Import and update web module's globals to share state
+                import web as _web
+                _web.OLLAMA_KEY = ollama_key
+                _web.ELEVENLABS_KEY = elevenlabs_key
+                _web.MODEL = model
+                _web.VOICE_ID = voice_id
+                srv = _web.ReusableHTTPServer(('0.0.0.0', WEB_PORT), _web.DarvisHandler)
+                srv.serve_forever()
+            except Exception:
+                pass
+        web_thread = threading.Thread(target=_run_web, daemon=True)
+        web_thread.start()
+        console.print(f"  [green]✓[/green] Web dashboard: http://127.0.0.1:{WEB_PORT}")
+    except Exception:
+        console.print(f"  [dim]Web dashboard not available[/dim]")
+
     # Init microphone
     ear = Ear()
     has_mic = ear.init_mic()

@@ -70,10 +70,9 @@ echo ""
 echo "  ✓ DARVIS installed at $INSTALL_DIR"
 echo "  ✓ API keys configured"
 echo ""
-echo "  Commands:"
+echo "  Just type:  darvis"
 echo ""
-echo "    darvis        — terminal mode"
-echo "    darvis-web    — web dashboard (http://localhost:2414)"
+echo "  Terminal + web dashboard (http://127.0.0.1:2414) start together."
 echo ""
 
 # Create shortcut aliases

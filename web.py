@@ -30,6 +30,10 @@ HOME_DIR = str(Path.home())
 CONFIG_PATH = BASE_DIR / ".env"
 SETTINGS_PATH = BASE_DIR / "settings.json"
 PORT = 2414
+CLOUD_MODELS = [
+    "llama3.3:70b", "llama3.1:8b", "qwen2.5:72b", "qwen2.5:7b",
+    "deepseek-r1:70b", "deepseek-r1:8b", "mistral:7b", "gemma2:27b", "phi4:14b",
+]
 
 def load_env():
     env = {}
@@ -297,9 +301,73 @@ body {
     color: #ff4444;
     animation: pulse 1s infinite;
 }
+
+/* ── Settings Panel ── */
+.settings-toggle {
+    position: fixed;
+    top: 15px; right: 15px;
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    border: 1px solid rgba(80, 140, 255, 0.3);
+    background: rgba(15, 15, 25, 0.9);
+    color: #4a90d9;
+    font-size: 1rem;
+    cursor: pointer;
+    z-index: 100;
+}
+.settings-toggle:hover { border-color: rgba(80, 180, 255, 0.7); }
+.settings-panel {
+    position: fixed;
+    top: 60px; right: 15px;
+    background: rgba(10, 10, 20, 0.95);
+    border: 1px solid rgba(80, 140, 255, 0.2);
+    border-radius: 12px;
+    padding: 20px;
+    width: 280px;
+    z-index: 100;
+    display: none;
+    backdrop-filter: blur(10px);
+}
+.settings-panel.open { display: block; }
+.settings-panel label {
+    display: block;
+    font-size: 0.75rem;
+    color: #4a90d9;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin: 12px 0 6px;
+}
+.settings-panel label:first-child { margin-top: 0; }
+.settings-panel select {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid rgba(80, 140, 255, 0.3);
+    border-radius: 8px;
+    background: rgba(15, 15, 25, 0.9);
+    color: #e0e0e0;
+    font-family: inherit;
+    font-size: 0.85rem;
+    outline: none;
+}
+.settings-panel select:focus { border-color: rgba(80, 180, 255, 0.7); }
+.settings-status {
+    margin-top: 12px;
+    font-size: 0.75rem;
+    color: #5a5;
+    min-height: 1.2em;
+}
 </style>
 </head>
 <body>
+
+<button class="settings-toggle" onclick="toggleSettings()">&#9881;</button>
+<div class="settings-panel" id="settingsPanel">
+    <label>Model</label>
+    <select id="modelSelect" onchange="setModel(this.value)"></select>
+    <label>Voice</label>
+    <select id="voiceSelect" onchange="setVoice(this.value)"></select>
+    <div class="settings-status" id="settingsStatus"></div>
+</div>
 
 <div class="title">D . A . R . V . I . S .</div>
 
@@ -395,6 +463,69 @@ async function send() {
     }
 }
 
+// ── Settings ──
+function toggleSettings() {
+    document.getElementById('settingsPanel').classList.toggle('open');
+}
+
+async function loadSettings() {
+    // Load models
+    try {
+        const res = await fetch('/api/models');
+        const data = await res.json();
+        const sel = document.getElementById('modelSelect');
+        sel.innerHTML = '';
+        data.models.forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m; opt.textContent = m;
+            if (m === data.current) opt.selected = true;
+            sel.appendChild(opt);
+        });
+    } catch(e) {}
+
+    // Load voices
+    try {
+        const res = await fetch('/api/voices');
+        const data = await res.json();
+        const sel = document.getElementById('voiceSelect');
+        sel.innerHTML = '';
+        data.voices.forEach(v => {
+            const opt = document.createElement('option');
+            opt.value = v.id;
+            opt.textContent = v.name + (v.category ? ' (' + v.category + ')' : '');
+            if (v.id === data.current) opt.selected = true;
+            sel.appendChild(opt);
+        });
+    } catch(e) {}
+}
+
+async function setModel(model) {
+    const status = document.getElementById('settingsStatus');
+    status.textContent = 'Switching model...';
+    try {
+        await fetch('/api/set_model', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({model}),
+        });
+        status.textContent = 'Model: ' + model;
+    } catch(e) { status.textContent = 'Error switching model'; }
+}
+
+async function setVoice(voice_id) {
+    const status = document.getElementById('settingsStatus');
+    status.textContent = 'Switching voice...';
+    try {
+        await fetch('/api/set_voice', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({voice_id}),
+        });
+        status.textContent = 'Voice updated';
+    } catch(e) { status.textContent = 'Error switching voice'; }
+}
+
+loadSettings();
 inputEl.focus();
 </script>
 </body>
@@ -427,6 +558,29 @@ class DarvisHandler(BaseHTTPRequestHandler):
             else:
                 self.send_response(404)
                 self.end_headers()
+        elif self.path == '/api/voices':
+            # Return available ElevenLabs voices
+            voices = []
+            if ELEVENLABS_KEY:
+                try:
+                    req = urllib.request.Request(
+                        f"{ELEVENLABS_URL}/voices",
+                        headers={"xi-api-key": ELEVENLABS_KEY},
+                    )
+                    with urllib.request.urlopen(req, timeout=10) as resp:
+                        data = json.loads(resp.read().decode())
+                        voices = [{"id": v["voice_id"], "name": v["name"], "category": v.get("category", "")} for v in data.get("voices", [])]
+                except Exception:
+                    pass
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({"voices": voices, "current": VOICE_ID}).encode())
+        elif self.path == '/api/models':
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({"models": CLOUD_MODELS, "current": MODEL}).encode())
         else:
             self.send_response(404)
             self.end_headers()
@@ -461,6 +615,34 @@ class DarvisHandler(BaseHTTPRequestHandler):
                 'reply': reply,
                 'audio_url': audio_url,
             }).encode())
+
+        elif self.path == '/api/set_model':
+            length = int(self.headers.get('Content-Length', 0))
+            body = json.loads(self.rfile.read(length))
+            global MODEL
+            MODEL = body.get('model', MODEL)
+            # Save to settings
+            s = load_settings()
+            s['model'] = MODEL
+            SETTINGS_PATH.write_text(json.dumps(s, indent=2))
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'model': MODEL}).encode())
+
+        elif self.path == '/api/set_voice':
+            length = int(self.headers.get('Content-Length', 0))
+            body = json.loads(self.rfile.read(length))
+            global VOICE_ID
+            VOICE_ID = body.get('voice_id', VOICE_ID)
+            s = load_settings()
+            s['voice_id'] = VOICE_ID
+            SETTINGS_PATH.write_text(json.dumps(s, indent=2))
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'voice_id': VOICE_ID}).encode())
+
         else:
             self.send_response(404)
             self.end_headers()

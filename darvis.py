@@ -363,6 +363,14 @@ class ElevenLabsVoice:
         for name, info in self.PRESET_VOICES.items():
             if info["id"] == voice_id:
                 return name
+        # Try fetching from API for custom/cloned voices
+        try:
+            voices = self.fetch_voices()
+            for v in voices:
+                if v["voice_id"] == voice_id:
+                    return v["name"]
+        except Exception:
+            pass
         return voice_id[:12]
 
     def set_voice(self, voice_id: str):
@@ -1506,6 +1514,21 @@ def main():
                     tts.speak("Voice updated. How do I sound, sir?")
                 continue
 
+            if lower == "/models" or lower.startswith("/model "):
+                if lower.startswith("/model ") and len(lower) > 7:
+                    new_model = user_input.strip().split(None, 1)[1]
+                    brain.model = new_model
+                    settings["model"] = new_model
+                    save_settings(settings)
+                    console.print(f"  [green]✓[/green] Model changed to [bold]{new_model}[/bold]")
+                else:
+                    new_model = select_model(ollama_key)
+                    brain.model = new_model
+                    settings["model"] = new_model
+                    save_settings(settings)
+                    console.print(f"  [green]✓[/green] Model changed to [bold]{new_model}[/bold]")
+                continue
+
             if lower == "/help":
                 console.print(
                     Panel(
@@ -1514,6 +1537,8 @@ def main():
                         "[bold]/voices[/bold]       — pick a new voice (interactive menu)\n"
                         "[bold]/voice NAME[/bold]  — switch voice by name (e.g. /voice rachel)\n"
                         "[bold]/voice ID[/bold]    — switch voice by ElevenLabs ID\n"
+                        "[bold]/models[/bold]      — pick a new LLM model\n"
+                        "[bold]/model NAME[/bold]  — switch model directly (e.g. /model deepseek-r1:70b)\n"
                         "[bold]goodbye[/bold]      — exit D.A.R.V.I.S.\n\n"
                         "[dim]Settings (model + voice) are saved automatically.[/dim]",
                         title=f"[bold {CYAN}]Commands[/bold {CYAN}]",

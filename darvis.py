@@ -171,7 +171,7 @@ To create a full project structure, use multiple blocks together:
 CRITICAL: When the user asks to create a folder, ALWAYS use create_folder. When they ask to move or copy, use move/copy. When they say "open" a folder, use open_file. Do NOT just say you did it — actually do it.
 
 ## 6. Search the Web
-Search the internet in real time and get results back. Also opens Safari so the user can see:
+Search the internet in real time and get results back. Also opens the user's browser so they can see:
 ```command
 {"action": "search_web", "query": "latest news about AI"}
 ```
@@ -182,25 +182,31 @@ Read the contents of any webpage or API endpoint in real time:
 {"action": "fetch_url", "url": "https://example.com"}
 ```
 
-## 8. Open Files & Apps
-Open any file in its default application, or open a specific app:
+## 8. Open Files, URLs & Apps
+Open any file in its default application, open a URL in the browser, or open a folder:
 ```command
 {"action": "open_file", "path": "HOME_DIR/Desktop/example.py"}
 ```
-This works for ANY file type — .py opens in code editor, .html in browser, .pdf in Preview, etc.
-To open a URL in Safari:
+This works for ANY file type — .py opens in code editor, .html in browser, .pdf in viewer, etc.
+To open a URL in the browser:
 ```command
 {"action": "open_file", "path": "https://www.google.com"}
-```
-To open a specific app:
-```command
-{"action": "shell", "command": "open -a 'Google Chrome'"}
 ```
 
 CRITICAL: When the user says "open" a file, you MUST use the open_file action. Do NOT just say you opened it — actually open it.
 When you create a file and the user asked you to open it, use BOTH create_file AND open_file actions.
 
-## 9. Safari Browser Control
+PLATFORM_BROWSER_SECTION
+
+IMPORTANT RULES:
+- You can use MULTIPLE command blocks in a single response if needed.
+- When the user asks a question that requires current/real-time information (news, weather, prices, sports scores, "who is the current president", recent events, etc.), ALWAYS use search_web or fetch_url. Do NOT say you don't have access to the internet — you DO.
+- When creating files, show the full content in the create_file block.
+- For weather, use: fetch_url with https://wttr.in/CITY?format=3
+- Keep spoken responses concise (1-3 sentences) but be thorough in file contents.
+- Only use dangerous shell commands after warning the user first."""
+
+SAFARI_PROMPT_SECTION = """## 9. Safari Browser Control (macOS)
 You can control Safari directly — click links, read page content, fill forms, scroll, and more.
 
 Get info about the current Safari tab (URL, title, all clickable links):
@@ -226,47 +232,52 @@ Run any JavaScript on the current page:
 {"action": "safari", "method": "run_js", "code": "document.title"}
 ```
 
-Go to a specific URL:
+Navigate, scroll, click buttons, type into fields:
 ```command
 {"action": "safari", "method": "navigate", "url": "https://example.com"}
 ```
-
-Go back/forward:
-```command
-{"action": "safari", "method": "back"}
-```
-```command
-{"action": "safari", "method": "forward"}
-```
-
-Scroll the page:
 ```command
 {"action": "safari", "method": "scroll", "direction": "down"}
 ```
-
-Click a button by its text:
 ```command
 {"action": "safari", "method": "click_button", "text": "Submit"}
 ```
-
-Type into a focused input field:
 ```command
 {"action": "safari", "method": "type_text", "text": "hello world"}
+```
+```command
+{"action": "safari", "method": "back"}
 ```
 
 SAFARI WORKFLOW: When the user asks you to "click the first link" or interact with a page:
 1. First use get_page_info to see what's on the page
 2. Then use click_link with the right index or text
 3. Then optionally read_page to see what loaded
-Always chain these steps. The user expects you to actually interact with the browser, not just describe what you would do.
+Always chain these steps."""
 
-IMPORTANT RULES:
-- You can use MULTIPLE command blocks in a single response if needed.
-- When the user asks a question that requires current/real-time information (news, weather, prices, sports scores, "who is the current president", recent events, etc.), ALWAYS use search_web or fetch_url. Do NOT say you don't have access to the internet — you DO.
-- When creating files, show the full content in the create_file block.
-- For weather, use: fetch_url with https://wttr.in/CITY?format=3
-- Keep spoken responses concise (1-3 sentences) but be thorough in file contents.
-- Only use dangerous shell commands after warning the user first."""
+ANDROID_BROWSER_SECTION = """## 9. Browser (Android)
+You can open URLs in the user's default Android browser (Chrome, Firefox, etc.):
+```command
+{"action": "open_file", "path": "https://www.example.com"}
+```
+Use search_web to search and open results in the browser.
+Use fetch_url to read page content programmatically.
+You cannot directly click links inside the browser on Android — use fetch_url to read pages and extract links, then open specific URLs with open_file."""
+
+LINUX_BROWSER_SECTION = """## 9. Browser (Linux)
+You can open URLs in the user's default browser:
+```command
+{"action": "open_file", "path": "https://www.example.com"}
+```
+Use search_web to search and open results in the browser.
+Use fetch_url to read page content programmatically."""
+
+if IS_MAC:
+    SYSTEM_PROMPT = SYSTEM_PROMPT.replace("PLATFORM_BROWSER_SECTION", SAFARI_PROMPT_SECTION)
+elif IS_TERMUX:
+    SYSTEM_PROMPT = SYSTEM_PROMPT.replace("PLATFORM_BROWSER_SECTION", ANDROID_BROWSER_SECTION)
+else:
+    SYSTEM_PROMPT = SYSTEM_PROMPT.replace("PLATFORM_BROWSER_SECTION", LINUX_BROWSER_SECTION)
 
 # ── Console UI ────────────────────────────────────────────────────────────────
 

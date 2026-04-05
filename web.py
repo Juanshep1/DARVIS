@@ -689,7 +689,12 @@ def main():
   ██████╔╝██║  ██║██║  ██║ ╚████╔╝ ██║███████║
   ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝  ╚═══╝  ╚═╝╚══════╝
 
-  Web Dashboard — http://localhost:{PORT}
+  Web Dashboard running!
+
+  Open in browser:
+    http://127.0.0.1:{PORT}
+    http://localhost:{PORT}
+
   Model: {MODEL} | Voice: {VOICE_ID[:12]}...
   Press Ctrl+C to stop.
     """)
@@ -703,9 +708,15 @@ def main():
     server = ReusableHTTPServer(('0.0.0.0', PORT), DarvisHandler)
 
     # Auto-open browser
-    import webbrowser
-    url = f"http://localhost:{PORT}"
-    threading.Timer(1.0, lambda: webbrowser.open(url)).start()
+    url = f"http://127.0.0.1:{PORT}"
+    IS_TERMUX = os.path.isdir("/data/data/com.termux") or "TERMUX_VERSION" in os.environ
+    if IS_TERMUX:
+        threading.Timer(1.0, lambda: subprocess.Popen(
+            ["termux-open-url", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        )).start()
+    else:
+        import webbrowser
+        threading.Timer(1.0, lambda: webbrowser.open(url)).start()
 
     try:
         server.serve_forever()

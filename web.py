@@ -481,6 +481,12 @@ def main():
     """)
 
     server = HTTPServer(('0.0.0.0', PORT), DarvisHandler)
+
+    # Auto-open browser
+    import webbrowser
+    url = f"http://localhost:{PORT}"
+    threading.Timer(1.0, lambda: webbrowser.open(url)).start()
+
     try:
         server.serve_forever()
     except KeyboardInterrupt:

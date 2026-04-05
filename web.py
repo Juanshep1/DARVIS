@@ -450,15 +450,24 @@ async function send() {
         // Play TTS audio
         if (data.audio_url) {
             orb.className = 'orb speaking';
-            currentAudio = new Audio(data.audio_url);
-            currentAudio.onended = () => { orb.className = 'orb'; currentAudio = null; };
-            currentAudio.onerror = (e) => { console.error('Audio error:', e); orb.className = 'orb'; };
-            currentAudio.play().catch(err => {
-                console.warn('Autoplay blocked, retrying on interaction:', err);
+            try {
+                currentAudio = new Audio();
+                currentAudio.onended = () => { orb.className = 'orb'; currentAudio = null; };
+                currentAudio.onerror = () => { orb.className = 'orb'; };
+                currentAudio.src = data.audio_url;
+                await currentAudio.play();
+            } catch(audioErr) {
                 orb.className = 'orb';
-                // Show play button if autoplay blocked
-                responseEl.innerHTML += '<br><button onclick="currentAudio.play().then(()=>{orb.className=\\'orb speaking\\'});this.remove()" style="margin-top:10px;padding:8px 20px;border-radius:20px;border:1px solid #4a90d9;background:transparent;color:#4a90d9;cursor:pointer;font-family:inherit">&#9654; Play Audio</button>';
-            });
+                const playBtn = document.createElement('button');
+                playBtn.textContent = '\\u25B6 Play Audio';
+                playBtn.style.cssText = 'margin-top:10px;padding:8px 20px;border-radius:20px;border:1px solid #4a90d9;background:transparent;color:#4a90d9;cursor:pointer;font-family:inherit';
+                playBtn.onclick = () => {
+                    currentAudio.play().then(() => { orb.className = 'orb speaking'; });
+                    playBtn.remove();
+                };
+                responseEl.appendChild(document.createElement('br'));
+                responseEl.appendChild(playBtn);
+            }
         } else {
             orb.className = 'orb';
         }
@@ -561,18 +570,23 @@ class DarvisHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(HTML.encode())
         elif self.path.startswith('/audio/'):
-            # Serve temp audio files
             filename = self.path.split('/')[-1]
             filepath = Path(tempfile.gettempdir()) / filename
             if filepath.exists():
+                audio_bytes = filepath.read_bytes()
                 self.send_response(200)
                 self.send_header('Content-Type', 'audio/mpeg')
+                self.send_header('Content-Length', str(len(audio_bytes)))
+                self.send_header('Accept-Ranges', 'none')
+                self.send_header('Cache-Control', 'no-cache')
                 self.end_headers()
-                self.wfile.write(filepath.read_bytes())
-                try:
-                    filepath.unlink()
-                except Exception:
-                    pass
+                self.wfile.write(audio_bytes)
+                # Delete after a delay so browser can re-request if needed
+                def _cleanup():
+                    import time; time.sleep(10)
+                    try: filepath.unlink()
+                    except: pass
+                threading.Thread(target=_cleanup, daemon=True).start()
             else:
                 self.send_response(404)
                 self.end_headers()

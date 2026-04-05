@@ -1,0 +1,1511 @@
+#!/usr/bin/env python3
+"""
+D.A.R.V.I.S. — Digital Assistant, Rather Very Intelligent System
+A voice-activated AI assistant powered by Ollama Cloud + ElevenLabs.
+"""
+
+import os
+import sys
+import json
+import subprocess
+import datetime
+import threading
+import tempfile
+import re
+import urllib.request
+import urllib.error
+import urllib.parse
+from pathlib import Path
+
+# ── Platform Detection ────────────────────────────────────────────────────────
+
+PLATFORM = sys.platform  # "darwin" or "linux" (Termux)
+IS_MAC = PLATFORM == "darwin"
+IS_TERMUX = os.path.isdir("/data/data/com.termux") or "TERMUX_VERSION" in os.environ
+IS_LINUX = PLATFORM.startswith("linux") and not IS_TERMUX
+
+# Suppress PortAudio/AUHAL stderr noise before importing audio
+_devnull = os.open(os.devnull, os.O_WRONLY)
+_old_stderr = os.dup(2)
+os.dup2(_devnull, 2)
+try:
+    import speech_recognition as sr
+    HAS_SR = True
+except ImportError:
+    HAS_SR = False
+os.dup2(_old_stderr, 2)
+os.close(_devnull)
+os.close(_old_stderr)
+
+from rich.console import Console
+from rich.panel import Panel
+from rich.markdown import Markdown
+from rich.table import Table
+
+
+# ── Platform Helpers ──────────────────────────────────────────────────────────
+
+def _play_audio(path: str) -> subprocess.Popen:
+    """Play an audio file using the best available player."""
+    if IS_MAC:
+        return subprocess.Popen(["afplay", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    elif IS_TERMUX:
+        return subprocess.Popen(["termux-media-player", "play", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    else:
+        # Linux — try mpv, then ffplay, then aplay
+        for player in [["mpv", "--no-video", path], ["ffplay", "-nodisp", "-autoexit", path], ["aplay", path]]:
+            try:
+                return subprocess.Popen(player, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except FileNotFoundError:
+                continue
+        return subprocess.Popen(["true"])  # no-op
+
+
+def _fallback_tts(text: str) -> subprocess.Popen:
+    """Speak text using platform-native TTS as fallback."""
+    if IS_MAC:
+        return subprocess.Popen(["say", "-v", "Daniel", "-r", "190", text], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    elif IS_TERMUX:
+        return subprocess.Popen(["termux-tts-speak", "-r", "1.2", text], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    else:
+        # Linux — try espeak
+        try:
+            return subprocess.Popen(["espeak", text], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except FileNotFoundError:
+            return subprocess.Popen(["true"])
+
+
+def _open_path(path: str) -> subprocess.Popen:
+    """Open a file/URL with the system default handler."""
+    if IS_MAC:
+        return subprocess.Popen(["open", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    elif IS_TERMUX:
+        return subprocess.Popen(["termux-open", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    else:
+        return subprocess.Popen(["xdg-open", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def _open_url_in_browser(url: str):
+    """Open a URL in the system browser."""
+    if IS_MAC:
+        subprocess.Popen(["open", "-a", "Safari", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    elif IS_TERMUX:
+        subprocess.Popen(["termux-open-url", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    else:
+        subprocess.Popen(["xdg-open", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+# ── Config ────────────────────────────────────────────────────────────────────
+
+WAKE_WORD = "darvis"
+OLLAMA_URL = "https://ollama.com/api"
+ELEVENLABS_URL = "https://api.elevenlabs.io/v1"
+MODEL = "llama3.3:70b"
+DEFAULT_VOICE_ID = "kPtEHAvRnjUJFv7SK9WI"
+MAX_HISTORY = 20
+HOME_DIR = str(Path.home())
+BASE_DIR = Path(__file__).parent
+CONFIG_PATH = BASE_DIR / ".env"
+SETTINGS_PATH = BASE_DIR / "settings.json"
+
+SYSTEM_PROMPT = """You are D.A.R.V.I.S., a Digital Assistant, Rather Very Intelligent System.
+You are dry-witted, efficient, and occasionally sardonic — but always helpful and loyal.
+
+Personality traits:
+- British-accented speech patterns (use British English spellings and idioms)
+- Concise and direct, but with personality
+- Occasionally makes subtle quips or observations
+- Addresses the user as "sir" or "ma'am" naturally (not excessively)
+- When delivering bad news, does so with understated calm
+- Shows quiet competence — never brags, just delivers
+
+You have the following capabilities. Use them whenever relevant — don't just talk about doing things, actually do them.
+
+## 1. Shell Commands
+Run system commands (open apps, check status, list files, etc.):
+```command
+{"action": "shell", "command": "the shell command here"}
+```
+
+## 2. Create Files
+Create or overwrite files with any content (code, notes, configs, scripts, etc.):
+```command
+{"action": "create_file", "path": "HOME_DIR/Desktop/example.py", "content": "print('hello world')"}
+```
+- The user's home directory is HOME_DIR
+- Default to ~/Desktop for files unless the user specifies a path
+- You can create ANY file type: .py, .js, .html, .txt, .md, .sh, .csv, .json, etc.
+- create_file automatically creates parent directories, so you can create deeply nested paths
+
+## 3. Create Folders
+Create one or more folders (nested paths created automatically):
+```command
+{"action": "create_folder", "path": "HOME_DIR/Desktop/MyProject/src/components"}
+```
+
+## 4. Move / Copy Files & Folders
+Move or copy files and folders:
+```command
+{"action": "move", "from": "HOME_DIR/Desktop/old.txt", "to": "HOME_DIR/Desktop/MyProject/old.txt"}
+```
+```command
+{"action": "copy", "from": "HOME_DIR/Desktop/file.txt", "to": "HOME_DIR/Desktop/backup/file.txt"}
+```
+
+## 5. Open Folders in Finder
+Open a folder in Finder so the user can see it:
+```command
+{"action": "open_file", "path": "HOME_DIR/Desktop/MyProject"}
+```
+
+To create a full project structure, use multiple blocks together:
+```command
+{"action": "create_folder", "path": "HOME_DIR/Desktop/MyProject/src"}
+```
+```command
+{"action": "create_file", "path": "HOME_DIR/Desktop/MyProject/src/main.py", "content": "# entry point"}
+```
+```command
+{"action": "open_file", "path": "HOME_DIR/Desktop/MyProject"}
+```
+
+CRITICAL: When the user asks to create a folder, ALWAYS use create_folder. When they ask to move or copy, use move/copy. When they say "open" a folder, use open_file. Do NOT just say you did it — actually do it.
+
+## 6. Search the Web
+Search the internet in real time and get results back. Also opens Safari so the user can see:
+```command
+{"action": "search_web", "query": "latest news about AI"}
+```
+
+## 7. Fetch a URL
+Read the contents of any webpage or API endpoint in real time:
+```command
+{"action": "fetch_url", "url": "https://example.com"}
+```
+
+## 8. Open Files & Apps
+Open any file in its default application, or open a specific app:
+```command
+{"action": "open_file", "path": "HOME_DIR/Desktop/example.py"}
+```
+This works for ANY file type — .py opens in code editor, .html in browser, .pdf in Preview, etc.
+To open a URL in Safari:
+```command
+{"action": "open_file", "path": "https://www.google.com"}
+```
+To open a specific app:
+```command
+{"action": "shell", "command": "open -a 'Google Chrome'"}
+```
+
+CRITICAL: When the user says "open" a file, you MUST use the open_file action. Do NOT just say you opened it — actually open it.
+When you create a file and the user asked you to open it, use BOTH create_file AND open_file actions.
+
+## 9. Safari Browser Control
+You can control Safari directly — click links, read page content, fill forms, scroll, and more.
+
+Get info about the current Safari tab (URL, title, all clickable links):
+```command
+{"action": "safari", "method": "get_page_info"}
+```
+
+Click a link by its number (from get_page_info results) or by text match:
+```command
+{"action": "safari", "method": "click_link", "index": 0}
+```
+```command
+{"action": "safari", "method": "click_link", "text": "Sign in"}
+```
+
+Read the visible text content of the current page:
+```command
+{"action": "safari", "method": "read_page"}
+```
+
+Run any JavaScript on the current page:
+```command
+{"action": "safari", "method": "run_js", "code": "document.title"}
+```
+
+Go to a specific URL:
+```command
+{"action": "safari", "method": "navigate", "url": "https://example.com"}
+```
+
+Go back/forward:
+```command
+{"action": "safari", "method": "back"}
+```
+```command
+{"action": "safari", "method": "forward"}
+```
+
+Scroll the page:
+```command
+{"action": "safari", "method": "scroll", "direction": "down"}
+```
+
+Click a button by its text:
+```command
+{"action": "safari", "method": "click_button", "text": "Submit"}
+```
+
+Type into a focused input field:
+```command
+{"action": "safari", "method": "type_text", "text": "hello world"}
+```
+
+SAFARI WORKFLOW: When the user asks you to "click the first link" or interact with a page:
+1. First use get_page_info to see what's on the page
+2. Then use click_link with the right index or text
+3. Then optionally read_page to see what loaded
+Always chain these steps. The user expects you to actually interact with the browser, not just describe what you would do.
+
+IMPORTANT RULES:
+- You can use MULTIPLE command blocks in a single response if needed.
+- When the user asks a question that requires current/real-time information (news, weather, prices, sports scores, "who is the current president", recent events, etc.), ALWAYS use search_web or fetch_url. Do NOT say you don't have access to the internet — you DO.
+- When creating files, show the full content in the create_file block.
+- For weather, use: fetch_url with https://wttr.in/CITY?format=3
+- Keep spoken responses concise (1-3 sentences) but be thorough in file contents.
+- Only use dangerous shell commands after warning the user first."""
+
+# ── Console UI ────────────────────────────────────────────────────────────────
+
+console = Console()
+
+BLUE = "bright_blue"
+CYAN = "bright_cyan"
+GOLD = "yellow"
+DIM = "dim white"
+
+
+def banner():
+    art = r"""
+  ██████╗  █████╗ ██████╗ ██╗   ██╗██╗███████╗
+  ██╔══██╗██╔══██╗██╔══██╗██║   ██║██║██╔════╝
+  ██║  ██║███████║██████╔╝██║   ██║██║███████╗
+  ██║  ██║██╔══██║██╔══██╗╚██╗ ██╔╝██║╚════██║
+  ██████╔╝██║  ██║██║  ██║ ╚████╔╝ ██║███████║
+  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝  ╚═══╝  ╚═╝╚══════╝
+    """
+    console.print(art, style=CYAN)
+    console.print(
+        "  Digital Assistant, Rather Very Intelligent System",
+        style=f"bold {GOLD}",
+    )
+
+
+# ── Settings Persistence ─────────────────────────────────────────────────────
+
+def load_settings() -> dict:
+    """Load saved settings (model, voice, etc.)."""
+    if SETTINGS_PATH.exists():
+        try:
+            return json.loads(SETTINGS_PATH.read_text())
+        except (json.JSONDecodeError, OSError):
+            pass
+    return {}
+
+
+def save_settings(settings: dict):
+    """Save settings to disk."""
+    SETTINGS_PATH.write_text(json.dumps(settings, indent=2))
+
+
+# ── ElevenLabs TTS ───────────────────────────────────────────────────────────
+
+class ElevenLabsVoice:
+    """Text-to-speech via ElevenLabs API."""
+
+    PRESET_VOICES = {
+        "adam":      {"id": "pNInz6obpgDQGcFmaJgB", "desc": "Deep male, narrative"},
+        "antoni":    {"id": "ErXwobaYiN019PkySvjV", "desc": "Warm male, calm"},
+        "arnold":    {"id": "VR6AewLTigWG4xSOukaG", "desc": "Strong male, bold"},
+        "bella":     {"id": "EXAVITQu4vr4xnSDxMaL", "desc": "Soft female, gentle"},
+        "domi":      {"id": "AZnzlk1XvdvUeBnXmlld", "desc": "Confident female, strong"},
+        "elli":      {"id": "MF3mGyEYCl7XYWbV9V6O", "desc": "Young female, sweet"},
+        "josh":      {"id": "TxGEqnHWrfWFTfGW9XjX", "desc": "Deep male, grounded"},
+        "rachel":    {"id": "21m00Tcm4TlvDq8ikWAM", "desc": "Calm female, composed"},
+        "sam":       {"id": "yoZ06aMxZJJ28mfd3POQ", "desc": "Raspy male, edgy"},
+    }
+
+    def __init__(self, api_key: str, voice_id: str = DEFAULT_VOICE_ID):
+        self.api_key = api_key
+        self.voice_id = voice_id
+        self.voice_name = self._resolve_name(voice_id)
+        self._speaking_process = None
+
+    def _resolve_name(self, voice_id: str) -> str:
+        for name, info in self.PRESET_VOICES.items():
+            if info["id"] == voice_id:
+                return name
+        return voice_id[:12]
+
+    def set_voice(self, voice_id: str):
+        self.voice_id = voice_id
+        self.voice_name = self._resolve_name(voice_id)
+
+    def speak(self, text: str):
+        """Convert text to speech via ElevenLabs and play it."""
+        clean = re.sub(r'[*_`#\[\]()]', '', text)
+        clean = re.sub(r'\n+', '. ', clean)
+        if len(clean) > 5000:
+            clean = clean[:5000]
+
+        self.stop_speaking()
+
+        def _synth_and_play():
+            try:
+                payload = json.dumps({
+                    "text": clean,
+                    "model_id": "eleven_multilingual_v2",
+                    "voice_settings": {
+                        "stability": 0.5,
+                        "similarity_boost": 0.75,
+                        "style": 0.3,
+                    },
+                }).encode("utf-8")
+
+                req = urllib.request.Request(
+                    f"{ELEVENLABS_URL}/text-to-speech/{self.voice_id}",
+                    data=payload,
+                    headers={
+                        "Content-Type": "application/json",
+                        "xi-api-key": self.api_key,
+                        "Accept": "audio/mpeg",
+                    },
+                    method="POST",
+                )
+
+                with urllib.request.urlopen(req, timeout=30) as resp:
+                    audio_data = resp.read()
+
+                tmp = tempfile.NamedTemporaryFile(suffix=".mp3", delete=False)
+                tmp.write(audio_data)
+                tmp.close()
+
+                self._speaking_process = _play_audio(tmp.name)
+                self._speaking_process.wait()
+
+                try:
+                    os.unlink(tmp.name)
+                except OSError:
+                    pass
+
+            except urllib.error.HTTPError as e:
+                if e.code == 402:
+                    console.print(f"  [dim yellow]ElevenLabs: no credits — falling back to system voice[/dim yellow]")
+                else:
+                    console.print(f"  [dim red]ElevenLabs error ({e.code}): {e.reason}[/dim red]")
+                self._fallback_speak(clean)
+            except Exception as e:
+                console.print(f"  [dim red]TTS error: {e} — falling back to system voice[/dim red]")
+                self._fallback_speak(clean)
+
+        thread = threading.Thread(target=_synth_and_play, daemon=True)
+        thread.start()
+
+    def _fallback_speak(self, text: str):
+        self._speaking_process = _fallback_tts(text)
+        self._speaking_process.wait()
+
+    def stop_speaking(self):
+        if self._speaking_process and self._speaking_process.poll() is None:
+            self._speaking_process.terminate()
+
+    def wait_for_speech(self):
+        if self._speaking_process:
+            self._speaking_process.wait()
+
+    def fetch_voices(self) -> list[dict]:
+        try:
+            req = urllib.request.Request(
+                f"{ELEVENLABS_URL}/voices",
+                headers={"xi-api-key": self.api_key},
+                method="GET",
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                return data.get("voices", [])
+        except Exception:
+            return []
+
+
+# ── Speech Recognition ────────────────────────────────────────────────────────
+
+class Ear:
+    """Handles microphone input and speech recognition."""
+
+    def __init__(self):
+        self._mic_available = False
+        self._lock = threading.Lock()
+        self._use_termux = IS_TERMUX
+        if HAS_SR:
+            self.recognizer = sr.Recognizer()
+            self.recognizer.energy_threshold = 300
+            self.recognizer.dynamic_energy_threshold = True
+            self.recognizer.pause_threshold = 0.8
+
+    def init_mic(self):
+        if self._use_termux:
+            # Termux uses termux-microphone-record + termux-speech-to-text
+            try:
+                result = subprocess.run(["which", "termux-speech-to-text"], capture_output=True, timeout=5)
+                if result.returncode == 0:
+                    self._mic_available = True
+                    console.print("  [green]✓[/green] Termux speech recognition ready")
+                    return True
+            except Exception:
+                pass
+            console.print("  [dim]Install termux-api: pkg install termux-api[/dim]")
+            return False
+
+        if not HAS_SR:
+            console.print("  [dim]speech_recognition not installed — text input only[/dim]")
+            return False
+
+        try:
+            devnull = os.open(os.devnull, os.O_WRONLY)
+            old_stderr = os.dup(2)
+            os.dup2(devnull, 2)
+            try:
+                mic = sr.Microphone()
+                with mic as source:
+                    console.print("  [dim]Calibrating microphone...[/dim]")
+                    self.recognizer.adjust_for_ambient_noise(source, duration=1.5)
+                self._mic_available = True
+            finally:
+                os.dup2(old_stderr, 2)
+                os.close(devnull)
+                os.close(old_stderr)
+            console.print("  [green]✓[/green] Microphone ready")
+            return True
+        except (OSError, AttributeError) as e:
+            console.print(f"  [red]✗[/red] Microphone error: {e}")
+            console.print("  [dim]Falling back to text input mode[/dim]")
+            return False
+
+    def listen(self) -> str | None:
+        if not self._mic_available:
+            return None
+
+        if self._use_termux:
+            with self._lock:
+                try:
+                    result = subprocess.run(
+                        ["termux-speech-to-text"], capture_output=True, text=True, timeout=15
+                    )
+                    text = result.stdout.strip()
+                    return text if text else None
+                except (subprocess.TimeoutExpired, Exception):
+                    return None
+
+        with self._lock:
+            try:
+                devnull = os.open(os.devnull, os.O_WRONLY)
+                old_stderr = os.dup(2)
+                os.dup2(devnull, 2)
+                try:
+                    mic = sr.Microphone()
+                    with mic as source:
+                        audio = self.recognizer.listen(source, timeout=8, phrase_time_limit=30)
+                finally:
+                    os.dup2(old_stderr, 2)
+                    os.close(devnull)
+                    os.close(old_stderr)
+                return self.recognizer.recognize_google(audio)
+            except (sr.WaitTimeoutError, sr.UnknownValueError):
+                return None
+            except sr.RequestError as e:
+                console.print(f"  [red]Speech API error: {e}[/red]")
+                return None
+            except OSError:
+                return None
+
+
+# ── Command Execution ─────────────────────────────────────────────────────────
+
+SAFE_PREFIXES = [
+    "open ", "ls", "pwd", "date", "cal", "whoami", "uptime", "df ",
+    "system_profiler", "sw_vers", "top -l 1", "ps aux", "echo ",
+    "cat ", "head ", "tail ", "wc ", "du ", "which ", "python3 ",
+    "brew ", "pmset", "networksetup", "ifconfig", "curl ",
+    "osascript", "defaults read", "say ", "afplay ", "screencapture",
+    "termux-open", "termux-battery-status", "termux-wifi-connectioninfo",
+    "termux-toast", "termux-vibrate", "termux-tts-speak", "termux-notification",
+    "termux-clipboard-set", "termux-clipboard-get", "termux-share",
+    "xdg-open", "espeak", "mpv ", "ffplay ",
+    "mdls ", "mdfind ", "diskutil list", "sysctl ", "mkdir ",
+    "touch ", "cp ", "mv ", "chmod ", "find ", "grep ", "pip",
+    "node ", "npm ", "git ", "zip ", "unzip ", "tar ",
+]
+
+BLOCKED_PATTERNS = ["rm -rf /", "sudo rm -rf", "mkfs", "> /dev", "dd if=", ":(){ :", "fork bomb"]
+
+
+def is_safe_command(cmd: str) -> bool:
+    cmd_stripped = cmd.strip()
+    if any(danger in cmd_stripped for danger in BLOCKED_PATTERNS):
+        return False
+    return any(cmd_stripped.startswith(prefix) for prefix in SAFE_PREFIXES)
+
+
+def execute_shell(cmd: str) -> str:
+    if not is_safe_command(cmd):
+        return f"⚠️ Blocked unsafe command: {cmd}"
+    try:
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
+        output = result.stdout.strip()
+        if result.returncode != 0 and result.stderr:
+            output += f"\n(stderr: {result.stderr.strip()})"
+        return output or "(command completed with no output)"
+    except subprocess.TimeoutExpired:
+        return "(command timed out after 30s)"
+    except Exception as e:
+        return f"(error: {e})"
+
+
+def create_file(path: str, content: str) -> str:
+    try:
+        filepath = Path(path).expanduser()
+        filepath.parent.mkdir(parents=True, exist_ok=True)
+        filepath.write_text(content, encoding="utf-8")
+        size = filepath.stat().st_size
+        return f"✓ Created {filepath} ({size} bytes)"
+    except Exception as e:
+        return f"✗ Failed to create file: {e}"
+
+
+def create_folder(path: str) -> str:
+    """Create a folder (and all parent directories)."""
+    try:
+        folder = Path(path).expanduser()
+        folder.mkdir(parents=True, exist_ok=True)
+        return f"✓ Created folder {folder}"
+    except Exception as e:
+        return f"✗ Failed to create folder: {e}"
+
+
+import shutil
+
+def move_path(src: str, dst: str) -> str:
+    """Move a file or folder."""
+    try:
+        src_p = Path(src).expanduser()
+        dst_p = Path(dst).expanduser()
+        if not src_p.exists():
+            return f"✗ Source not found: {src_p}"
+        dst_p.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(src_p), str(dst_p))
+        return f"✓ Moved {src_p} → {dst_p}"
+    except Exception as e:
+        return f"✗ Failed to move: {e}"
+
+
+def copy_path(src: str, dst: str) -> str:
+    """Copy a file or folder."""
+    try:
+        src_p = Path(src).expanduser()
+        dst_p = Path(dst).expanduser()
+        if not src_p.exists():
+            return f"✗ Source not found: {src_p}"
+        dst_p.parent.mkdir(parents=True, exist_ok=True)
+        if src_p.is_dir():
+            shutil.copytree(str(src_p), str(dst_p))
+        else:
+            shutil.copy2(str(src_p), str(dst_p))
+        return f"✓ Copied {src_p} → {dst_p}"
+    except Exception as e:
+        return f"✗ Failed to copy: {e}"
+
+
+def search_web(query: str) -> str:
+    try:
+        encoded_q = urllib.parse.quote(query)
+        _open_url_in_browser(f"https://www.google.com/search?q={encoded_q}")
+
+        ddg_url = f"https://html.duckduckgo.com/html/?q={encoded_q}"
+        req = urllib.request.Request(ddg_url, headers={
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
+        })
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            html = resp.read().decode("utf-8", errors="replace")
+
+        results = []
+        links = re.findall(r'<a[^>]*class="result__a"[^>]*>(.*?)</a>', html, re.DOTALL)
+        snippets = re.findall(r'<a[^>]*class="result__snippet"[^>]*>(.*?)</a>', html, re.DOTALL)
+
+        for i, (link, snippet) in enumerate(zip(links[:8], snippets[:8]), 1):
+            clean_link = re.sub(r'<[^>]+>', '', link).strip()
+            clean_snip = re.sub(r'<[^>]+>', '', snippet).strip()
+            clean_snip = clean_snip.replace("&#x27;", "'").replace("&amp;", "&").replace("&quot;", '"')
+            clean_link = clean_link.replace("&#x27;", "'").replace("&amp;", "&").replace("&quot;", '"')
+            if clean_snip:
+                results.append(f"{i}. {clean_link}\n   {clean_snip}")
+
+        if results:
+            return f"Search results for '{query}':\n\n" + "\n\n".join(results)
+
+        text = re.sub(r'<[^>]+>', ' ', html)
+        text = re.sub(r'\s+', ' ', text).strip()
+        return f"Search results for '{query}':\n{text[:2000]}"
+    except Exception as e:
+        return f"Search error: {e}"
+
+
+def fetch_url(url: str) -> str:
+    try:
+        req = urllib.request.Request(url, headers={
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
+        })
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            content_type = resp.headers.get("Content-Type", "")
+            raw = resp.read()
+
+            if "json" in content_type:
+                data = json.loads(raw.decode("utf-8", errors="replace"))
+                return json.dumps(data, indent=2)[:4000]
+
+            text = raw.decode("utf-8", errors="replace")
+            if "html" in content_type:
+                text = re.sub(r'<(script|style)[^>]*>.*?</\1>', '', text, flags=re.DOTALL | re.IGNORECASE)
+                text = re.sub(r'<[^>]+>', ' ', text)
+                text = re.sub(r'\s+', ' ', text).strip()
+
+            return text[:4000] if text else "(empty response)"
+    except Exception as e:
+        return f"Fetch error: {e}"
+
+
+def open_file(path: str) -> str:
+    """Open a file or URL using the system default handler."""
+    try:
+        target = Path(path).expanduser() if not path.startswith("http") else path
+        if not path.startswith("http") and not Path(target).exists():
+            return f"✗ File not found: {target}"
+        _open_path(str(target))
+        return f"✓ Opened {target}"
+    except Exception as e:
+        return f"✗ Failed to open: {e}"
+
+
+# ── Safari Browser Control ────────────────────────────────────────────────────
+
+def _run_applescript(script: str) -> str:
+    """Run an AppleScript and return its output."""
+    try:
+        result = subprocess.run(
+            ["osascript", "-e", script],
+            capture_output=True, text=True, timeout=15,
+        )
+        output = result.stdout.strip()
+        if result.returncode != 0 and result.stderr:
+            return f"(AppleScript error: {result.stderr.strip()})"
+        return output
+    except subprocess.TimeoutExpired:
+        return "(timed out)"
+    except Exception as e:
+        return f"(error: {e})"
+
+
+def _safari_js(js_code: str) -> str:
+    """Execute JavaScript in the current Safari tab and return the result."""
+    escaped = js_code.replace("\\", "\\\\").replace('"', '\\"')
+    script = f'tell application "Safari" to do JavaScript "{escaped}" in current tab of front window'
+    result = _run_applescript(script)
+    if "Allow JavaScript from Apple Events" in result:
+        return ("✗ Safari needs JavaScript enabled for DARVIS control.\n"
+                "Enable it: Safari → Settings → Advanced → tick 'Show features for web developers'\n"
+                "Then: Developer menu → tick 'Allow JavaScript from Apple Events'")
+    return result
+
+
+# Shared JS to extract meaningful links (filters out Google/nav junk)
+SAFARI_GET_LINKS_JS = """
+(function() {
+    var skip = ['google.com/search','google.com/preferences','accounts.google','maps.google','support.google','policies.google','google.com/intl'];
+    var links = document.querySelectorAll('a[href]');
+    var seen = {};
+    var results = [];
+    var idx = 0;
+    for (var i = 0; i < links.length && idx < 25; i++) {
+        var text = links[i].innerText.trim().substring(0, 80);
+        var href = links[i].href;
+        var dominated = false;
+        for (var s = 0; s < skip.length; s++) { if (href.includes(skip[s])) { dominated = true; break; } }
+        if (text && text.length > 2 && href && !href.startsWith('javascript:') && !dominated && !seen[href]) {
+            seen[href] = true;
+            results.push(idx + '|' + text + '|' + href);
+            idx++;
+        }
+    }
+    return results.join('\\n');
+})()
+"""
+
+
+def _safari_navigate(url: str):
+    """Navigate Safari to a URL directly via AppleScript (most reliable)."""
+    escaped_url = url.replace('"', '\\"')
+    _run_applescript(f'tell application "Safari" to set URL of current tab of front window to "{escaped_url}"')
+    _run_applescript('tell application "Safari" to activate')
+
+
+def safari_control(data: dict) -> str:
+    """Handle Safari browser control actions."""
+    if not IS_MAC:
+        return "Safari control is only available on macOS. Use search_web or fetch_url instead."
+    method = data.get("method", "")
+
+    if method == "get_page_info":
+        url = _run_applescript('tell application "Safari" to get URL of current tab of front window')
+        title = _run_applescript('tell application "Safari" to get name of current tab of front window')
+
+        links_js = SAFARI_GET_LINKS_JS
+        raw_links = _safari_js(links_js)
+
+        # Format for display
+        formatted = []
+        for line in raw_links.split("\n"):
+            parts = line.split("|", 2)
+            if len(parts) == 3:
+                formatted.append(f"  [{parts[0]}] {parts[1]}\n      {parts[2]}")
+
+        links_display = "\n".join(formatted) if formatted else "(no links found)"
+        return f"Safari Page Info:\nTitle: {title}\nURL: {url}\n\nClickable Links:\n{links_display}"
+
+    elif method == "click_link":
+        # Strategy: get the href from the page, then navigate via AppleScript (much more reliable than .click())
+        if "index" in data:
+            idx = int(data["index"])
+            js = f"""
+            (function() {{
+                var skip = ['google.com/search','google.com/preferences','accounts.google','maps.google','support.google','policies.google','google.com/intl'];
+                var links = document.querySelectorAll('a[href]');
+                var seen = {{}};
+                var clickable = [];
+                for (var i = 0; i < links.length; i++) {{
+                    var text = links[i].innerText.trim();
+                    var href = links[i].href;
+                    var dominated = false;
+                    for (var s = 0; s < skip.length; s++) {{ if (href.includes(skip[s])) {{ dominated = true; break; }} }}
+                    if (text && text.length > 2 && href && !href.startsWith('javascript:') && !dominated && !seen[href]) {{
+                        seen[href] = true;
+                        clickable.push({{text: text.substring(0, 80), href: href}});
+                    }}
+                }}
+                if ({idx} < clickable.length) {{
+                    return clickable[{idx}].href + '|||' + clickable[{idx}].text;
+                }}
+                return 'NOT_FOUND|||' + clickable.length + ' links available';
+            }})()
+            """
+            result = _safari_js(js)
+            parts = result.split("|||", 1)
+            if parts[0] == "NOT_FOUND":
+                return f"Link index {idx} not found ({parts[1] if len(parts) > 1 else ''})"
+            href = parts[0]
+            text = parts[1] if len(parts) > 1 else ""
+            _safari_navigate(href)
+            import time
+            time.sleep(1.5)
+            new_title = _run_applescript('tell application "Safari" to get name of current tab of front window')
+            return f"✓ Clicked [{idx}] \"{text}\"\n  Navigated to: {href}\n  Page loaded: {new_title}"
+
+        elif "text" in data:
+            search_text = data["text"].replace("'", "\\'").replace('"', '\\"')
+            js = f"""
+            (function() {{
+                var skip = ['google.com/search','google.com/preferences','accounts.google','maps.google','support.google','policies.google','google.com/intl'];
+                var links = document.querySelectorAll('a[href]');
+                for (var i = 0; i < links.length; i++) {{
+                    var text = links[i].innerText.trim();
+                    var href = links[i].href;
+                    var dominated = false;
+                    for (var s = 0; s < skip.length; s++) {{ if (href.includes(skip[s])) {{ dominated = true; break; }} }}
+                    if (text && href && !href.startsWith('javascript:') && !dominated && text.toLowerCase().includes('{search_text.lower()}')) {{
+                        return href + '|||' + text.substring(0, 80);
+                    }}
+                }}
+                return 'NOT_FOUND|||No link matching "{search_text}"';
+            }})()
+            """
+            result = _safari_js(js)
+            parts = result.split("|||", 1)
+            if parts[0] == "NOT_FOUND":
+                return parts[1] if len(parts) > 1 else "Link not found"
+            href = parts[0]
+            text = parts[1] if len(parts) > 1 else ""
+            _safari_navigate(href)
+            import time
+            time.sleep(1.5)
+            new_title = _run_applescript('tell application "Safari" to get name of current tab of front window')
+            return f"✓ Clicked \"{text}\"\n  Navigated to: {href}\n  Page loaded: {new_title}"
+
+        return "Need 'index' or 'text' to click a link"
+
+    elif method == "click_button":
+        search_text = data.get("text", "").replace("'", "\\'").replace('"', '\\"')
+        js = f"""
+        (function() {{
+            var els = document.querySelectorAll('button, input[type="submit"], input[type="button"], [role="button"], a.btn, a.button');
+            for (var i = 0; i < els.length; i++) {{
+                var btnText = (els[i].innerText || els[i].value || els[i].getAttribute('aria-label') || '').trim();
+                if (btnText.toLowerCase().includes('{search_text.lower()}')) {{
+                    els[i].dispatchEvent(new MouseEvent('click', {{bubbles: true, cancelable: true}}));
+                    return 'Clicked button: ' + btnText.substring(0, 60);
+                }}
+            }}
+            return 'No button found matching "{search_text}"';
+        }})()
+        """
+        return _safari_js(js)
+
+    elif method == "read_page":
+        js = """
+        (function() {
+            var body = document.body.innerText;
+            return body.substring(0, 4000);
+        })()
+        """
+        text = _safari_js(js)
+        return f"Page Content:\n{text}" if text else "Could not read page"
+
+    elif method == "run_js":
+        code = data.get("code", "")
+        if not code:
+            return "No JavaScript code provided"
+        return _safari_js(code)
+
+    elif method == "navigate":
+        url = data.get("url", "")
+        if not url:
+            return "No URL provided"
+        _safari_navigate(url)
+        return f"✓ Navigated to {url}"
+
+    elif method == "back":
+        _safari_js("history.back()")
+        return "✓ Went back"
+
+    elif method == "forward":
+        _safari_js("history.forward()")
+        return "✓ Went forward"
+
+    elif method == "scroll":
+        direction = data.get("direction", "down")
+        if direction == "down":
+            _safari_js("window.scrollBy(0, 600)")
+        elif direction == "up":
+            _safari_js("window.scrollBy(0, -600)")
+        elif direction == "top":
+            _safari_js("window.scrollTo(0, 0)")
+        elif direction == "bottom":
+            _safari_js("window.scrollTo(0, document.body.scrollHeight)")
+        return f"✓ Scrolled {direction}"
+
+    elif method == "type_text":
+        text = data.get("text", "").replace("'", "\\'")
+        js = f"""
+        (function() {{
+            var el = document.activeElement;
+            if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) {{
+                el.value = '{text}';
+                el.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                return 'Typed into ' + el.tagName + ': ' + '{text}'.substring(0, 40);
+            }}
+            // Try to find a visible search/text input
+            var inputs = document.querySelectorAll('input[type="text"], input[type="search"], input:not([type]), textarea');
+            for (var i = 0; i < inputs.length; i++) {{
+                if (inputs[i].offsetParent !== null) {{
+                    inputs[i].focus();
+                    inputs[i].value = '{text}';
+                    inputs[i].dispatchEvent(new Event('input', {{ bubbles: true }}));
+                    return 'Typed into ' + inputs[i].tagName + ': ' + '{text}'.substring(0, 40);
+                }}
+            }}
+            return 'No input field found on page';
+        }})()
+        """
+        return _safari_js(js)
+
+    else:
+        return f"Unknown Safari method: {method}"
+
+
+def extract_and_run_commands(response_text: str) -> list[str]:
+    results = []
+    pattern = r'```command\s*\n(.*?)\n```'
+    matches = re.findall(pattern, response_text, re.DOTALL)
+    for match in matches:
+        try:
+            data = json.loads(match)
+            action = data.get("action", "")
+
+            if action == "shell" and "command" in data:
+                cmd = data["command"]
+                console.print(f"  [dim]Shell:[/dim] {cmd}")
+                output = execute_shell(cmd)
+                results.append(output)
+                if output:
+                    console.print(f"  [dim]{output[:300]}[/dim]")
+
+            elif action == "create_file" and "path" in data and "content" in data:
+                console.print(f"  [dim]Creating:[/dim] {data['path']}")
+                output = create_file(data["path"], data["content"])
+                results.append(output)
+                console.print(f"  [dim]{output}[/dim]")
+
+            elif action == "search_web" and "query" in data:
+                console.print(f"  [dim]Searching:[/dim] {data['query']}")
+                output = search_web(data["query"])
+                results.append(output)
+                console.print(f"  [dim]{output[:300]}...[/dim]")
+
+            elif action == "fetch_url" and "url" in data:
+                console.print(f"  [dim]Fetching:[/dim] {data['url']}")
+                output = fetch_url(data["url"])
+                results.append(output)
+                console.print(f"  [dim]{output[:300]}...[/dim]")
+
+            elif action == "open_file" and "path" in data:
+                target = data["path"]
+                console.print(f"  [dim]Opening:[/dim] {target}")
+                output = open_file(target)
+                results.append(output)
+                console.print(f"  [dim]{output}[/dim]")
+
+            elif action == "create_folder" and "path" in data:
+                console.print(f"  [dim]Creating folder:[/dim] {data['path']}")
+                output = create_folder(data["path"])
+                results.append(output)
+                console.print(f"  [dim]{output}[/dim]")
+
+            elif action == "move" and "from" in data and "to" in data:
+                console.print(f"  [dim]Moving:[/dim] {data['from']} → {data['to']}")
+                output = move_path(data["from"], data["to"])
+                results.append(output)
+                console.print(f"  [dim]{output}[/dim]")
+
+            elif action == "copy" and "from" in data and "to" in data:
+                console.print(f"  [dim]Copying:[/dim] {data['from']} → {data['to']}")
+                output = copy_path(data["from"], data["to"])
+                results.append(output)
+                console.print(f"  [dim]{output}[/dim]")
+
+            elif action == "safari" and "method" in data:
+                method = data["method"]
+                console.print(f"  [dim]Safari:[/dim] {method}")
+                output = safari_control(data)
+                results.append(output)
+                if output:
+                    console.print(f"  [dim]{output[:400]}[/dim]")
+
+        except json.JSONDecodeError:
+            pass
+    return results
+
+
+# ── Brain (Ollama Cloud) ──────────────────────────────────────────────────────
+
+def load_env() -> dict[str, str]:
+    env = {}
+    if CONFIG_PATH.exists():
+        for line in CONFIG_PATH.read_text().splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                env[k.strip()] = v.strip()
+    return env
+
+
+def get_key(name: str, prompt_msg: str = "") -> str:
+    env = load_env()
+    if name in env and env[name]:
+        return env[name]
+    val = os.environ.get(name)
+    if val:
+        return val
+    if prompt_msg:
+        console.print(Panel(prompt_msg, title="[bold yellow]Key Required[/bold yellow]", border_style="yellow"))
+        val = console.input("  [bold]Paste key: [/bold]").strip()
+        if val:
+            with open(CONFIG_PATH, "a") as f:
+                f.write(f"{name}={val}\n")
+            return val
+    return ""
+
+
+class Brain:
+    def __init__(self, api_key: str, model: str = MODEL):
+        self.api_key = api_key
+        self.model = model
+        self.history: list[dict] = []
+
+    def _call_ollama(self, messages: list[dict]) -> str:
+        payload = json.dumps({
+            "model": self.model,
+            "messages": messages,
+            "stream": False,
+        }).encode("utf-8")
+
+        req = urllib.request.Request(
+            f"{OLLAMA_URL}/chat",
+            data=payload,
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self.api_key}",
+            },
+            method="POST",
+        )
+
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            return data["message"]["content"]
+
+    def think(self, user_input: str, context: str = "") -> str:
+        now = datetime.datetime.now()
+        time_ctx = f"[Current time: {now.strftime('%A, %B %d, %Y at %I:%M %p')}]"
+
+        content = f"{time_ctx}\n{user_input}"
+        if context:
+            content += f"\n\n[System output from previous command:\n{context}]"
+
+        self.history.append({"role": "user", "content": content})
+
+        if len(self.history) > MAX_HISTORY * 2:
+            self.history = self.history[-(MAX_HISTORY * 2):]
+
+        prompt = SYSTEM_PROMPT.replace("HOME_DIR", HOME_DIR)
+        messages = [{"role": "system", "content": prompt}] + self.history
+
+        reply = self._call_ollama(messages)
+        self.history.append({"role": "assistant", "content": reply})
+        return reply
+
+
+# ── Ollama Cloud Helpers ──────────────────────────────────────────────────────
+
+def check_ollama_cloud(api_key: str) -> bool:
+    try:
+        req = urllib.request.Request(
+            f"{OLLAMA_URL}/tags",
+            headers={"Authorization": f"Bearer {api_key}"},
+            method="GET",
+        )
+        with urllib.request.urlopen(req, timeout=10):
+            return True
+    except (urllib.error.URLError, ConnectionError, OSError):
+        return False
+
+
+def list_cloud_models(api_key: str) -> list[str]:
+    try:
+        req = urllib.request.Request(
+            f"{OLLAMA_URL}/tags",
+            headers={"Authorization": f"Bearer {api_key}"},
+            method="GET",
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            return [m["name"] for m in data.get("models", [])]
+    except Exception:
+        return []
+
+
+CLOUD_MODELS = [
+    "llama3.3:70b",
+    "llama3.1:8b",
+    "qwen2.5:72b",
+    "qwen2.5:7b",
+    "deepseek-r1:70b",
+    "deepseek-r1:8b",
+    "mistral:7b",
+    "gemma2:27b",
+    "phi4:14b",
+]
+
+
+def select_model(api_key: str, saved_model: str = "") -> str:
+    if saved_model:
+        console.print(f"  [dim]Saved model:[/dim] [bold]{saved_model}[/bold]")
+        choice = console.input(f"  [bold]Keep {saved_model}? [enter=yes, n=change]: [/bold]").strip().lower()
+        if choice not in ("n", "no", "change"):
+            return saved_model
+
+    models = list_cloud_models(api_key)
+    if not models:
+        models = CLOUD_MODELS
+        console.print(f"  [dim]Known Ollama Cloud models:[/dim]")
+    else:
+        console.print(f"  [dim]Available cloud models:[/dim]")
+
+    for i, name in enumerate(models, 1):
+        marker = " [green](default)[/green]" if name == MODEL else ""
+        console.print(f"    {i}. {name}{marker}")
+
+    choice = console.input(f"\n  [bold]Select model [enter for {MODEL}]: [/bold]").strip()
+
+    if not choice:
+        return MODEL
+    if choice.isdigit() and 1 <= int(choice) <= len(models):
+        return models[int(choice) - 1]
+    return choice
+
+
+# ── Voice Selection ───────────────────────────────────────────────────────────
+
+def show_voice_menu(tts: ElevenLabsVoice) -> str:
+    table = Table(title="Available Voices", border_style=BLUE)
+    table.add_column("#", style="dim", width=3)
+    table.add_column("Name", style=f"bold {CYAN}")
+    table.add_column("Description", style=DIM)
+    table.add_column("ID", style="dim")
+
+    voices = list(ElevenLabsVoice.PRESET_VOICES.items())
+
+    console.print(f"  [dim]Fetching voices...[/dim]")
+    account_voices = tts.fetch_voices()
+    custom_voices = []
+    preset_ids = {v["id"] for v in ElevenLabsVoice.PRESET_VOICES.values()}
+    for v in account_voices:
+        if v["voice_id"] not in preset_ids:
+            custom_voices.append((v["name"].lower(), {"id": v["voice_id"], "desc": v.get("labels", {}).get("description", v.get("category", "custom"))}))
+
+    all_voices = voices + custom_voices
+
+    for i, (name, info) in enumerate(all_voices, 1):
+        current = " ◄" if info["id"] == tts.voice_id else ""
+        table.add_row(str(i), name.title(), info["desc"], info["id"][:16] + "..." + current)
+
+    console.print()
+    console.print(table)
+    console.print(f"\n  [dim]Or paste any ElevenLabs voice ID directly.[/dim]")
+
+    choice = console.input(f"\n  [bold]Select voice [enter to keep current]: [/bold]").strip()
+
+    if not choice:
+        return tts.voice_id
+    if choice.isdigit() and 1 <= int(choice) <= len(all_voices):
+        return all_voices[int(choice) - 1][1]["id"]
+    for name, info in all_voices:
+        if choice.lower() == name:
+            return info["id"]
+    return choice
+
+
+def select_initial_voice(tts: ElevenLabsVoice, saved_voice: str = "") -> str:
+    if saved_voice:
+        tts.set_voice(saved_voice)
+        console.print(f"  [dim]Saved voice:[/dim] [bold]{tts.voice_name.title()}[/bold]")
+        choice = console.input(f"  [bold]Keep {tts.voice_name.title()}? [enter=yes, n=change]: [/bold]").strip().lower()
+        if choice not in ("n", "no", "change"):
+            return saved_voice
+
+    account_voices = tts.fetch_voices()
+    default_name = "Custom"
+    for v in account_voices:
+        if v["voice_id"] == DEFAULT_VOICE_ID:
+            default_name = v["name"]
+            break
+
+    console.print(f"\n  [dim]ElevenLabs voices:[/dim]")
+    console.print(f"    [green]★  {default_name} (default)[/green] — {DEFAULT_VOICE_ID[:16]}...")
+    voices = list(ElevenLabsVoice.PRESET_VOICES.items())
+    for i, (name, info) in enumerate(voices, 1):
+        console.print(f"    {i}. {name.title():10s} — {info['desc']}")
+
+    console.print(f"    [dim]Or paste a voice ID directly[/dim]")
+    choice = console.input(f"\n  [bold]Select voice [enter for {default_name}]: [/bold]").strip()
+
+    if not choice:
+        return DEFAULT_VOICE_ID
+    if choice.isdigit() and 1 <= int(choice) <= len(voices):
+        return voices[int(choice) - 1][1]["id"]
+    for name, info in voices:
+        if choice.lower() == name:
+            return info["id"]
+    return choice
+
+
+# ── Main Loop ─────────────────────────────────────────────────────────────────
+
+def main():
+    banner()
+
+    # Load saved settings
+    settings = load_settings()
+    saved_model = settings.get("model", "")
+    saved_voice = settings.get("voice_id", "")
+    if saved_model or saved_voice:
+        console.print(f"  [dim]Loaded saved settings[/dim]")
+
+    # Load keys
+    ollama_key = get_key("OLLAMA_API_KEY", "I need an Ollama Cloud API key.\nGet one at: https://ollama.com/settings/keys")
+    if not ollama_key:
+        console.print("  [red]No Ollama key. Exiting.[/red]")
+        sys.exit(1)
+    console.print(f"  [green]✓[/green] Ollama API key loaded")
+
+    elevenlabs_key = get_key("ELEVENLABS_API_KEY", "I need an ElevenLabs API key for voice.\nGet one at: https://elevenlabs.io/app/settings/api-keys")
+    if not elevenlabs_key:
+        console.print("  [red]No ElevenLabs key. Exiting.[/red]")
+        sys.exit(1)
+    console.print(f"  [green]✓[/green] ElevenLabs API key loaded")
+
+    # Check Ollama Cloud
+    with console.status(f"[{BLUE}]Connecting to Ollama Cloud...", spinner="arc"):
+        cloud_ok = check_ollama_cloud(ollama_key)
+
+    if not cloud_ok:
+        console.print(
+            Panel(
+                "Cannot reach Ollama Cloud.\n"
+                "Check your API key and internet connection.\n"
+                f"Endpoint: {OLLAMA_URL}",
+                title="[bold red]Connection Failed[/bold red]",
+                border_style="red",
+            )
+        )
+        console.print(f"  [yellow]Continuing anyway...[/yellow]\n")
+    else:
+        console.print(f"  [green]✓[/green] Ollama Cloud connected")
+
+    # Select model (uses saved if available)
+    model = select_model(ollama_key, saved_model)
+    brain = Brain(api_key=ollama_key, model=model)
+    console.print(f"  [green]✓[/green] Brain online ({model})")
+
+    # Select voice (uses saved if available)
+    tts = ElevenLabsVoice(api_key=elevenlabs_key)
+    voice_id = select_initial_voice(tts, saved_voice)
+    tts.set_voice(voice_id)
+    console.print(f"  [green]✓[/green] Voice: {tts.voice_name.title()}")
+
+    # Save settings for next run
+    save_settings({"model": model, "voice_id": voice_id})
+
+    # Init microphone
+    ear = Ear()
+    has_mic = ear.init_mic()
+
+    # Start in /type mode (text-only, no auto-listening)
+    listening_active = False
+    console.print(
+        Panel(
+            f"Input: [bold]text[/bold] | Voice: [bold]{tts.voice_name.title()}[/bold] | Model: [bold]{model}[/bold]\n"
+            + "Type your message, or use commands below:\n"
+            + "[bold]/listen[/bold]     — start listening via microphone\n"
+            + "[bold]/type[/bold]       — stop listening, text-only mode\n"
+            + "[bold]/voices[/bold]     — change voice\n"
+            + "[bold]/voice NAME[/bold] — quick switch voice\n"
+            + "[bold]/help[/bold]       — all commands\n"
+            + "[bold]goodbye[/bold]     — exit D.A.R.V.I.S.",
+            title=f"[bold {CYAN}]D.A.R.V.I.S. Ready[/bold {CYAN}]",
+            border_style=CYAN,
+        )
+    )
+
+    # Input system — uses select() on stdin + background mic thread
+    import queue
+    import select as _select
+    speech_queue: queue.Queue[str] = queue.Queue()
+    _listen_stop = threading.Event()
+
+    def _background_listener():
+        """Continuously listen for speech and put results in the queue."""
+        while not _listen_stop.is_set():
+            if not listening_active:
+                _listen_stop.wait(timeout=0.5)
+                continue
+            result = ear.listen()
+            if result and listening_active:
+                speech_queue.put(result)
+
+    if has_mic:
+        mic_thread = threading.Thread(target=_background_listener, daemon=True)
+        mic_thread.start()
+
+    def _get_input_listen_mode() -> str | None:
+        """In listen mode: wait for either voice or keyboard, whichever comes first."""
+        sys.stdout.write(f"\r  \033[94m● Mic on\033[0m  \033[33mYou:\033[0m ")
+        sys.stdout.flush()
+        typed_chars = []
+        import tty
+        import termios
+        old_settings = termios.tcgetattr(sys.stdin)
+        try:
+            tty.setcbreak(sys.stdin.fileno())
+            while True:
+                # Check for voice input
+                try:
+                    voice_text = speech_queue.get_nowait()
+                    # Clear the prompt line and show voice input
+                    sys.stdout.write(f"\r  \033[33mYou (voice):\033[0m {voice_text}          \n")
+                    sys.stdout.flush()
+                    return voice_text
+                except queue.Empty:
+                    pass
+
+                # Check for keyboard input (non-blocking)
+                ready, _, _ = _select.select([sys.stdin], [], [], 0.2)
+                if ready:
+                    ch = sys.stdin.read(1)
+                    if ch == '\n' or ch == '\r':
+                        sys.stdout.write('\n')
+                        sys.stdout.flush()
+                        text = ''.join(typed_chars).strip()
+                        return text if text else None
+                    elif ch == '\x7f' or ch == '\x08':  # Backspace
+                        if typed_chars:
+                            typed_chars.pop()
+                            sys.stdout.write('\b \b')
+                            sys.stdout.flush()
+                    elif ch == '\x03':  # Ctrl+C
+                        raise KeyboardInterrupt
+                    elif ch >= ' ':
+                        typed_chars.append(ch)
+                        sys.stdout.write(ch)
+                        sys.stdout.flush()
+        finally:
+            termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
+
+    while True:
+        try:
+            user_input = None
+
+            if listening_active:
+                user_input = _get_input_listen_mode()
+            else:
+                # Drain stale voice queue
+                try:
+                    while not speech_queue.empty():
+                        speech_queue.get_nowait()
+                except queue.Empty:
+                    pass
+                user_input = console.input(f"  [bold {GOLD}]You:[/bold {GOLD}] ").strip()
+
+            if not user_input:
+                continue
+
+            lower = user_input.lower().strip()
+
+            # ── Slash Commands ──
+            if lower in ("goodbye", "exit", "quit", "shut down", "shutdown"):
+                _listen_stop.set()
+                tts.speak("Goodbye, sir. I'll be here if you need me.")
+                console.print(
+                    f"\n  [bold {CYAN}]Goodbye, sir. I'll be here if you need me.[/bold {CYAN}]\n"
+                )
+                tts.wait_for_speech()
+                break
+
+            if lower in ("/type", "/text"):
+                listening_active = False
+                # Drain any pending voice input
+                try:
+                    while not speech_queue.empty():
+                        speech_queue.get_nowait()
+                except queue.Empty:
+                    pass
+                console.print(f"  [green]✓[/green] Mic off — text only. Type [bold]/listen[/bold] to resume.")
+                continue
+
+            if lower in ("/listen", "/mic"):
+                if has_mic:
+                    listening_active = True
+                    console.print(f"  [green]✓[/green] Mic on — listening + typing. Type [bold]/type[/bold] to pause.")
+                else:
+                    console.print(f"  [red]No microphone available[/red]")
+                continue
+
+            if lower == "/voices" or lower.startswith("/voice "):
+                if lower.startswith("/voice ") and len(lower) > 7:
+                    arg = user_input.strip().split(None, 1)[1]
+                    matched = False
+                    for name, info in ElevenLabsVoice.PRESET_VOICES.items():
+                        if arg.lower() == name:
+                            tts.set_voice(info["id"])
+                            matched = True
+                            break
+                    if not matched:
+                        tts.set_voice(arg)
+                    console.print(f"  [green]✓[/green] Voice changed to [bold]{tts.voice_name.title()}[/bold]")
+                    # Save to settings
+                    settings["voice_id"] = tts.voice_id
+                    save_settings(settings)
+                    tts.speak("Voice updated. How do I sound, sir?")
+                else:
+                    new_voice = show_voice_menu(tts)
+                    tts.set_voice(new_voice)
+                    console.print(f"  [green]✓[/green] Voice changed to [bold]{tts.voice_name.title()}[/bold]")
+                    settings["voice_id"] = tts.voice_id
+                    save_settings(settings)
+                    tts.speak("Voice updated. How do I sound, sir?")
+                continue
+
+            if lower == "/help":
+                console.print(
+                    Panel(
+                        "[bold]/listen[/bold]       — start microphone listening\n"
+                        "[bold]/type[/bold]         — pause mic, text-only input\n"
+                        "[bold]/voices[/bold]       — pick a new voice (interactive menu)\n"
+                        "[bold]/voice NAME[/bold]  — switch voice by name (e.g. /voice rachel)\n"
+                        "[bold]/voice ID[/bold]    — switch voice by ElevenLabs ID\n"
+                        "[bold]goodbye[/bold]      — exit D.A.R.V.I.S.\n\n"
+                        "[dim]Settings (model + voice) are saved automatically.[/dim]",
+                        title=f"[bold {CYAN}]Commands[/bold {CYAN}]",
+                        border_style=BLUE,
+                    )
+                )
+                continue
+
+            # ── Thinking Phase ──
+            with console.status(f"[{BLUE}]Thinking...", spinner="arc"):
+                response = brain.think(user_input)
+
+            # ── Execute any commands in the response ──
+            cmd_results = extract_and_run_commands(response)
+
+            if cmd_results:
+                context = "\n".join(cmd_results)
+                with console.status(f"[{BLUE}]Processing results...", spinner="arc"):
+                    response = brain.think(
+                        "(Report the results of the command you just ran to the user naturally. Be concise.)",
+                        context=context,
+                    )
+
+            # ── Display clean response ──
+            display_text = re.sub(r'```command\s*\n.*?\n```', '', response, flags=re.DOTALL).strip()
+            if display_text:
+                console.print()
+                console.print(
+                    Panel(
+                        Markdown(display_text),
+                        title=f"[bold {CYAN}]D.A.R.V.I.S.[/bold {CYAN}]",
+                        border_style=BLUE,
+                        padding=(1, 2),
+                    )
+                )
+                console.print()
+
+                tts.speak(display_text)
+
+        except KeyboardInterrupt:
+            tts.stop_speaking()
+            _listen_stop.set()
+            console.print(f"\n\n  [bold {CYAN}]Standing by, sir.[/bold {CYAN}]\n")
+            break
+        except urllib.error.HTTPError as e:
+            if e.code == 401:
+                console.print(f"\n  [red]Authentication failed — check your API key(s).[/red]\n")
+            else:
+                console.print(f"\n  [red]API error ({e.code}): {e.reason}[/red]\n")
+        except urllib.error.URLError as e:
+            console.print(f"\n  [red]Connection error: {e}[/red]")
+            console.print(f"  [dim]Check your internet connection.[/dim]\n")
+        except Exception as e:
+            console.print(f"\n  [red]Error: {e}[/red]\n")
+
+
+if __name__ == "__main__":
+    main()

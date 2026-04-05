@@ -1,10 +1,7 @@
 #!/bin/bash
 # D.A.R.V.I.S. — Developer setup for Android (Termux)
-# Installs everything needed to develop + deploy from your phone:
-#   - DARVIS + dependencies
-#   - Git (with GitHub auth)
-#   - Node.js + Netlify CLI
-#   - Claude Code (AI coding assistant)
+# After this, just type: darvis-dev
+# Then tell Claude Code what to fix. It handles code, deploy, commit, push.
 #
 # Usage:
 #   curl -sL https://raw.githubusercontent.com/Juanshep1/DARVIS/main/dev-setup.sh | bash
@@ -19,7 +16,7 @@ echo "  ██║  ██║██╔══██║██╔══██╗╚�
 echo "  ██████╔╝██║  ██║██║  ██║ ╚████╔╝ ██║███████║"
 echo "  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝  ╚═══╝  ╚═╝╚══════╝"
 echo ""
-echo "  Developer Setup — Code on Android, push to GitHub"
+echo "  Developer Setup — tell Claude what to fix, it handles the rest"
 echo ""
 
 # ── Platform check ──
@@ -34,22 +31,29 @@ echo "  Platform: $PLATFORM"
 
 # ── System packages ──
 echo ""
-echo "  [1/6] Installing system packages..."
+echo "  [1/7] Installing system packages..."
 if [ "$PLATFORM" = "termux" ]; then
     pkg update -y
-    pkg install -y python git nodejs-lts openssh termux-api 2>/dev/null || true
+    pkg install -y python git nodejs-lts openssh termux-api gh 2>/dev/null || true
 elif [ "$PLATFORM" = "mac" ]; then
     which python3 >/dev/null || brew install python3
     which node >/dev/null || brew install node
     which git >/dev/null || brew install git
+    which gh >/dev/null || brew install gh
 elif [ "$PLATFORM" = "linux" ]; then
     sudo apt update
     sudo apt install -y python3 python3-pip git nodejs npm
+    # Install gh CLI
+    if ! which gh >/dev/null 2>&1; then
+        curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+        sudo apt update && sudo apt install -y gh
+    fi
 fi
 
 # ── Clone / update repo ──
 echo ""
-echo "  [2/6] Setting up DARVIS repo..."
+echo "  [2/7] Setting up DARVIS repo..."
 INSTALL_DIR="$HOME/DARVIS"
 if [ -d "$INSTALL_DIR/.git" ]; then
     echo "  Repo exists, pulling latest..."
@@ -63,64 +67,72 @@ fi
 
 # ── Python deps ──
 echo ""
-echo "  [3/6] Installing Python packages..."
+echo "  [3/7] Installing Python packages..."
 pip install rich SpeechRecognition 2>/dev/null || pip3 install rich SpeechRecognition 2>/dev/null || true
 
 # ── API keys ──
 if [ ! -f "$INSTALL_DIR/.env" ]; then
-    echo ""
-    echo "  [3.5] Setting up API keys..."
     cat > "$INSTALL_DIR/.env" << 'KEYS'
 OLLAMA_API_KEY=0305bcb541ec4980bc99bb1aa77a3d12.lIr9I8Ir2oj-S26Bo1745Kcu
 ELEVENLABS_API_KEY=sk_fc66616221fcc7b5f374a38e485815297965f2fc7baf4f7b
 KEYS
-    echo "  ✓ API keys written to .env"
+    echo "  ✓ API keys written"
 fi
 
-# ── Git config ──
+# ── Git + GitHub auth ──
 echo ""
-echo "  [4/6] Configuring Git..."
-if [ -z "$(git config --global user.name)" ]; then
-    git config --global user.name "Juanshep1"
-fi
-if [ -z "$(git config --global user.email)" ]; then
-    git config --global user.email "shephard_juan@yahoo.com"
-fi
+echo "  [4/7] Setting up Git + GitHub..."
+git config --global user.name "Juanshep1" 2>/dev/null || true
+git config --global user.email "shephard_juan@yahoo.com" 2>/dev/null || true
 
-# Set up GitHub credential caching so you don't have to type your password every push
-git config --global credential.helper store
-echo "  ✓ Git configured (user: $(git config --global user.name))"
-echo ""
-echo "  To authenticate with GitHub, you'll need a Personal Access Token:"
-echo "    1. Go to: https://github.com/settings/tokens"
-echo "    2. Generate a token with 'repo' scope"
-echo "    3. On your first 'git push', use your GitHub username"
-echo "       and paste the token as your password"
-echo "    4. It'll be saved — you won't need to enter it again"
-echo ""
+# Authenticate with GitHub CLI — this lets Claude Code push without tokens
+if which gh >/dev/null 2>&1; then
+    if ! gh auth status >/dev/null 2>&1; then
+        echo ""
+        echo "  GitHub login required (one time only)."
+        echo "  This lets Claude Code push code for you."
+        echo ""
+        gh auth login
+    else
+        echo "  ✓ Already logged into GitHub"
+    fi
+    # Set gh as the git credential helper so push just works
+    gh auth setup-git 2>/dev/null || true
+else
+    echo "  ⚠ gh CLI not available — you'll need to set up git credentials manually"
+    git config --global credential.helper store
+fi
 
 # ── Netlify CLI ──
-echo "  [5/6] Installing Netlify CLI..."
+echo ""
+echo "  [5/7] Installing Netlify CLI..."
 npm install -g netlify-cli 2>/dev/null || true
-echo "  ✓ Netlify CLI installed"
-echo ""
-echo "  To deploy from Termux, run:"
-echo "    cd ~/DARVIS/site && netlify login && netlify link --name darvis1"
-echo ""
+
+# Link Netlify site
+if [ ! -d "$INSTALL_DIR/site/.netlify" ]; then
+    echo "  Linking Netlify site..."
+    cd "$INSTALL_DIR/site"
+    netlify link --name darvis1 2>/dev/null || echo "  ⚠ Run 'netlify login' then 'netlify link --name darvis1' in ~/DARVIS/site"
+    cd "$INSTALL_DIR"
+fi
+echo "  ✓ Netlify CLI ready"
 
 # ── Claude Code ──
-echo "  [6/6] Installing Claude Code..."
+echo ""
+echo "  [6/7] Installing Claude Code..."
 npm install -g @anthropic-ai/claude-code 2>/dev/null || true
 echo "  ✓ Claude Code installed"
-echo ""
 
 # ── Shell aliases ──
+echo ""
+echo "  [7/7] Setting up shortcuts..."
 SHELL_RC="$HOME/.bashrc"
 [ -f "$HOME/.zshrc" ] && SHELL_RC="$HOME/.zshrc"
 
-# Add aliases if not present
-if ! grep -q "alias darvis=" "$SHELL_RC" 2>/dev/null; then
-    cat >> "$SHELL_RC" << 'ALIASES'
+# Remove old aliases and rewrite
+sed -i '/# DARVIS shortcuts/d; /alias darvis=/d; /alias darvis-web=/d; /alias darvis-dev=/d; /alias darvis-deploy=/d' "$SHELL_RC" 2>/dev/null || true
+
+cat >> "$SHELL_RC" << 'ALIASES'
 
 # DARVIS shortcuts
 alias darvis='cd ~/DARVIS && python3 darvis.py'
@@ -128,26 +140,25 @@ alias darvis-web='cd ~/DARVIS && python3 web.py'
 alias darvis-dev='cd ~/DARVIS && claude'
 alias darvis-deploy='cd ~/DARVIS/site && netlify deploy --prod --dir=public --functions=netlify/functions'
 ALIASES
-    echo "  ✓ Added shell aliases"
-fi
+
+echo "  ✓ Aliases added"
 
 echo ""
 echo "  ══════════════════════════════════════════════════"
-echo "  ✓ Dev environment ready!"
+echo "  ✓ Everything is set up!"
 echo ""
-echo "  Commands:"
-echo "    darvis         — Run DARVIS (terminal assistant)"
-echo "    darvis-web     — Run local web dashboard"
-echo "    darvis-dev     — Open Claude Code in the DARVIS repo"
-echo "    darvis-deploy  — Deploy to Netlify (darvis1.netlify.app)"
+echo "  To work on DARVIS, just run:"
 echo ""
-echo "  Workflow:"
-echo "    1. darvis-dev        → opens Claude Code"
-echo "    2. Make changes      → Claude writes/edits code"
-echo "    3. git add . && git commit -m 'your message'"
-echo "    4. git push          → pushes to GitHub"
-echo "    5. darvis-deploy     → deploys browser version"
+echo "    darvis-dev"
 echo ""
-echo "  First time? Run: source $SHELL_RC"
+echo "  Then tell Claude what you need:"
+echo "    'fix the voice cutting out on mobile'"
+echo "    'add a dark mode toggle'"
+echo "    'the search isnt working, fix it'"
+echo ""
+echo "  Claude Code will edit the code, deploy to Netlify,"
+echo "  commit, and push to GitHub — all automatically."
+echo ""
+echo "  Run: source $SHELL_RC"
 echo "  ══════════════════════════════════════════════════"
 echo ""

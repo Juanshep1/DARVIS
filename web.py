@@ -29,7 +29,7 @@ ELEVENLABS_URL = "https://api.elevenlabs.io/v1"
 HOME_DIR = str(Path.home())
 CONFIG_PATH = BASE_DIR / ".env"
 SETTINGS_PATH = BASE_DIR / "settings.json"
-PORT = 3000
+PORT = 2414
 
 def load_env():
     env = {}

@@ -73,7 +73,7 @@ echo ""
 echo "  Commands:"
 echo ""
 echo "    darvis        — terminal mode"
-echo "    darvis-web    — web dashboard (http://localhost:3000)"
+echo "    darvis-web    — web dashboard (http://localhost:2414)"
 echo ""
 
 # Create shortcut aliases

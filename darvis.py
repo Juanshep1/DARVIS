@@ -502,12 +502,21 @@ class Ear:
         if self._use_termux:
             with self._lock:
                 try:
+                    # termux-speech-to-text blocks until user speaks, then returns text
                     result = subprocess.run(
-                        ["termux-speech-to-text"], capture_output=True, text=True, timeout=15
+                        ["termux-speech-to-text"], capture_output=True, text=True, timeout=30
                     )
                     text = result.stdout.strip()
-                    return text if text else None
-                except (subprocess.TimeoutExpired, Exception):
+                    # Validate: ignore empty, too short, or garbage results
+                    if not text or len(text) < 2:
+                        return None
+                    # Filter out common garbage characters from failed recognition
+                    if all(c in '[]{}().,;:!?"\'-_/\\|@#$%^&*~`' for c in text):
+                        return None
+                    return text
+                except subprocess.TimeoutExpired:
+                    return None
+                except Exception:
                     return None
 
         with self._lock:
@@ -1331,6 +1340,10 @@ def main():
             result = ear.listen()
             if result and listening_active:
                 speech_queue.put(result)
+            # Cooldown to prevent rapid-fire on Termux
+            if IS_TERMUX:
+                import time
+                time.sleep(1)
 
     if has_mic:
         mic_thread = threading.Thread(target=_background_listener, daemon=True)
@@ -1338,6 +1351,35 @@ def main():
 
     def _get_input_listen_mode() -> str | None:
         """In listen mode: wait for either voice or keyboard, whichever comes first."""
+        if IS_TERMUX:
+            # Termux: simple approach — show prompt, use input() with a thread
+            # checking the speech queue in parallel
+            console.print(f"  [{BLUE}]● Mic on[/{BLUE}] [dim](listening... type or speak)[/dim]")
+            input_result = [None]
+            got_input = threading.Event()
+
+            def _wait_for_text():
+                try:
+                    input_result[0] = console.input(f"  [bold {GOLD}]You:[/bold {GOLD}] ").strip()
+                except EOFError:
+                    input_result[0] = None
+                got_input.set()
+
+            text_thread = threading.Thread(target=_wait_for_text, daemon=True)
+            text_thread.start()
+
+            # Poll speech queue while waiting for text input
+            while not got_input.is_set():
+                try:
+                    voice_text = speech_queue.get(timeout=0.3)
+                    console.print(f"  [bold {GOLD}]You (voice):[/bold {GOLD}] {voice_text}")
+                    return voice_text
+                except queue.Empty:
+                    continue
+
+            return input_result[0] if input_result[0] else None
+
+        # macOS/Linux: use raw terminal for responsive dual input
         sys.stdout.write(f"\r  \033[94m● Mic on\033[0m  \033[33mYou:\033[0m ")
         sys.stdout.flush()
         typed_chars = []
@@ -1347,17 +1389,14 @@ def main():
         try:
             tty.setcbreak(sys.stdin.fileno())
             while True:
-                # Check for voice input
                 try:
                     voice_text = speech_queue.get_nowait()
-                    # Clear the prompt line and show voice input
                     sys.stdout.write(f"\r  \033[33mYou (voice):\033[0m {voice_text}          \n")
                     sys.stdout.flush()
                     return voice_text
                 except queue.Empty:
                     pass
 
-                # Check for keyboard input (non-blocking)
                 ready, _, _ = _select.select([sys.stdin], [], [], 0.2)
                 if ready:
                     ch = sys.stdin.read(1)
@@ -1366,12 +1405,12 @@ def main():
                         sys.stdout.flush()
                         text = ''.join(typed_chars).strip()
                         return text if text else None
-                    elif ch == '\x7f' or ch == '\x08':  # Backspace
+                    elif ch == '\x7f' or ch == '\x08':
                         if typed_chars:
                             typed_chars.pop()
                             sys.stdout.write('\b \b')
                             sys.stdout.flush()
-                    elif ch == '\x03':  # Ctrl+C
+                    elif ch == '\x03':
                         raise KeyboardInterrupt
                     elif ch >= ' ':
                         typed_chars.append(ch)

@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>D.A.R.V.I.S.</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔵</text></svg>">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    background: #0a0a0f;
+    color: #e0e0e0;
+    font-family: -apple-system, 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    height: 100vh; height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow: hidden;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.title {
+    padding: 24px 0 0;
+    font-size: 0.7rem;
+    letter-spacing: 5px;
+    color: #4a90d9;
+    text-transform: uppercase;
+}
+
+.orb-container {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    width: 100%;
+}
+
+.orb {
+    width: 180px; height: 180px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%,
+        rgba(80, 180, 255, 0.9),
+        rgba(30, 90, 200, 0.6),
+        rgba(10, 20, 60, 0.8));
+    box-shadow:
+        0 0 60px rgba(50, 140, 255, 0.4),
+        0 0 120px rgba(50, 140, 255, 0.2),
+        inset 0 0 40px rgba(100, 200, 255, 0.3);
+    animation: pulse 4s ease-in-out infinite, float 6s ease-in-out infinite;
+    cursor: pointer;
+    transition: all 0.4s ease;
+    position: relative;
+}
+.orb::after {
+    content: '';
+    position: absolute;
+    top: 15%; left: 20%;
+    width: 30%; height: 20%;
+    background: radial-gradient(ellipse, rgba(255,255,255,0.35), transparent);
+    border-radius: 50%;
+    filter: blur(4px);
+}
+.orb.thinking {
+    animation: thinkPulse 0.8s ease-in-out infinite, float 6s ease-in-out infinite;
+    box-shadow: 0 0 80px rgba(255,150,50,0.5), 0 0 160px rgba(255,150,50,0.2), inset 0 0 50px rgba(255,200,100,0.3);
+    background: radial-gradient(circle at 35% 35%, rgba(255,180,80,0.9), rgba(200,100,30,0.6), rgba(60,20,10,0.8));
+}
+.orb.speaking {
+    animation: speakPulse 0.35s ease-in-out infinite, float 6s ease-in-out infinite;
+    box-shadow: 0 0 80px rgba(80,255,150,0.5), 0 0 160px rgba(80,255,150,0.2), inset 0 0 50px rgba(150,255,200,0.3);
+    background: radial-gradient(circle at 35% 35%, rgba(80,255,160,0.9), rgba(30,180,80,0.6), rgba(10,40,20,0.8));
+}
+.orb.listening {
+    animation: listenPulse 1s ease-in-out infinite, float 6s ease-in-out infinite;
+    box-shadow: 0 0 80px rgba(255,80,80,0.5), 0 0 160px rgba(255,80,80,0.2), inset 0 0 50px rgba(255,150,150,0.3);
+    background: radial-gradient(circle at 35% 35%, rgba(255,100,100,0.9), rgba(200,40,40,0.6), rgba(60,10,10,0.8));
+}
+
+@keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.04)} }
+@keyframes thinkPulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.06)} }
+@keyframes speakPulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.08)} }
+@keyframes listenPulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.1)} }
+@keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
+
+.response {
+    position: absolute;
+    bottom: 10px;
+    width: 90%;
+    max-width: 550px;
+    text-align: center;
+    font-size: 0.95rem;
+    color: #b0c4de;
+    line-height: 1.6;
+    padding: 16px;
+    max-height: 180px;
+    overflow-y: auto;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.input-area {
+    width: 100%;
+    padding: 16px 20px 28px;
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    background: linear-gradient(transparent, rgba(0,0,0,0.6));
+}
+.input-area input {
+    width: 100%;
+    max-width: 480px;
+    padding: 14px 20px;
+    border: 1px solid rgba(80, 140, 255, 0.3);
+    border-radius: 30px;
+    background: rgba(15, 15, 25, 0.95);
+    color: #e0e0e0;
+    font-family: inherit;
+    font-size: 1rem;
+    outline: none;
+    transition: border-color 0.3s;
+}
+.input-area input:focus {
+    border-color: rgba(80, 180, 255, 0.7);
+    box-shadow: 0 0 20px rgba(50, 140, 255, 0.15);
+}
+.input-area input::placeholder { color: #444; }
+
+.mic-btn {
+    width: 48px; height: 48px; min-width: 48px;
+    border-radius: 50%;
+    border: 1px solid rgba(80, 140, 255, 0.3);
+    background: rgba(15, 15, 25, 0.95);
+    color: #4a90d9;
+    font-size: 1.3rem;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.3s;
+}
+.mic-btn:hover { border-color: rgba(80, 180, 255, 0.7); }
+.mic-btn.recording { border-color: #ff4444; color: #ff4444; }
+
+.status {
+    position: fixed;
+    bottom: 6px;
+    font-size: 0.6rem;
+    color: #333;
+    letter-spacing: 1px;
+}
+</style>
+</head>
+<body>
+
+<div class="title">D . A . R . V . I . S .</div>
+
+<div class="orb-container">
+    <div class="orb" id="orb" onclick="toggleMic()"></div>
+    <div class="response" id="response"></div>
+</div>
+
+<div class="input-area">
+    <input type="text" id="input" placeholder="Talk to DARVIS..." autocomplete="off"
+           onkeydown="if(event.key==='Enter')send()">
+    <button class="mic-btn" id="micBtn" onclick="toggleMic()">&#x1F3A4;</button>
+</div>
+
+<div class="status">POWERED BY OLLAMA CLOUD + ELEVENLABS</div>
+
+<script>
+const orb = document.getElementById('orb');
+const responseEl = document.getElementById('response');
+const inputEl = document.getElementById('input');
+const micBtn = document.getElementById('micBtn');
+let recognition = null;
+let isRecording = false;
+let currentAudio = null;
+
+// Unlock audio on first interaction
+let audioCtx = null;
+function unlockAudio() {
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        audioCtx.resume();
+    }
+}
+document.addEventListener('click', unlockAudio, { once: true });
+document.addEventListener('touchstart', unlockAudio, { once: true });
+
+// Web Speech API
+if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    recognition = new SR();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
+    recognition.onresult = (e) => {
+        const text = e.results[0][0].transcript;
+        inputEl.value = text;
+        orb.classList.remove('listening');
+        send();
+    };
+    recognition.onend = () => {
+        isRecording = false;
+        micBtn.classList.remove('recording');
+        if (!orb.classList.contains('thinking') && !orb.classList.contains('speaking')) {
+            orb.className = 'orb';
+        }
+    };
+    recognition.onerror = () => {
+        isRecording = false;
+        micBtn.classList.remove('recording');
+        orb.className = 'orb';
+    };
+}
+
+function toggleMic() {
+    if (!recognition) {
+        responseEl.textContent = 'Speech recognition not available in this browser. Use Chrome.';
+        return;
+    }
+    if (isRecording) {
+        recognition.stop();
+        orb.className = 'orb';
+    } else {
+        isRecording = true;
+        micBtn.classList.add('recording');
+        orb.className = 'orb listening';
+        recognition.start();
+    }
+}
+
+async function send() {
+    const text = inputEl.value.trim();
+    if (!text) return;
+    inputEl.value = '';
+
+    if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+
+    orb.className = 'orb thinking';
+    responseEl.textContent = '';
+
+    try {
+        // Get chat response
+        const res = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: text }),
+        });
+        const data = await res.json();
+        responseEl.textContent = data.reply;
+
+        // Get TTS audio
+        try {
+            const ttsRes = await fetch('/api/tts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: data.reply }),
+            });
+
+            if (ttsRes.ok && ttsRes.status === 200) {
+                const audioBlob = await ttsRes.blob();
+                if (audioBlob.size > 0) {
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    currentAudio = new Audio(audioUrl);
+                    currentAudio.onended = () => {
+                        orb.className = 'orb';
+                        currentAudio = null;
+                        URL.revokeObjectURL(audioUrl);
+                    };
+                    currentAudio.onerror = () => { orb.className = 'orb'; };
+                    orb.className = 'orb speaking';
+                    await currentAudio.play();
+                    return;
+                }
+            }
+        } catch (ttsErr) {
+            console.warn('TTS error:', ttsErr);
+        }
+        orb.className = 'orb';
+
+    } catch (err) {
+        responseEl.textContent = 'Connection error: ' + err.message;
+        orb.className = 'orb';
+    }
+}
+
+inputEl.focus();
+</script>
+</body>
+</html>

@@ -452,8 +452,13 @@ async function send() {
             orb.className = 'orb speaking';
             currentAudio = new Audio(data.audio_url);
             currentAudio.onended = () => { orb.className = 'orb'; currentAudio = null; };
-            currentAudio.onerror = () => { orb.className = 'orb'; };
-            currentAudio.play();
+            currentAudio.onerror = (e) => { console.error('Audio error:', e); orb.className = 'orb'; };
+            currentAudio.play().catch(err => {
+                console.warn('Autoplay blocked, retrying on interaction:', err);
+                orb.className = 'orb';
+                // Show play button if autoplay blocked
+                responseEl.innerHTML += '<br><button onclick="currentAudio.play().then(()=>{orb.className=\\'orb speaking\\'});this.remove()" style="margin-top:10px;padding:8px 20px;border-radius:20px;border:1px solid #4a90d9;background:transparent;color:#4a90d9;cursor:pointer;font-family:inherit">&#9654; Play Audio</button>';
+            });
         } else {
             orb.className = 'orb';
         }
@@ -525,6 +530,17 @@ async function setVoice(voice_id) {
     } catch(e) { status.textContent = 'Error switching voice'; }
 }
 
+// Unlock audio on first user interaction (required by browsers)
+let audioUnlocked = false;
+function unlockAudio() {
+    if (audioUnlocked) return;
+    const silence = new Audio('data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAABhkVuHQgAAAAAAAAAAAAAAAAAAP/7UGQAAAALS0gBQRAAANIKCAoYgAABAAH+AAAJAAADSAAAABAAAAAAACqf/LAAAAAARFRJJF//sqRA')
+    silence.play().then(() => { audioUnlocked = true; }).catch(() => {});
+}
+document.addEventListener('click', unlockAudio, { once: false });
+document.addEventListener('touchstart', unlockAudio, { once: false });
+document.addEventListener('keydown', unlockAudio, { once: false });
+
 loadSettings();
 inputEl.focus();
 </script>
@@ -540,6 +556,8 @@ class DarvisHandler(BaseHTTPRequestHandler):
         if self.path == '/' or self.path == '/index.html':
             self.send_response(200)
             self.send_header('Content-Type', 'text/html')
+            self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+            self.send_header('Pragma', 'no-cache')
             self.end_headers()
             self.wfile.write(HTML.encode())
         elif self.path.startswith('/audio/'):
@@ -662,7 +680,13 @@ def main():
   Press Ctrl+C to stop.
     """)
 
-    server = HTTPServer(('0.0.0.0', PORT), DarvisHandler)
+    import socket as _socket
+
+    class ReusableHTTPServer(HTTPServer):
+        allow_reuse_address = True
+        allow_reuse_port = True
+
+    server = ReusableHTTPServer(('0.0.0.0', PORT), DarvisHandler)
 
     # Auto-open browser
     import webbrowser

@@ -392,7 +392,13 @@ document.addEventListener('touchstart', unlockAudio, { once: false });
 // ══════════════════════════════════════════════════════════════════════════════
 
 async function geminiConnect() {
-    if (geminiWs && geminiWs.readyState === WebSocket.OPEN) return true;
+    // Clean up any stale connection
+    if (geminiWs) {
+        if (geminiWs.readyState === WebSocket.OPEN && geminiSessionActive) return true;
+        try { geminiWs.close(); } catch {}
+        geminiWs = null;
+        geminiSessionActive = false;
+    }
 
     try {
         // Get token from server
@@ -400,9 +406,7 @@ async function geminiConnect() {
         const tokenData = await tokenRes.json();
         if (!tokenData.token) throw new Error('No Gemini token');
 
-        const wsUrl = tokenData.useAsKey
-            ? `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${tokenData.token}`
-            : `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${tokenData.token}`;
+        const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${tokenData.token}`;
 
         // Fetch memories for system instruction
         let memoryCtx = '';
@@ -415,10 +419,12 @@ async function geminiConnect() {
         } catch {}
 
         return new Promise((resolve, reject) => {
-            geminiWs = new WebSocket(wsUrl);
-            geminiWs.onopen = () => {
-                // Send setup message
-                geminiWs.send(JSON.stringify({
+            let settled = false;
+            const ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                console.log('Gemini WS open, sending setup...');
+                ws.send(JSON.stringify({
                     setup: {
                         model: `models/${tokenData.model}`,
                         generation_config: {
@@ -444,24 +450,25 @@ You may receive camera images from the user's device. When you see images, you c
                 }));
             };
 
-            geminiWs.onmessage = (event) => {
+            ws.onmessage = (event) => {
                 try {
                     const msg = JSON.parse(event.data);
 
-                    // Setup complete
-                    if (msg.setupComplete) {
+                    // Setup complete — session is ready
+                    if (msg.setupComplete !== undefined) {
+                        console.log('Gemini setup complete');
+                        geminiWs = ws;
                         geminiSessionActive = true;
-                        statusBar.textContent = 'GEMINI LIVE AUDIO ACTIVE';
-                        resolve(true);
+                        statusBar.textContent = 'GEMINI LIVE — SPEAK NATURALLY';
+                        if (!settled) { settled = true; resolve(true); }
                         return;
                     }
 
                     // Server content (audio + text)
                     if (msg.serverContent) {
-                        // Interruption — user started speaking over Gemini
+                        // Interruption — user spoke over Gemini
                         if (msg.serverContent.interrupted) {
                             stopGeminiPlayback();
-                            responseEl.textContent += ' [interrupted]';
                             orb.className = isRecording ? 'orb listening' : 'orb';
                             return;
                         }
@@ -472,14 +479,15 @@ You may receive camera images from the user's device. When you see images, you c
                                 playGeminiAudio(part.inlineData.data);
                             }
                             if (part.text) {
-                                responseEl.textContent += part.text;
+                                // Filter out thinking blocks (text between ** **)
+                                const clean = part.text.replace(/\*\*[^*]+\*\*\n?/g, '').trim();
+                                if (clean) responseEl.textContent = clean;
                             }
                         }
 
-                        // Turn complete — Gemini is done responding
+                        // Turn complete
                         if (msg.serverContent.turnComplete) {
-                            // Save to history
-                            const text = responseEl.textContent.replace(' [interrupted]', '');
+                            const text = responseEl.textContent;
                             if (text) {
                                 fetch('/api/history', {
                                     method: 'POST',
@@ -492,45 +500,59 @@ You may receive camera images from the user's device. When you see images, you c
                         }
                     }
                 } catch (e) {
-                    console.warn('Gemini message parse error:', e);
+                    console.warn('Gemini parse error:', e);
                 }
             };
 
-            geminiWs.onerror = (ev) => {
-                console.warn('Gemini WebSocket error:', ev);
-                geminiSessionActive = false;
-                fallbackToClassic();
-                reject(new Error('WebSocket error'));
+            ws.onerror = (ev) => {
+                console.warn('Gemini WS error:', ev);
+                if (!settled) { settled = true; reject(new Error('WebSocket error')); }
             };
 
-            geminiWs.onclose = (ev) => {
-                console.warn('Gemini WebSocket closed:', ev.code, ev.reason);
+            ws.onclose = (ev) => {
+                console.warn('Gemini WS closed:', ev.code, ev.reason);
                 geminiSessionActive = false;
-                if (audioMode === 'gemini') {
-                    statusBar.textContent = `GEMINI DISCONNECTED (${ev.code}) — TAP MIC TO RECONNECT`;
-                    responseEl.textContent = ev.reason || 'Connection closed';
+                geminiWs = null;
+                if (!settled) {
+                    settled = true;
+                    reject(new Error(`Closed: ${ev.code} ${ev.reason}`));
+                } else if (audioMode === 'gemini' && isRecording) {
+                    // Session dropped while active — show reconnect message
+                    statusBar.textContent = 'GEMINI DISCONNECTED — TAP MIC TO RECONNECT';
+                    isRecording = false;
+                    micBtn.classList.remove('recording');
+                    stopGeminiMic();
+                    stopGeminiPlayback();
+                    orb.className = 'orb';
                 }
             };
 
-            // Timeout
+            // Timeout — only if setup hasn't completed
             setTimeout(() => {
-                if (!geminiSessionActive) {
-                    geminiWs.close();
-                    reject(new Error('Connection timeout'));
+                if (!settled) {
+                    settled = true;
+                    try { ws.close(); } catch {}
+                    reject(new Error('Connection timeout (10s)'));
                 }
             }, 10000);
         });
     } catch (err) {
         console.warn('Gemini connect failed:', err);
-        fallbackToClassic();
         return false;
     }
 }
 
 function fallbackToClassic() {
+    stopGeminiPlayback();
+    stopGeminiMic();
+    if (geminiWs) { try { geminiWs.close(); } catch {} geminiWs = null; }
+    geminiSessionActive = false;
+    isRecording = false;
+    micBtn.classList.remove('recording');
     audioMode = 'classic';
     document.getElementById('audioModeSelect').value = 'classic';
     updateModeUI();
+    orb.className = 'orb';
     responseEl.textContent = 'Gemini unavailable — switched to Classic mode.';
 }
 
@@ -793,14 +815,22 @@ async function toggleMic() {
             // Gemini's VAD detects when you speak vs silence
             orb.className = 'orb thinking';
             responseEl.textContent = 'Connecting to Gemini...';
-            const ok = await geminiConnect();
-            if (ok) {
-                isRecording = true;
-                micBtn.classList.add('recording');
-                orb.className = 'orb listening';
-                responseEl.textContent = '';
-                await startGeminiMic();
-                // Mic now streams continuously — just talk naturally
+            try {
+                const ok = await geminiConnect();
+                if (ok) {
+                    isRecording = true;
+                    micBtn.classList.add('recording');
+                    orb.className = 'orb listening';
+                    responseEl.textContent = '';
+                    await startGeminiMic();
+                } else {
+                    orb.className = 'orb';
+                    responseEl.textContent = 'Could not connect to Gemini. Try again.';
+                }
+            } catch (err) {
+                console.warn('Gemini mic start error:', err);
+                orb.className = 'orb';
+                responseEl.textContent = 'Gemini connection failed: ' + err.message;
             }
         }
         return;

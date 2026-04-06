@@ -32,7 +32,7 @@ export default async (req) => {
       const data = await res.json();
       return Response.json({
         token: data.token,
-        model: "gemini-2.5-flash-preview-native-audio-dialog",
+        model: "gemini-2.5-flash-native-audio-latest",
       });
     }
 
@@ -41,14 +41,14 @@ export default async (req) => {
     return Response.json({
       token: GEMINI_KEY,
       useAsKey: true, // tells frontend to use ?key= instead of ?access_token=
-      model: "gemini-2.5-flash-preview-native-audio-dialog",
+      model: "gemini-2.5-flash-native-audio-latest",
     });
   } catch {
     // Fallback: return key directly
     return Response.json({
       token: GEMINI_KEY,
       useAsKey: true,
-      model: "gemini-2.5-flash-preview-native-audio-dialog",
+      model: "gemini-2.5-flash-native-audio-latest",
     });
   }
 };

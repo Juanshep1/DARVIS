@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta"
-COMPUTER_USE_MODEL = "gemini-2.5-flash-preview-native-audio-dialog"  # or gemini-2.5-computer-use-preview-10-2025
+COMPUTER_USE_MODEL = "gemini-2.5-flash-native-audio-latest"  # or gemini-2.5-computer-use-preview-10-2025
 VIEWPORT_W = 1280
 VIEWPORT_H = 800
 GRID_SIZE = 1000  # Gemini uses 1000x1000 coordinate grid

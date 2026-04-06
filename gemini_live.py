@@ -31,7 +31,7 @@ except ImportError:
     HAS_PYAUDIO = False
 
 GEMINI_WS_URL = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent"
-DEFAULT_MODEL = "gemini-2.5-flash-preview-native-audio-dialog"
+DEFAULT_MODEL = "gemini-2.5-flash-native-audio-latest"
 INPUT_RATE = 16000
 OUTPUT_RATE = 24000
 CHUNK_SIZE = 4096

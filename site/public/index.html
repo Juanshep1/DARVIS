@@ -244,7 +244,7 @@ body {
     .input-area { padding: 8px 12px 12px; }
 }
 
-/* Agent View */
+/* Agent View — floating browser window */
 .agent-toggle {
     position: fixed;
     top: 15px; left: 15px;
@@ -259,43 +259,86 @@ body {
     transition: all 0.3s;
 }
 .agent-toggle:hover { border-color: rgba(80, 180, 255, 0.7); }
-.agent-toggle.active { border-color: #44ff44; color: #44ff44; }
+.agent-toggle.active { border-color: #44ff44; color: #44ff44; animation: pulse 1.5s infinite; }
 .agent-panel {
     position: fixed;
-    top: 60px; left: 15px;
-    background: rgba(10, 10, 20, 0.95);
-    border: 1px solid rgba(80, 140, 255, 0.2);
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(8, 8, 16, 0.98);
+    border: 1px solid rgba(80, 140, 255, 0.3);
     border-radius: 12px;
-    padding: 16px;
-    width: 360px;
-    max-height: 80vh;
-    z-index: 100;
+    padding: 0;
+    width: 90vw;
+    max-width: 700px;
+    max-height: 85vh;
+    z-index: 200;
     display: none;
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    overflow-y: auto;
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+    overflow: hidden;
+    box-shadow: 0 0 40px rgba(50, 140, 255, 0.2), 0 20px 60px rgba(0,0,0,0.5);
 }
-.agent-panel.open { display: block; }
-.agent-panel img {
+.agent-panel.open { display: flex; flex-direction: column; }
+.agent-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    border-bottom: 1px solid rgba(80, 140, 255, 0.15);
+    background: rgba(15, 15, 30, 0.8);
+}
+.agent-header .agent-title {
+    font-size: 0.7rem;
+    color: #4a90d9;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+}
+.agent-header .agent-close {
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 80, 80, 0.3);
+    background: transparent;
+    color: #f55;
+    font-size: 0.8rem;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+}
+.agent-header .agent-close:hover { background: rgba(255, 80, 80, 0.15); }
+.agent-screen-wrap {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+    background: #000;
+    min-height: 200px;
+}
+.agent-screen-wrap img {
     width: 100%;
-    border-radius: 8px;
-    border: 1px solid rgba(80, 140, 255, 0.2);
-    margin: 8px 0;
+    height: 100%;
+    object-fit: contain;
+    display: block;
 }
-.agent-panel .agent-log {
+.agent-screen-wrap .agent-no-feed {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    color: #444;
+    font-size: 0.8rem;
+    text-align: center;
+}
+.agent-footer {
+    padding: 8px 14px;
+    border-top: 1px solid rgba(80, 140, 255, 0.15);
+    background: rgba(15, 15, 30, 0.8);
+}
+.agent-footer .agent-status {
     font-size: 0.7rem;
     color: #8a8;
-    max-height: 120px;
-    overflow-y: auto;
-    margin-top: 8px;
-    padding: 8px;
-    background: rgba(0,0,0,0.3);
-    border-radius: 6px;
+    margin: 0;
 }
-.agent-panel .agent-status {
-    font-size: 0.75rem;
-    color: #b0c4de;
-    margin: 4px 0;
+.agent-footer .agent-step {
+    font-size: 0.65rem;
+    color: #555;
+    margin-top: 2px;
 }
 </style>
 </head>
@@ -319,9 +362,18 @@ body {
 
 <button class="agent-toggle" id="agentToggle" onclick="toggleAgentView()">&#x1F441;</button>
 <div class="agent-panel" id="agentPanel">
-    <div class="agent-status" id="agentStatus">No active agent session</div>
-    <img id="agentScreen" style="display:none" alt="Agent browser view">
-    <div class="agent-log" id="agentLog"></div>
+    <div class="agent-header">
+        <span class="agent-title">D.A.R.V.I.S. Browser</span>
+        <button class="agent-close" onclick="toggleAgentView()">&times;</button>
+    </div>
+    <div class="agent-screen-wrap">
+        <img id="agentScreen" style="display:none" alt="Agent browser view">
+        <div class="agent-no-feed" id="agentNoFeed">No active session<br>Ask DARVIS to browse something</div>
+    </div>
+    <div class="agent-footer">
+        <div class="agent-status" id="agentStatus">Idle</div>
+        <div class="agent-step" id="agentStep"></div>
+    </div>
 </div>
 
 <div class="title">D . A . R . V . I . S .</div>
@@ -1356,6 +1408,7 @@ document.addEventListener('click', (e) => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 let agentPollTimer = null;
+let lastScreenshotUrl = null;
 
 function toggleAgentView() {
     const panel = document.getElementById('agentPanel');
@@ -1370,7 +1423,7 @@ function toggleAgentView() {
 function startAgentPolling() {
     if (agentPollTimer) return;
     pollAgent();
-    agentPollTimer = setInterval(pollAgent, 1000);
+    agentPollTimer = setInterval(pollAgent, 500); // Fast polling for smooth updates
 }
 
 function stopAgentPolling() {
@@ -1385,34 +1438,41 @@ async function pollAgent() {
         const res = await fetch('/api/agent/status');
         const status = await res.json();
         const statusEl = document.getElementById('agentStatus');
+        const stepEl = document.getElementById('agentStep');
         const screenEl = document.getElementById('agentScreen');
-        const logEl = document.getElementById('agentLog');
+        const noFeed = document.getElementById('agentNoFeed');
         const toggleBtn = document.getElementById('agentToggle');
 
         if (status.active) {
             toggleBtn.classList.add('active');
-            statusEl.textContent = `Step ${status.step}: ${status.goal}`;
+            statusEl.textContent = status.goal;
+            stepEl.textContent = `Step ${status.step} — ${status.thinking || 'Working...'}`;
+            noFeed.style.display = 'none';
 
             // Fetch screenshot
             try {
                 const imgRes = await fetch('/api/agent/screenshot');
                 if (imgRes.ok && imgRes.headers.get('content-type')?.includes('image')) {
                     const blob = await imgRes.blob();
-                    screenEl.src = URL.createObjectURL(blob);
+                    if (lastScreenshotUrl) URL.revokeObjectURL(lastScreenshotUrl);
+                    lastScreenshotUrl = URL.createObjectURL(blob);
+                    screenEl.src = lastScreenshotUrl;
                     screenEl.style.display = 'block';
                 }
             } catch {}
-
-            if (status.thinking) {
-                logEl.textContent = status.thinking + '\n' + (status.actions || []).map(a => JSON.stringify(a)).join('\n');
-            }
-        } else if (status.done) {
+        } else if (status.done && status.thinking) {
             toggleBtn.classList.remove('active');
-            statusEl.textContent = 'Agent finished: ' + (status.thinking || 'Done');
+            statusEl.textContent = 'Complete';
+            stepEl.textContent = status.thinking;
+            // Keep last screenshot visible
         } else {
             toggleBtn.classList.remove('active');
-            statusEl.textContent = 'No active agent session';
-            screenEl.style.display = 'none';
+            statusEl.textContent = 'Idle';
+            stepEl.textContent = '';
+            if (!screenEl.src || screenEl.src === window.location.href) {
+                noFeed.style.display = 'block';
+                screenEl.style.display = 'none';
+            }
         }
     } catch {}
 }

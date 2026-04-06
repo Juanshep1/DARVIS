@@ -42,12 +42,15 @@ class ComputerUseAgent:
         self.step_count = 0
         self._status = {"active": False, "goal": "", "step": 0, "thinking": "", "actions": [], "done": False}
 
-    async def start_browser(self):
-        """Launch headless Chromium via Playwright."""
+    async def start_browser(self, headless=False):
+        """Launch Chromium via Playwright. Visible by default so user can watch."""
         if not HAS_PLAYWRIGHT:
             raise RuntimeError("Playwright not installed. Run: pip install playwright && playwright install chromium")
         self.playwright = await async_playwright().start()
-        self.browser = await self.playwright.chromium.launch(headless=True)
+        self.browser = await self.playwright.chromium.launch(
+            headless=headless,
+            args=["--window-size=1280,800", "--window-position=100,100"] if not headless else [],
+        )
         self.page = await self.browser.new_page(viewport={"width": VIEWPORT_W, "height": VIEWPORT_H})
         await self.page.goto("https://www.google.com")
 

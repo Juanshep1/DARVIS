@@ -1,0 +1,413 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 63;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		020501B840026022FE61C7E3 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE4B8156BCCE7D1B336F5B39 /* APIClient.swift */; };
+		0367C5F49427F2724A77880F /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C349C8EB0223E2864E8C451 /* ChatView.swift */; };
+		107F00A8E9EF39B9DBA12607 /* AgentStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EE457E8A83C8518F2D04A1C /* AgentStatus.swift */; };
+		1DEC2FCD03FF363BF1DDB589 /* InputBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24DB81440FEA13BC34DA1563 /* InputBar.swift */; };
+		1FBC67F3267313BF74E74B0F /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91A86AD774262FD1B10D7352 /* ChatViewModel.swift */; };
+		2E978154AD1D846FC3940523 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B6B622EA9A9A91096DF2695 /* SettingsView.swift */; };
+		3A7F16730BF19825E9820412 /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14CD49F8C9CDAFEB75CDA43E /* MainTabView.swift */; };
+		41F1BD7C5D93FB328376E434 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07FFD2D7D25830247F3268D1 /* AppSettings.swift */; };
+		42F66B9BD3DEF4E594C7BF58 /* Memory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 812AC60C57A91DF5C9309CB5 /* Memory.swift */; };
+		480F9A80A85BD1F7ABF1769B /* JARVISTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7690A944B9D8D0AD43C540B0 /* JARVISTheme.swift */; };
+		64F8310BB90B380759389A5F /* ChatMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BB8B395EAFB415A83AF0DC0 /* ChatMessage.swift */; };
+		680FADB1B66AFDD1024B059E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F263F0DB28CC9CF7BEC34C4B /* Assets.xcassets */; };
+		7A5ED8E621DC81CD14901875 /* MemoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FEFD354307DB1E6E4635287 /* MemoryView.swift */; };
+		7B9A438F30C939C6278F8C4C /* OrbView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89B3A8E19F62DDFF548B0A0A /* OrbView.swift */; };
+		AE5E8DF86C65DA34907025F2 /* DARVISApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A56A3B062FFB5E699C752225 /* DARVISApp.swift */; };
+		ED71C94A77A0BC618927082A /* AgentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BB77D4AA1C392C2E7A0D2FF /* AgentView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		07FFD2D7D25830247F3268D1 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
+		14CD49F8C9CDAFEB75CDA43E /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
+		1B6B622EA9A9A91096DF2695 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		24DB81440FEA13BC34DA1563 /* InputBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputBar.swift; sourceTree = "<group>"; };
+		2C349C8EB0223E2864E8C451 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
+		3FEFD354307DB1E6E4635287 /* MemoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryView.swift; sourceTree = "<group>"; };
+		4BB8B395EAFB415A83AF0DC0 /* ChatMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatMessage.swift; sourceTree = "<group>"; };
+		56D564137239A45C388BAE78 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		5BB77D4AA1C392C2E7A0D2FF /* AgentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentView.swift; sourceTree = "<group>"; };
+		7690A944B9D8D0AD43C540B0 /* JARVISTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JARVISTheme.swift; sourceTree = "<group>"; };
+		7EE457E8A83C8518F2D04A1C /* AgentStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentStatus.swift; sourceTree = "<group>"; };
+		812AC60C57A91DF5C9309CB5 /* Memory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Memory.swift; sourceTree = "<group>"; };
+		89B3A8E19F62DDFF548B0A0A /* OrbView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrbView.swift; sourceTree = "<group>"; };
+		91A86AD774262FD1B10D7352 /* ChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViewModel.swift; sourceTree = "<group>"; };
+		A56A3B062FFB5E699C752225 /* DARVISApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DARVISApp.swift; sourceTree = "<group>"; };
+		CE4B8156BCCE7D1B336F5B39 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
+		F165F40D77684EA2C4518B5E /* DARVIS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DARVIS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F263F0DB28CC9CF7BEC34C4B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		08B143EC7A931B1E99EBDC9D /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				CE4B8156BCCE7D1B336F5B39 /* APIClient.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		15B3AD7D5188808D73C82925 /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				91A86AD774262FD1B10D7352 /* ChatViewModel.swift */,
+			);
+			path = ViewModels;
+			sourceTree = "<group>";
+		};
+		455A10536A7625CD84EA8F24 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				7EE457E8A83C8518F2D04A1C /* AgentStatus.swift */,
+				07FFD2D7D25830247F3268D1 /* AppSettings.swift */,
+				4BB8B395EAFB415A83AF0DC0 /* ChatMessage.swift */,
+				812AC60C57A91DF5C9309CB5 /* Memory.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		5C406E48343889CE68A45BD5 /* Theme */ = {
+			isa = PBXGroup;
+			children = (
+				7690A944B9D8D0AD43C540B0 /* JARVISTheme.swift */,
+			);
+			path = Theme;
+			sourceTree = "<group>";
+		};
+		8FD1EEB8350DF7FEF36BD8FC /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				F165F40D77684EA2C4518B5E /* DARVIS.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		B3C2AC5941E933C564B3E8FE /* DARVIS */ = {
+			isa = PBXGroup;
+			children = (
+				F263F0DB28CC9CF7BEC34C4B /* Assets.xcassets */,
+				A56A3B062FFB5E699C752225 /* DARVISApp.swift */,
+				56D564137239A45C388BAE78 /* Info.plist */,
+				455A10536A7625CD84EA8F24 /* Models */,
+				08B143EC7A931B1E99EBDC9D /* Services */,
+				15B3AD7D5188808D73C82925 /* ViewModels */,
+				E98D7EB241A5DAF7C44148F0 /* Views */,
+			);
+			path = DARVIS;
+			sourceTree = "<group>";
+		};
+		B6A70156C1B55396E447CCAF = {
+			isa = PBXGroup;
+			children = (
+				B3C2AC5941E933C564B3E8FE /* DARVIS */,
+				8FD1EEB8350DF7FEF36BD8FC /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		D6F4CB00FF702B59C43C1494 /* Chat */ = {
+			isa = PBXGroup;
+			children = (
+				2C349C8EB0223E2864E8C451 /* ChatView.swift */,
+				24DB81440FEA13BC34DA1563 /* InputBar.swift */,
+				89B3A8E19F62DDFF548B0A0A /* OrbView.swift */,
+			);
+			path = Chat;
+			sourceTree = "<group>";
+		};
+		E98D7EB241A5DAF7C44148F0 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				5BB77D4AA1C392C2E7A0D2FF /* AgentView.swift */,
+				14CD49F8C9CDAFEB75CDA43E /* MainTabView.swift */,
+				3FEFD354307DB1E6E4635287 /* MemoryView.swift */,
+				1B6B622EA9A9A91096DF2695 /* SettingsView.swift */,
+				D6F4CB00FF702B59C43C1494 /* Chat */,
+				5C406E48343889CE68A45BD5 /* Theme */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		0C01E3BF914BDFE2D2A37CD6 /* DARVIS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F6F3FA94B46D6DFFA3EF101E /* Build configuration list for PBXNativeTarget "DARVIS" */;
+			buildPhases = (
+				83DE7F31CA0D984656299FA3 /* Sources */,
+				85F40677CA0D96250619A654 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = DARVIS;
+			packageProductDependencies = (
+			);
+			productName = DARVIS;
+			productReference = F165F40D77684EA2C4518B5E /* DARVIS.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		B438B705BACA5F46A3778DE8 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 2640;
+				TargetAttributes = {
+					0C01E3BF914BDFE2D2A37CD6 = {
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = AACC6560727A0641C9C94B75 /* Build configuration list for PBXProject "DARVIS" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = B6A70156C1B55396E447CCAF;
+			minimizedProjectReferenceProxies = 1;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				0C01E3BF914BDFE2D2A37CD6 /* DARVIS */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		85F40677CA0D96250619A654 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				680FADB1B66AFDD1024B059E /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		83DE7F31CA0D984656299FA3 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				020501B840026022FE61C7E3 /* APIClient.swift in Sources */,
+				107F00A8E9EF39B9DBA12607 /* AgentStatus.swift in Sources */,
+				ED71C94A77A0BC618927082A /* AgentView.swift in Sources */,
+				41F1BD7C5D93FB328376E434 /* AppSettings.swift in Sources */,
+				64F8310BB90B380759389A5F /* ChatMessage.swift in Sources */,
+				0367C5F49427F2724A77880F /* ChatView.swift in Sources */,
+				1FBC67F3267313BF74E74B0F /* ChatViewModel.swift in Sources */,
+				AE5E8DF86C65DA34907025F2 /* DARVISApp.swift in Sources */,
+				1DEC2FCD03FF363BF1DDB589 /* InputBar.swift in Sources */,
+				480F9A80A85BD1F7ABF1769B /* JARVISTheme.swift in Sources */,
+				3A7F16730BF19825E9820412 /* MainTabView.swift in Sources */,
+				42F66B9BD3DEF4E594C7BF58 /* Memory.swift in Sources */,
+				7A5ED8E621DC81CD14901875 /* MemoryView.swift in Sources */,
+				7B9A438F30C939C6278F8C4C /* OrbView.swift in Sources */,
+				2E978154AD1D846FC3940523 /* SettingsView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		38641203563FDCD5A3BF08E2 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 78RJ6F9JL2;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		B6855BD116EFCE52A66E6D3D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				INFOPLIST_FILE = DARVIS/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.darvis.app;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		BD129E96821889B5034C2A20 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 78RJ6F9JL2;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		F860C64269520621B75A77BB /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				INFOPLIST_FILE = DARVIS/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.darvis.app;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		AACC6560727A0641C9C94B75 /* Build configuration list for PBXProject "DARVIS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BD129E96821889B5034C2A20 /* Debug */,
+				38641203563FDCD5A3BF08E2 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		F6F3FA94B46D6DFFA3EF101E /* Build configuration list for PBXNativeTarget "DARVIS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F860C64269520621B75A77BB /* Debug */,
+				B6855BD116EFCE52A66E6D3D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = B438B705BACA5F46A3778DE8 /* Project object */;
+}

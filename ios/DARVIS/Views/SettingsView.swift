@@ -1,0 +1,135 @@
+import SwiftUI
+
+@MainActor
+class SettingsViewModel: ObservableObject {
+    @Published var settings = AppSettings(model: "glm-5", voice_id: "", audio_mode: "classic")
+    @Published var models: [String] = []
+    @Published var voices: [VoiceOption] = []
+    @Published var currentModel = ""
+    @Published var currentVoice = ""
+
+    func load() async {
+        do {
+            settings = try await APIClient.shared.getSettings()
+            let m = try await APIClient.shared.getModels()
+            models = m.models
+            currentModel = m.current
+            let v = try await APIClient.shared.getVoices()
+            voices = v.voices
+            currentVoice = v.current
+        } catch {}
+    }
+
+    func setModel(_ model: String) async {
+        settings.model = model
+        do { try await APIClient.shared.updateSettings(settings) } catch {}
+    }
+
+    func setVoice(_ voiceId: String) async {
+        settings.voice_id = voiceId
+        do { try await APIClient.shared.updateSettings(settings) } catch {}
+    }
+
+    func setAudioMode(_ mode: String) async {
+        settings.audio_mode = mode
+        do { try await APIClient.shared.updateSettings(settings) } catch {}
+    }
+}
+
+struct SettingsView: View {
+    @StateObject private var vm = SettingsViewModel()
+
+    var body: some View {
+        ZStack {
+            Color.darvisBackground.ignoresSafeArea()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    Text("SETTINGS")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .tracking(3)
+                        .foregroundColor(.darvisCyan)
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 16)
+
+                    // Audio Mode
+                    settingSection("AUDIO MODE") {
+                        Picker("Mode", selection: Binding(
+                            get: { vm.settings.audio_mode },
+                            set: { val in vm.settings.audio_mode = val; Task { await vm.setAudioMode(val) } }
+                        )) {
+                            Text("Classic (Ollama + ElevenLabs)").tag("classic")
+                            Text("Gemini Live Audio").tag("gemini")
+                        }
+                        .pickerStyle(.segmented)
+                        .tint(.darvisCyan)
+                    }
+
+                    // Model
+                    settingSection("MODEL") {
+                        Picker("Model", selection: Binding(
+                            get: { vm.settings.model },
+                            set: { val in vm.settings.model = val; Task { await vm.setModel(val) } }
+                        )) {
+                            ForEach(vm.models, id: \.self) { model in
+                                Text(model).tag(model)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .tint(.darvisCyan)
+                    }
+
+                    // Voice
+                    if vm.settings.audio_mode == "classic" {
+                        settingSection("VOICE") {
+                            Picker("Voice", selection: Binding(
+                                get: { vm.settings.voice_id },
+                                set: { val in vm.settings.voice_id = val; Task { await vm.setVoice(val) } }
+                            )) {
+                                ForEach(vm.voices) { voice in
+                                    Text("\(voice.name) (\(voice.category))").tag(voice.id)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .tint(.darvisCyan)
+                        }
+                    }
+
+                    // Info
+                    settingSection("STATUS") {
+                        infoRow("Platform", "iOS")
+                        infoRow("Backend", "darvis1.netlify.app")
+                        infoRow("Audio", vm.settings.audio_mode == "gemini" ? "Gemini Live" : "Ollama + ElevenLabs")
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
+        }
+        .task { await vm.load() }
+    }
+
+    @ViewBuilder
+    private func settingSection(_ title: String, @ViewBuilder content: () -> some View) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .tracking(2)
+                .foregroundColor(.darvisCyan.opacity(0.7))
+            content()
+                .padding(12)
+                .hudCard()
+        }
+    }
+
+    private func infoRow(_ label: String, _ value: String) -> some View {
+        HStack {
+            Text(label)
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundColor(.darvisDim)
+            Spacer()
+            Text(value)
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundColor(.darvisText)
+        }
+    }
+}

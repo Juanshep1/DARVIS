@@ -228,6 +228,12 @@ When asked to forget something, include:
             action: "open_url",
             url: `https://www.google.com/search?q=${encodeURIComponent(cmd.query)}`,
           });
+        } else if (cmd.action === "computer_use" && cmd.goal) {
+          // Store goal in Blobs for terminal to pick up
+          const agentStore = getStore("darvis-agent");
+          await agentStore.setJSON("pending_goal", { goal: cmd.goal, ts: Date.now() });
+          await agentStore.setJSON("status", { active: true, goal: cmd.goal, step: 0, thinking: "Waiting for terminal agent...", actions: [], done: false });
+          clientActions.push({ action: "agent_started", goal: cmd.goal });
         }
       } catch {}
     }

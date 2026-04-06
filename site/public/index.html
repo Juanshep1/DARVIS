@@ -445,8 +445,8 @@ Keep responses concise (1-3 sentences unless more detail is needed).
 
 You may receive camera images from the user's device. When you see images, describe what you see accurately.
 
-When the user asks you to remember something, include MEMORY_SAVE: followed by what to remember in your response text. Example: "I'll remember that, sir. MEMORY_SAVE: User's favorite food is pizza"
-When asked to forget something, include MEMORY_FORGET: followed by the memory content. Example: "Forgotten, sir. MEMORY_FORGET: User's favorite food is pizza"${memoryCtx}`
+When the user asks you to remember something, confirm naturally ("Noted, sir" or "I'll remember that"). The memory system saves it automatically — you don't need to do anything special.
+When asked what you remember, refer to the user memories listed below.${memoryCtx}`
                             }]
                         }
                     }
@@ -499,15 +499,6 @@ When asked to forget something, include MEMORY_FORGET: followed by the memory co
                         if (msg.serverContent.turnComplete) {
                             const text = responseEl.textContent;
                             if (text) {
-                                // Check for memory commands in the response
-                                handleMemoryFromText(text);
-
-                                // Clean memory markers from displayed text
-                                responseEl.textContent = text
-                                    .replace(/MEMORY_SAVE:\s*[^\n]*/g, '')
-                                    .replace(/MEMORY_FORGET:\s*[^\n]*/g, '')
-                                    .trim();
-
                                 fetch('/api/history', {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
@@ -707,43 +698,74 @@ async function startGeminiMic() {
 // Gemini API to describe what the camera sees, then feed the
 // description into the live audio session for speech output.
 
-// ── Memory handling from Gemini responses ──
+// ── Memory: detect from USER input, not LLM output ──
+// This is reliable — we don't depend on the LLM to format markers correctly.
 
-async function handleMemoryFromText(text) {
-    // Save memories
-    const saveMatches = text.matchAll(/MEMORY_SAVE:\s*(.+)/g);
-    for (const match of saveMatches) {
-        const content = match[1].trim();
-        if (content) {
-            fetch('/api/memory', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ content, category: 'general' }),
-            }).catch(() => {});
-        }
+function detectMemoryIntent(userText) {
+    const lower = userText.toLowerCase().trim();
+
+    // REMEMBER patterns
+    const rememberPatterns = [
+        /^remember\s+(?:that\s+)?(.+)/i,
+        /^don'?t forget\s+(?:that\s+)?(.+)/i,
+        /^save\s+(?:that\s+)?(.+)/i,
+        /^keep in mind\s+(?:that\s+)?(.+)/i,
+        /^note\s+(?:that\s+)?(.+)/i,
+        /^memorize\s+(?:that\s+)?(.+)/i,
+        /remember\s+(?:that\s+)?(?:my\s+|i\s+|the\s+)(.+)/i,
+    ];
+    for (const pat of rememberPatterns) {
+        const match = userText.match(pat);
+        if (match) return { action: 'save', content: match[1].trim() };
     }
 
-    // Forget memories
-    const forgetMatches = text.matchAll(/MEMORY_FORGET:\s*(.+)/g);
-    for (const match of forgetMatches) {
-        const content = match[1].trim().toLowerCase();
-        if (content) {
-            try {
-                const res = await fetch('/api/memory');
-                const data = await res.json();
-                for (const mem of (data.memories || [])) {
-                    if (mem.content.toLowerCase().includes(content) || content.includes(mem.content.toLowerCase())) {
-                        fetch('/api/memory', {
-                            method: 'DELETE',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ id: mem.id }),
-                        }).catch(() => {});
-                        break;
-                    }
+    // FORGET patterns
+    const forgetPatterns = [
+        /^forget\s+(?:that\s+|about\s+)?(.+)/i,
+        /^delete\s+(?:the\s+)?memory\s+(?:about\s+)?(.+)/i,
+        /^remove\s+(?:the\s+)?memory\s+(?:about\s+)?(.+)/i,
+        /^erase\s+(?:the\s+)?memory\s+(?:about\s+)?(.+)/i,
+    ];
+    for (const pat of forgetPatterns) {
+        const match = userText.match(pat);
+        if (match) return { action: 'forget', content: match[1].trim() };
+    }
+
+    return null;
+}
+
+async function handleMemoryFromUserInput(userText) {
+    const intent = detectMemoryIntent(userText);
+    if (!intent) return false;
+
+    if (intent.action === 'save') {
+        await fetch('/api/memory', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: intent.content, category: 'general' }),
+        });
+        return true;
+    }
+
+    if (intent.action === 'forget') {
+        try {
+            const res = await fetch('/api/memory');
+            const data = await res.json();
+            const lower = intent.content.toLowerCase();
+            for (const mem of (data.memories || [])) {
+                if (mem.content.toLowerCase().includes(lower) || lower.includes(mem.content.toLowerCase())) {
+                    await fetch('/api/memory', {
+                        method: 'DELETE',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id: mem.id }),
+                    });
+                    return true;
                 }
-            } catch {}
-        }
+            }
+        } catch {}
+        return true;
     }
+    return false;
 }
 
 let cameraAnalyzing = false;
@@ -1090,6 +1112,9 @@ async function send() {
     if (!text) return;
     inputEl.value = '';
 
+    // Handle memory saves/forgets directly from user input (reliable, doesn't depend on LLM)
+    handleMemoryFromUserInput(text);
+
     // Gemini text mode — send via WebSocket
     if (audioMode === 'gemini') {
         // If camera is active and user is asking about what they see, use camera vision
@@ -1165,6 +1190,10 @@ async function send() {
                     } else {
                         window.open(act.url, '_blank');
                     }
+                } else if (act.action === 'agent_started') {
+                    // Open agent view automatically
+                    document.getElementById('agentPanel').classList.add('open');
+                    startAgentPolling();
                 }
             });
             if (pendingTab && !usedPending) pendingTab.close();

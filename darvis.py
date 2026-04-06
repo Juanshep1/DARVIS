@@ -1452,6 +1452,40 @@ def main():
         )
     )
 
+    # Background agent goal polling — picks up browse tasks from the browser app
+    def _poll_agent_goals():
+        """Check for pending Computer Use goals from the browser."""
+        import time as _time
+        while True:
+            _time.sleep(5)
+            try:
+                req = urllib.request.Request(
+                    "https://darvis1.netlify.app/api/agent/goal",
+                    method="GET",
+                )
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    data = json.loads(resp.read().decode())
+                    if data.get("goal"):
+                        goal = data["goal"]
+                        console.print(f"\n  [{BLUE}]Browser requested agent task: {goal}[/{BLUE}]")
+                        gkey = load_env().get("GEMINI_API_KEY", os.environ.get("GEMINI_API_KEY", ""))
+                        if gkey:
+                            try:
+                                from computer_use import run_agent
+                                summary = run_agent(gkey, goal)
+                                console.print(
+                                    Panel(summary, title=f"[bold {CYAN}]Agent Complete[/bold {CYAN}]", border_style=BLUE)
+                                )
+                                tts.speak(summary)
+                                tts.wait_for_speech()
+                            except Exception as e:
+                                console.print(f"  [red]Agent error: {e}[/red]")
+            except Exception:
+                pass
+
+    agent_poll_thread = threading.Thread(target=_poll_agent_goals, daemon=True)
+    agent_poll_thread.start()
+
     # Input system — uses select() on stdin + background mic thread
     import queue
     import select as _select

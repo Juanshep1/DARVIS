@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta"
-COMPUTER_USE_MODEL = "gemini-2.5-flash-native-audio-latest"  # or gemini-2.5-computer-use-preview-10-2025
+COMPUTER_USE_MODEL = "gemini-2.5-flash"  # Vision-capable model for screenshot analysis
 VIEWPORT_W = 1280
 VIEWPORT_H = 800
 GRID_SIZE = 1000  # Gemini uses 1000x1000 coordinate grid
@@ -111,51 +111,27 @@ class ComputerUseAgent:
         # Upload screenshot to cloud for remote viewing
         self._upload_screenshot(img_bytes)
 
-        # Build message to Gemini
-        user_parts = []
+        # Build prompt
         if self.step_count == 1:
-            user_parts.append({"text": f"Goal: {goal}\n\nHere is the current browser screenshot. Analyze it and decide what actions to take to accomplish the goal. Respond with a JSON array of actions."})
+            prompt = f"Goal: {goal}\n\nThis is a screenshot of the browser. Tell me what to click/type to accomplish the goal."
         else:
-            user_parts.append({"text": "Here is the updated screenshot after the previous actions. Continue toward the goal, or say DONE if the goal is accomplished."})
+            prev_actions = json.dumps(self._status.get("actions", []))
+            prompt = f"Goal: {goal}\n\nPrevious actions taken: {prev_actions}\n\nThis is the updated screenshot. Continue toward the goal, or set done=true if accomplished."
 
-        user_parts.append({
-            "inlineData": {
-                "mimeType": "image/png",
-                "data": img_b64,
-            }
-        })
-
-        self.history.append({"role": "user", "parts": user_parts})
-
-        # Call Gemini
+        # Single-turn API call (most reliable)
         payload = json.dumps({
-            "contents": self.history,
-            "systemInstruction": {
-                "parts": [{"text": f"""You are a browser automation agent. You control a browser to accomplish user goals.
+            "contents": [{"parts": [
+                {"inlineData": {"mimeType": "image/png", "data": img_b64}},
+                {"text": f"""{prompt}
 
-The browser viewport is {VIEWPORT_W}x{VIEWPORT_H} pixels. When specifying coordinates, use a 0-{GRID_SIZE} scale for both x and y.
+Respond with ONLY a JSON object:
+{{"thinking": "what you see and your plan", "actions": [{{"type": "click", "x": 500, "y": 300}}, {{"type": "type", "text": "query"}}, {{"type": "key", "key": "Enter"}}, {{"type": "scroll", "direction": "down", "amount": 3}}], "done": false, "summary": "only when done=true"}}
 
-Respond with a JSON object:
-{{
-  "thinking": "brief description of what you see and your plan",
-  "actions": [
-    {{"type": "click", "x": 500, "y": 300}},
-    {{"type": "type", "text": "search query"}},
-    {{"type": "key", "key": "Enter"}},
-    {{"type": "scroll", "x": 500, "y": 500, "direction": "down", "amount": 3}},
-    {{"type": "navigate", "url": "https://..."}},
-    {{"type": "wait", "ms": 1000}}
-  ],
-  "done": false,
-  "summary": "only include when done=true, describe what was accomplished"
-}}
-
-If the goal is accomplished, set "done": true and include a summary.
-Always respond with valid JSON only, no markdown."""}]
-            },
+Coordinates: 0-{GRID_SIZE} scale for {VIEWPORT_W}x{VIEWPORT_H} viewport."""}
+            ]}],
             "generationConfig": {
                 "temperature": 0.2,
-                "maxOutputTokens": 2048,
+                "maxOutputTokens": 1024,
             }
         }).encode()
 
@@ -167,7 +143,7 @@ Always respond with valid JSON only, no markdown."""}]
         )
 
         try:
-            with urllib.request.urlopen(req, timeout=30) as resp:
+            with urllib.request.urlopen(req, timeout=60) as resp:
                 data = json.loads(resp.read().decode())
         except Exception as e:
             return {"thinking": f"API error: {e}", "actions": [], "done": True, "summary": "Failed due to API error"}
@@ -179,11 +155,8 @@ Always respond with valid JSON only, no markdown."""}]
                 if "text" in part:
                     reply_text += part["text"]
 
-        self.history.append({"role": "model", "parts": [{"text": reply_text}]})
-
-        # Parse JSON from response
+        # Parse JSON — strip markdown fences if present
         try:
-            # Strip markdown code fences if present
             clean = reply_text.strip()
             if clean.startswith("```"):
                 clean = clean.split("\n", 1)[1] if "\n" in clean else clean[3:]

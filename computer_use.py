@@ -151,9 +151,9 @@ class ComputerUseAgent:
         # Upload screenshot to cloud for remote viewing
         self._upload_screenshot(img_bytes)
 
-        # Check page text for CAPTCHA before even calling the API
+        # Check visible page text for CAPTCHA before calling the API
         try:
-            page_text = await self.page.text_content("body") or ""
+            page_text = await self.page.evaluate("document.body.innerText") or ""
             if any(kw in page_text.lower() for kw in CAPTCHA_KEYWORDS):
                 return {"thinking": "CAPTCHA detected", "actions": [], "done": False, "captcha": True}
         except Exception:
@@ -302,7 +302,7 @@ Coordinates: 0-{GRID_SIZE} scale for {VIEWPORT_W}x{VIEWPORT_H} viewport."""}
                 return
             # Also check if the CAPTCHA element is gone
             try:
-                content = await self.page.text_content("body") or ""
+                content = await self.page.evaluate("document.body.innerText") or ""
                 has_captcha = any(kw in content.lower() for kw in CAPTCHA_KEYWORDS)
                 if not has_captcha:
                     print("  [Agent] CAPTCHA appears solved — continuing.")

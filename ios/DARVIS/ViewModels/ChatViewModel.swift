@@ -248,23 +248,46 @@ class ChatViewModel: ObservableObject {
         recognitionTask?.cancel()
         recognitionTask = nil
 
-        let audioSession = AVAudioSession.sharedInstance()
-        try? audioSession.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetoothA2DP])
-        try? audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+        do {
+            let audioSession = AVAudioSession.sharedInstance()
+            try audioSession.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker, .allowBluetoothA2DP, .mixWithOthers])
+            try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+        } catch {
+            responseText = "Audio session error: \(error.localizedDescription)"
+            isRecording = false
+            orbState = .idle
+            return
+        }
 
         recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
         guard let request = recognitionRequest else { return }
         request.shouldReportPartialResults = true
 
+        // Reset audio engine
+        speechAudioEngine = AVAudioEngine()
         let inputNode = speechAudioEngine.inputNode
         let recordingFormat = inputNode.outputFormat(forBus: 0)
+
+        guard recordingFormat.sampleRate > 0 else {
+            responseText = "Microphone not available."
+            isRecording = false
+            orbState = .idle
+            return
+        }
 
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
             self?.recognitionRequest?.append(buffer)
         }
 
-        speechAudioEngine.prepare()
-        try? speechAudioEngine.start()
+        do {
+            speechAudioEngine.prepare()
+            try speechAudioEngine.start()
+        } catch {
+            responseText = "Audio engine error: \(error.localizedDescription)"
+            isRecording = false
+            orbState = .idle
+            return
+        }
 
         recognitionTask = speechRecognizer?.recognitionTask(with: request) { [weak self] result, error in
             guard let self = self else { return }
@@ -299,8 +322,16 @@ class ChatViewModel: ObservableObject {
             cameraService.stop()
             cameraActive = false
         } else {
+            // Stop speech recognition if running — can't have both audio taps
+            if isRecording && audioMode != "gemini" {
+                stopSpeechRecognition()
+                isRecording = false
+            }
             cameraService.start()
-            cameraActive = true
+            // Wait for camera to actually activate
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                self?.cameraActive = self?.cameraService.isActive ?? false
+            }
         }
     }
 

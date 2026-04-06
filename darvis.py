@@ -210,6 +210,14 @@ When the user says "forget about..." or "delete that memory":
 
 Memories persist across sessions and devices. They are automatically included in your context.
 
+## 11. Computer Use — Browse the Web Visually
+When the user asks you to do something in a browser that requires visual interaction (fill forms, navigate complex sites, shop, compare products, find specific content on a page), use computer use:
+```command
+{"action": "computer_use", "goal": "go to YouTube and find the latest Spurs highlights"}
+```
+Use this when the user says things like "go to...", "find me... on [website]", "buy...", "book...", "search [website] for...", "look up flights", "check Amazon for...".
+Do NOT use this for simple web searches — use search_web for those. Use computer_use when the task requires clicking, scrolling, or interacting with a specific website.
+
 PLATFORM_BROWSER_SECTION
 
 IMPORTANT RULES:
@@ -1046,6 +1054,24 @@ def extract_and_run_commands(response_text: str) -> list[str]:
                 if output:
                     console.print(f"  [dim]{output[:400]}[/dim]")
 
+            elif action == "computer_use" and "goal" in data:
+                goal = data["goal"]
+                console.print(f"  [dim]Computer Use:[/dim] {goal}")
+                try:
+                    env = load_env()
+                    gkey = env.get("GEMINI_API_KEY", os.environ.get("GEMINI_API_KEY", ""))
+                    if gkey:
+                        from computer_use import run_agent
+                        console.print(f"  [{BLUE}]Launching browser agent...[/{BLUE}]")
+                        summary = run_agent(gkey, goal)
+                        results.append(f"Browser agent completed: {summary}")
+                        console.print(f"  [green]✓[/green] {summary}")
+                    else:
+                        results.append("Computer Use unavailable — no GEMINI_API_KEY set")
+                except Exception as e:
+                    results.append(f"Computer Use error: {e}")
+                    console.print(f"  [red]Agent error: {e}[/red]")
+
             elif action == "remember" and "content" in data:
                 from memory import add_memory
                 cat = data.get("category", "general")
@@ -1333,6 +1359,21 @@ def main():
         sys.exit(1)
     console.print(f"  [green]✓[/green] ElevenLabs API key loaded")
 
+    # Gemini key (optional — enables Gemini Live Audio mode)
+    gemini_key = load_env().get("GEMINI_API_KEY", os.environ.get("GEMINI_API_KEY", ""))
+    gemini_available = False
+    if gemini_key:
+        try:
+            from gemini_live import HAS_WS
+            if HAS_WS:
+                gemini_available = True
+                console.print(f"  [green]✓[/green] Gemini Live Audio available (/gemini to enable)")
+            else:
+                console.print(f"  [dim]Gemini: install websockets package for live audio[/dim]")
+        except ImportError:
+            console.print(f"  [dim]Gemini: gemini_live.py not found[/dim]")
+    audio_mode = "classic"  # Start in classic mode
+
     # Check Ollama Cloud
     with console.status(f"[{BLUE}]Connecting to Ollama Cloud...", spinner="arc"):
         cloud_ok = check_ollama_cloud(ollama_key)
@@ -1534,6 +1575,20 @@ def main():
                     console.print(f"  [red]No microphone available[/red]")
                 continue
 
+            if lower == "/gemini":
+                if gemini_available:
+                    audio_mode = "gemini"
+                    console.print(f"  [green]✓[/green] Gemini Live Audio mode. Type [bold]/classic[/bold] to switch back.")
+                    console.print(f"  [dim]Voice input/output handled by Gemini natively.[/dim]")
+                else:
+                    console.print(f"  [red]Gemini not available[/red] — set GEMINI_API_KEY in .env and install websockets")
+                continue
+
+            if lower == "/classic":
+                audio_mode = "classic"
+                console.print(f"  [green]✓[/green] Classic mode (Ollama + ElevenLabs). Type [bold]/gemini[/bold] to switch.")
+                continue
+
             if lower == "/voices" or lower.startswith("/voice "):
                 if lower.startswith("/voice ") and len(lower) > 7:
                     arg = user_input.strip().split(None, 1)[1]
@@ -1584,6 +1639,8 @@ def main():
                         "[bold]/voice ID[/bold]    — switch voice by ElevenLabs ID\n"
                         "[bold]/models[/bold]      — pick a new LLM model\n"
                         "[bold]/model NAME[/bold]  — switch model directly (e.g. /model deepseek-r1:70b)\n"
+                        "[bold]/gemini[/bold]      — switch to Gemini Live Audio (speech-to-speech)\n"
+                        "[bold]/classic[/bold]     — switch back to Ollama + ElevenLabs\n"
                         "[bold]goodbye[/bold]      — exit D.A.R.V.I.S.\n\n"
                         "[dim]Settings (model + voice) are saved automatically.[/dim]",
                         title=f"[bold {CYAN}]Commands[/bold {CYAN}]",
@@ -1592,7 +1649,70 @@ def main():
                 )
                 continue
 
-            # ── Thinking Phase ──
+            # ── Gemini Mode: speech-to-speech via Gemini Live API ──
+            if audio_mode == "gemini" and gemini_available:
+                try:
+                    from gemini_live import run_gemini_text_turn
+                    from memory import get_memory_context
+
+                    sys_instr = SYSTEM_PROMPT.replace("HOME_DIR", HOME_DIR) + get_memory_context()
+
+                    # Suppress mic while Gemini speaks
+                    ear.suppressed = True
+                    was_listening = listening_active
+                    if was_listening:
+                        listening_active = False
+
+                    with console.status(f"[{BLUE}]Gemini thinking...", spinner="arc"):
+                        text_response = run_gemini_text_turn(
+                            api_key=gemini_key,
+                            text=user_input,
+                            system_instruction=sys_instr,
+                        )
+
+                    if text_response:
+                        console.print()
+                        console.print(
+                            Panel(
+                                Markdown(text_response),
+                                title=f"[bold {CYAN}]D.A.R.V.I.S. (Gemini)[/bold {CYAN}]",
+                                border_style=BLUE,
+                                padding=(1, 2),
+                            )
+                        )
+                        console.print()
+                        # Sync to history
+                        try:
+                            from history import append_history
+                            append_history(
+                                {"role": "user", "content": user_input},
+                                {"role": "assistant", "content": text_response},
+                            )
+                        except Exception:
+                            pass
+                    else:
+                        # Gemini failed — fall back to classic for this turn
+                        console.print(f"  [yellow]Gemini failed — using classic mode[/yellow]")
+                        audio_mode = "classic"
+
+                    import time
+                    time.sleep(1)
+                    try:
+                        while not speech_queue.empty():
+                            speech_queue.get_nowait()
+                    except queue.Empty:
+                        pass
+                    ear.suppressed = False
+                    if was_listening:
+                        listening_active = True
+
+                    if audio_mode == "gemini":
+                        continue
+                except Exception as e:
+                    console.print(f"  [yellow]Gemini error: {e} — falling back to classic[/yellow]")
+                    audio_mode = "classic"
+
+            # ── Classic Mode: Thinking Phase ──
             with console.status(f"[{BLUE}]Thinking...", spinner="arc"):
                 response = brain.think(user_input)
 

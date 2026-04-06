@@ -12,6 +12,7 @@ export default async (req) => {
     return Response.json({
       model: settings.model || Netlify.env.get("DARVIS_MODEL") || "llama3.3:70b",
       voice_id: settings.voice_id || Netlify.env.get("DARVIS_VOICE_ID") || "kPtEHAvRnjUJFv7SK9WI",
+      audio_mode: settings.audio_mode || "classic",
     });
   }
 
@@ -25,6 +26,7 @@ export default async (req) => {
 
     if (body.model) settings.model = body.model;
     if (body.voice_id) settings.voice_id = body.voice_id;
+    if (body.audio_mode) settings.audio_mode = body.audio_mode;
 
     await store.setJSON("current", settings);
     return Response.json(settings);

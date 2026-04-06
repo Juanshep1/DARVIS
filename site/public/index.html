@@ -130,7 +130,7 @@ body {
 }
 .input-area input::placeholder { color: #444; }
 
-.mic-btn {
+.mic-btn, .cam-btn {
     width: 48px; height: 48px; min-width: 48px;
     border-radius: 50%;
     border: 1px solid rgba(80, 140, 255, 0.3);
@@ -141,8 +141,9 @@ body {
     display: flex; align-items: center; justify-content: center;
     transition: all 0.3s;
 }
-.mic-btn:hover { border-color: rgba(80, 180, 255, 0.7); }
+.mic-btn:hover, .cam-btn:hover { border-color: rgba(80, 180, 255, 0.7); }
 .mic-btn.recording { border-color: #ff4444; color: #ff4444; }
+.cam-btn.active { border-color: #44ff44; color: #44ff44; }
 
 /* Settings */
 .settings-toggle {
@@ -157,7 +158,6 @@ body {
     cursor: pointer;
     z-index: 100;
     transition: all 0.3s;
-    padding-top: env(safe-area-inset-top);
 }
 .settings-toggle:hover { border-color: rgba(80, 180, 255, 0.7); }
 .settings-panel {
@@ -172,6 +172,8 @@ body {
     display: none;
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
+    max-height: 80vh;
+    overflow-y: auto;
 }
 .settings-panel.open { display: block; }
 .settings-panel label {
@@ -203,6 +205,19 @@ body {
     min-height: 1.2em;
 }
 
+/* Camera preview */
+.cam-preview {
+    position: fixed;
+    bottom: 90px; right: 15px;
+    width: 120px; height: 90px;
+    border-radius: 10px;
+    border: 1px solid rgba(80, 140, 255, 0.3);
+    object-fit: cover;
+    z-index: 90;
+    display: none;
+}
+.cam-preview.active { display: block; }
+
 .status {
     position: fixed;
     bottom: 6px;
@@ -219,6 +234,8 @@ body {
     .input-area { padding: 12px 12px calc(env(safe-area-inset-bottom, 0px) + 16px); }
     .input-area input { padding: 12px 16px; font-size: 0.95rem; }
     .settings-panel { width: calc(100vw - 30px); right: 15px; }
+    .cam-preview { width: 80px; height: 60px; bottom: 80px; right: 10px; }
+    .agent-panel { width: calc(100vw - 30px); max-height: 70vh; }
 }
 @media (max-height: 600px) {
     .orb { width: 120px; height: 120px; }
@@ -226,17 +243,85 @@ body {
     .title { padding: 8px 0 0; }
     .input-area { padding: 8px 12px 12px; }
 }
+
+/* Agent View */
+.agent-toggle {
+    position: fixed;
+    top: 15px; left: 15px;
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    border: 1px solid rgba(80, 140, 255, 0.3);
+    background: rgba(15, 15, 25, 0.9);
+    color: #4a90d9;
+    font-size: 1rem;
+    cursor: pointer;
+    z-index: 100;
+    transition: all 0.3s;
+}
+.agent-toggle:hover { border-color: rgba(80, 180, 255, 0.7); }
+.agent-toggle.active { border-color: #44ff44; color: #44ff44; }
+.agent-panel {
+    position: fixed;
+    top: 60px; left: 15px;
+    background: rgba(10, 10, 20, 0.95);
+    border: 1px solid rgba(80, 140, 255, 0.2);
+    border-radius: 12px;
+    padding: 16px;
+    width: 360px;
+    max-height: 80vh;
+    z-index: 100;
+    display: none;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    overflow-y: auto;
+}
+.agent-panel.open { display: block; }
+.agent-panel img {
+    width: 100%;
+    border-radius: 8px;
+    border: 1px solid rgba(80, 140, 255, 0.2);
+    margin: 8px 0;
+}
+.agent-panel .agent-log {
+    font-size: 0.7rem;
+    color: #8a8;
+    max-height: 120px;
+    overflow-y: auto;
+    margin-top: 8px;
+    padding: 8px;
+    background: rgba(0,0,0,0.3);
+    border-radius: 6px;
+}
+.agent-panel .agent-status {
+    font-size: 0.75rem;
+    color: #b0c4de;
+    margin: 4px 0;
+}
 </style>
 </head>
 <body>
 
 <button class="settings-toggle" onclick="toggleSettings()">&#9881;</button>
 <div class="settings-panel" id="settingsPanel">
-    <label>Model</label>
-    <select id="modelSelect" onchange="setModel(this.value)"></select>
-    <label>Voice</label>
-    <select id="voiceSelect" onchange="setVoice(this.value)"></select>
+    <label>Audio Mode</label>
+    <select id="audioModeSelect" onchange="setAudioMode(this.value)">
+        <option value="classic">Classic (Ollama + ElevenLabs)</option>
+        <option value="gemini">Gemini Live Audio</option>
+    </select>
+    <div id="classicSettings">
+        <label>Model</label>
+        <select id="modelSelect" onchange="setModel(this.value)"></select>
+        <label>Voice</label>
+        <select id="voiceSelect" onchange="setVoice(this.value)"></select>
+    </div>
     <div class="settings-status" id="settingsStatus"></div>
+</div>
+
+<button class="agent-toggle" id="agentToggle" onclick="toggleAgentView()">&#x1F441;</button>
+<div class="agent-panel" id="agentPanel">
+    <div class="agent-status" id="agentStatus">No active agent session</div>
+    <img id="agentScreen" style="display:none" alt="Agent browser view">
+    <div class="agent-log" id="agentLog"></div>
 </div>
 
 <div class="title">D . A . R . V . I . S .</div>
@@ -250,39 +335,356 @@ body {
     <input type="text" id="input" placeholder="Talk to DARVIS..." autocomplete="off"
            onkeydown="if(event.key==='Enter')send()">
     <button class="mic-btn" id="micBtn" onclick="toggleMic()">&#x1F3A4;</button>
+    <button class="cam-btn" id="camBtn" onclick="toggleCamera()">&#x1F4F7;</button>
 </div>
 
-<div class="status">POWERED BY OLLAMA CLOUD + ELEVENLABS</div>
+<video class="cam-preview" id="camPreview" autoplay playsinline muted></video>
+
+<div class="status" id="statusBar">POWERED BY OLLAMA CLOUD + ELEVENLABS</div>
 
 <script>
+// ── State ──
 const orb = document.getElementById('orb');
 const responseEl = document.getElementById('response');
 const inputEl = document.getElementById('input');
 const micBtn = document.getElementById('micBtn');
+const camBtn = document.getElementById('camBtn');
+const camPreview = document.getElementById('camPreview');
+const statusBar = document.getElementById('statusBar');
+
+let audioMode = 'classic'; // 'classic' or 'gemini'
 let recognition = null;
 let isRecording = false;
 let currentAudio = null;
 let silenceTimer = null;
-const SILENCE_DELAY = 3000; // 3 seconds of silence before auto-send
+const SILENCE_DELAY = 3000;
 
-// Unlock audio on first interaction — create a persistent Audio element
-// that we reuse for all TTS playback so the browser trusts it
-let audioCtx = null;
+// Camera state
+let cameraStream = null;
+let cameraCanvas = null;
+let cameraActive = false;
+
+// Gemini Live state
+let geminiWs = null;
+let geminiAudioCtx = null;
+let geminiMicStream = null;
+let geminiMicProcessor = null;
+let geminiAudioQueue = [];
+let geminiPlaying = false;
+let geminiSessionActive = false;
+
+// ── Audio unlock (classic mode) ──
 let persistentAudio = new Audio();
 persistentAudio.setAttribute('playsinline', '');
 function unlockAudio() {
-    if (!audioCtx) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        audioCtx.resume();
+    if (!geminiAudioCtx) {
+        geminiAudioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
     }
-    // Prime the audio element with a silent play so the browser marks it as user-activated
+    geminiAudioCtx.resume();
     persistentAudio.src = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAABhkVuHQgAAAAAAAAAAAAAAAAAAP/7UGQAAAALS0gBQRAAANIKCAoYgAABAAH+AAAJAAADSAAAABAAAAAAACqf/LAAAAAARFRJJF//sqRA';
-    persistentAudio.play().then(() => { persistentAudio.pause(); }).catch(() => {});
+    persistentAudio.play().then(() => persistentAudio.pause()).catch(() => {});
 }
 document.addEventListener('click', unlockAudio, { once: false });
 document.addEventListener('touchstart', unlockAudio, { once: false });
 
-// Web Speech API — continuous mode with silence timeout
+// ══════════════════════════════════════════════════════════════════════════════
+// GEMINI LIVE AUDIO SESSION
+// ══════════════════════════════════════════════════════════════════════════════
+
+async function geminiConnect() {
+    if (geminiWs && geminiWs.readyState === WebSocket.OPEN) return true;
+
+    try {
+        // Get token from server
+        const tokenRes = await fetch('/api/gemini-token');
+        const tokenData = await tokenRes.json();
+        if (!tokenData.token) throw new Error('No Gemini token');
+
+        const wsUrl = tokenData.useAsKey
+            ? `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${tokenData.token}`
+            : `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${tokenData.token}`;
+
+        // Fetch memories for system instruction
+        let memoryCtx = '';
+        try {
+            const memRes = await fetch('/api/memory');
+            const memData = await memRes.json();
+            if (memData.memories?.length) {
+                memoryCtx = '\n\nUser memories:\n' + memData.memories.map(m => `- [${m.category}] ${m.content}`).join('\n');
+            }
+        } catch {}
+
+        return new Promise((resolve, reject) => {
+            geminiWs = new WebSocket(wsUrl);
+            geminiWs.onopen = () => {
+                // Send setup message
+                geminiWs.send(JSON.stringify({
+                    setup: {
+                        model: `models/${tokenData.model}`,
+                        generation_config: {
+                            response_modalities: ['AUDIO'],
+                            speech_config: {
+                                voice_config: {
+                                    prebuilt_voice_config: { voice_name: 'Kore' }
+                                }
+                            }
+                        },
+                        system_instruction: {
+                            parts: [{
+                                text: `You are D.A.R.V.I.S., a Digital Assistant, Rather Very Intelligent System.
+You are dry-witted, efficient, and occasionally sardonic — but always helpful and loyal.
+British-accented speech patterns. Concise and direct, but with personality.
+Addresses the user as "sir" or "ma'am" naturally. Shows quiet competence.
+Keep responses concise (1-3 sentences unless more detail is needed).${memoryCtx}`
+                            }]
+                        }
+                    }
+                }));
+            };
+
+            geminiWs.onmessage = (event) => {
+                try {
+                    const msg = JSON.parse(event.data);
+
+                    // Setup complete
+                    if (msg.setupComplete) {
+                        geminiSessionActive = true;
+                        statusBar.textContent = 'GEMINI LIVE AUDIO ACTIVE';
+                        resolve(true);
+                        return;
+                    }
+
+                    // Server content (audio + text)
+                    if (msg.serverContent) {
+                        const parts = msg.serverContent.modelTurn?.parts || [];
+                        for (const part of parts) {
+                            // Audio data
+                            if (part.inlineData?.mimeType?.includes('audio')) {
+                                playGeminiAudio(part.inlineData.data);
+                                orb.className = 'orb speaking';
+                            }
+                            // Text transcript
+                            if (part.text) {
+                                responseEl.textContent += part.text;
+                            }
+                        }
+                        // Turn complete
+                        if (msg.serverContent.turnComplete) {
+                            // Save to history
+                            const text = responseEl.textContent;
+                            if (text) {
+                                fetch('/api/history', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ messages: [
+                                        { role: 'assistant', content: text }
+                                    ]}),
+                                }).catch(() => {});
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Gemini message parse error:', e);
+                }
+            };
+
+            geminiWs.onerror = () => {
+                console.warn('Gemini WebSocket error — falling back to classic');
+                geminiSessionActive = false;
+                fallbackToClassic();
+                reject(new Error('WebSocket error'));
+            };
+
+            geminiWs.onclose = () => {
+                geminiSessionActive = false;
+                if (audioMode === 'gemini') {
+                    statusBar.textContent = 'GEMINI DISCONNECTED — RECONNECT BY TAPPING MIC';
+                }
+            };
+
+            // Timeout
+            setTimeout(() => {
+                if (!geminiSessionActive) {
+                    geminiWs.close();
+                    reject(new Error('Connection timeout'));
+                }
+            }, 10000);
+        });
+    } catch (err) {
+        console.warn('Gemini connect failed:', err);
+        fallbackToClassic();
+        return false;
+    }
+}
+
+function fallbackToClassic() {
+    audioMode = 'classic';
+    document.getElementById('audioModeSelect').value = 'classic';
+    updateModeUI();
+    responseEl.textContent = 'Gemini unavailable — switched to Classic mode.';
+}
+
+// ── Gemini audio playback (PCM 24kHz → AudioContext) ──
+
+function playGeminiAudio(base64Data) {
+    if (!geminiAudioCtx) {
+        geminiAudioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
+    }
+    geminiAudioCtx.resume();
+
+    const raw = atob(base64Data);
+    const bytes = new Uint8Array(raw.length);
+    for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+
+    // Convert Int16 LE PCM to Float32
+    const int16 = new Int16Array(bytes.buffer);
+    const float32 = new Float32Array(int16.length);
+    for (let i = 0; i < int16.length; i++) {
+        float32[i] = int16[i] / 32768;
+    }
+
+    const buffer = geminiAudioCtx.createBuffer(1, float32.length, 24000);
+    buffer.copyToChannel(float32, 0);
+
+    const source = geminiAudioCtx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(geminiAudioCtx.destination);
+    source.onended = () => {
+        if (!geminiPlaying) orb.className = 'orb';
+    };
+    source.start();
+    geminiPlaying = true;
+    setTimeout(() => { geminiPlaying = false; }, (float32.length / 24000) * 1000);
+}
+
+// ── Gemini mic streaming (capture → 16kHz PCM → WebSocket) ──
+
+async function startGeminiMic() {
+    if (!geminiWs || geminiWs.readyState !== WebSocket.OPEN) return;
+
+    try {
+        geminiMicStream = await navigator.mediaDevices.getUserMedia({
+            audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true, noiseSuppression: true }
+        });
+
+        const micCtx = new AudioContext({ sampleRate: 16000 });
+        const source = micCtx.createMediaStreamSource(geminiMicStream);
+
+        // Use ScriptProcessorNode (widely supported) to capture PCM
+        const processor = micCtx.createScriptProcessor(4096, 1, 1);
+        processor.onaudioprocess = (e) => {
+            if (!geminiWs || geminiWs.readyState !== WebSocket.OPEN) return;
+
+            const float32 = e.inputBuffer.getChannelData(0);
+            const int16 = new Int16Array(float32.length);
+            for (let i = 0; i < float32.length; i++) {
+                int16[i] = Math.max(-32768, Math.min(32767, Math.floor(float32[i] * 32768)));
+            }
+
+            // Base64 encode
+            const bytes = new Uint8Array(int16.buffer);
+            let binary = '';
+            for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+            const b64 = btoa(binary);
+
+            // Send to Gemini
+            const msg = {
+                realtimeInput: {
+                    mediaChunks: [{
+                        data: b64,
+                        mimeType: 'audio/pcm;rate=16000'
+                    }]
+                }
+            };
+
+            // If camera is active, also send a frame
+            if (cameraActive && cameraCanvas) {
+                const frame = captureFrame();
+                if (frame) {
+                    msg.realtimeInput.mediaChunks.push({
+                        data: frame,
+                        mimeType: 'image/jpeg'
+                    });
+                }
+            }
+
+            geminiWs.send(JSON.stringify(msg));
+        };
+
+        source.connect(processor);
+        processor.connect(micCtx.destination);
+        geminiMicProcessor = { processor, source, context: micCtx };
+
+    } catch (err) {
+        console.warn('Mic access error:', err);
+        responseEl.textContent = 'Microphone access denied.';
+    }
+}
+
+function stopGeminiMic() {
+    if (geminiMicProcessor) {
+        geminiMicProcessor.processor.disconnect();
+        geminiMicProcessor.source.disconnect();
+        geminiMicProcessor.context.close();
+        geminiMicProcessor = null;
+    }
+    if (geminiMicStream) {
+        geminiMicStream.getTracks().forEach(t => t.stop());
+        geminiMicStream = null;
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// CAMERA
+// ══════════════════════════════════════════════════════════════════════════════
+
+async function toggleCamera() {
+    if (cameraActive) {
+        stopCamera();
+    } else {
+        try {
+            cameraStream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: 'environment', width: 640, height: 480 }
+            });
+            camPreview.srcObject = cameraStream;
+            camPreview.classList.add('active');
+            camBtn.classList.add('active');
+            cameraActive = true;
+
+            // Create canvas for frame capture
+            cameraCanvas = document.createElement('canvas');
+            cameraCanvas.width = 640;
+            cameraCanvas.height = 480;
+        } catch (err) {
+            responseEl.textContent = 'Camera access denied.';
+        }
+    }
+}
+
+function stopCamera() {
+    if (cameraStream) {
+        cameraStream.getTracks().forEach(t => t.stop());
+        cameraStream = null;
+    }
+    camPreview.srcObject = null;
+    camPreview.classList.remove('active');
+    camBtn.classList.remove('active');
+    cameraActive = false;
+    cameraCanvas = null;
+}
+
+function captureFrame() {
+    if (!cameraCanvas || !camPreview.videoWidth) return null;
+    const ctx = cameraCanvas.getContext('2d');
+    ctx.drawImage(camPreview, 0, 0, 640, 480);
+    // Return base64 JPEG (strip data URL prefix)
+    return cameraCanvas.toDataURL('image/jpeg', 0.5).split(',')[1];
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// CLASSIC MODE — Web Speech API + Ollama + ElevenLabs
+// ══════════════════════════════════════════════════════════════════════════════
+
 if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     recognition = new SR();
@@ -291,45 +693,29 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
     recognition.lang = 'en-US';
 
     recognition.onresult = (e) => {
-        // Build full transcript from all results
         let finalText = '';
         let interimText = '';
         for (let i = 0; i < e.results.length; i++) {
             const transcript = e.results[i][0].transcript;
-            if (e.results[i].isFinal) {
-                finalText += transcript;
-            } else {
-                interimText += transcript;
-            }
+            if (e.results[i].isFinal) finalText += transcript;
+            else interimText += transcript;
         }
-        // Show what the user is saying in real time
         inputEl.value = (finalText + interimText).trim();
-
-        // Reset the silence timer every time we get new speech
         clearTimeout(silenceTimer);
         silenceTimer = setTimeout(() => {
-            // No new speech for SILENCE_DELAY — stop and send
-            if (isRecording) {
-                recognition.stop();
-            }
+            if (isRecording) recognition.stop();
         }, SILENCE_DELAY);
     };
-
     recognition.onend = () => {
         clearTimeout(silenceTimer);
         const hadText = inputEl.value.trim().length > 0;
         isRecording = false;
         micBtn.classList.remove('recording');
-        if (hadText) {
-            send();
-        } else if (!orb.classList.contains('thinking') && !orb.classList.contains('speaking')) {
-            orb.className = 'orb';
-        }
+        if (hadText) send();
+        else if (!orb.classList.contains('thinking') && !orb.classList.contains('speaking')) orb.className = 'orb';
     };
-
     recognition.onerror = (e) => {
         clearTimeout(silenceTimer);
-        // 'no-speech' just means silence — not a real error
         if (e.error === 'no-speech') return;
         isRecording = false;
         micBtn.classList.remove('recording');
@@ -337,13 +723,39 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
     };
 }
 
-function toggleMic() {
+// ══════════════════════════════════════════════════════════════════════════════
+// MIC TOGGLE (routes to correct mode)
+// ══════════════════════════════════════════════════════════════════════════════
+
+async function toggleMic() {
+    if (audioMode === 'gemini') {
+        if (isRecording) {
+            // Stop Gemini mic
+            stopGeminiMic();
+            isRecording = false;
+            micBtn.classList.remove('recording');
+            orb.className = 'orb';
+        } else {
+            // Connect to Gemini if needed, then start streaming
+            orb.className = 'orb thinking';
+            responseEl.textContent = '';
+            const ok = await geminiConnect();
+            if (ok) {
+                isRecording = true;
+                micBtn.classList.add('recording');
+                orb.className = 'orb listening';
+                await startGeminiMic();
+            }
+        }
+        return;
+    }
+
+    // Classic mode
     if (!recognition) {
-        responseEl.textContent = 'Speech recognition not available in this browser. Use Chrome.';
+        responseEl.textContent = 'Speech recognition not available. Use Chrome.';
         return;
     }
     if (isRecording) {
-        // Manual stop — send whatever we have
         clearTimeout(silenceTimer);
         recognition.stop();
     } else {
@@ -355,14 +767,13 @@ function toggleMic() {
     }
 }
 
-// Detect if user likely wants to open something — reserve a blank tab NOW
-// while we're still inside the user gesture, so the browser allows it
+// ══════════════════════════════════════════════════════════════════════════════
+// SEND (classic mode text input + Gemini text input)
+// ══════════════════════════════════════════════════════════════════════════════
+
 function looksLikeOpenRequest(text) {
     const lower = text.toLowerCase();
-    const triggers = [
-        'open ', 'go to ', 'pull up ', 'navigate to ', 'take me to ',
-        'show me ', 'launch ', 'bring up ', 'load ', 'google ',
-    ];
+    const triggers = ['open ', 'go to ', 'pull up ', 'navigate to ', 'take me to ', 'show me ', 'launch ', 'bring up ', 'load ', 'google '];
     return triggers.some(t => lower.startsWith(t) || lower.includes('open '));
 }
 
@@ -371,9 +782,36 @@ async function send() {
     if (!text) return;
     inputEl.value = '';
 
+    // Gemini text mode — send via WebSocket
+    if (audioMode === 'gemini') {
+        orb.className = 'orb thinking';
+        responseEl.textContent = '';
+        const ok = await geminiConnect();
+        if (ok && geminiWs.readyState === WebSocket.OPEN) {
+            geminiWs.send(JSON.stringify({
+                clientContent: {
+                    turns: [{ role: 'user', parts: [{ text }] }],
+                    turnComplete: true
+                }
+            }));
+            // Save user message to history
+            fetch('/api/history', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ messages: [{ role: 'user', content: text }] }),
+            }).catch(() => {});
+        } else {
+            fallbackToClassic();
+            // Re-send in classic mode
+            inputEl.value = text;
+            send();
+        }
+        return;
+    }
+
+    // Classic mode
     if (currentAudio) { persistentAudio.pause(); persistentAudio.currentTime = 0; currentAudio = null; }
 
-    // Pre-open a blank tab during the user gesture so the browser doesn't block it
     let pendingTab = null;
     if (looksLikeOpenRequest(text)) {
         pendingTab = window.open('about:blank', '_blank');
@@ -383,7 +821,6 @@ async function send() {
     responseEl.textContent = '';
 
     try {
-        // Get chat response
         const res = await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -392,13 +829,11 @@ async function send() {
         const data = await res.json();
         responseEl.textContent = data.reply;
 
-        // Execute any client-side actions (open URLs, etc.)
         if (data.actions) {
             let usedPending = false;
             data.actions.forEach(act => {
                 if (act.action === 'open_url' && act.url) {
                     if (pendingTab && !usedPending) {
-                        // Redirect the pre-opened tab
                         pendingTab.location.href = act.url;
                         usedPending = true;
                     } else {
@@ -406,73 +841,101 @@ async function send() {
                     }
                 }
             });
-            // Close the blank tab if it wasn't used
-            if (pendingTab && !usedPending) {
-                pendingTab.close();
-            }
+            if (pendingTab && !usedPending) pendingTab.close();
             pendingTab = null;
         } else if (pendingTab) {
-            // No actions came back — close the blank tab
             pendingTab.close();
             pendingTab = null;
         }
 
-        // Get TTS audio — use persistent audio element for reliable mobile playback
+        // Classic TTS
         try {
             const ttsRes = await fetch('/api/tts', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ text: data.reply }),
             });
-
             const contentType = ttsRes.headers.get('content-type') || '';
             if (ttsRes.ok && contentType.includes('audio')) {
                 const audioBlob = await ttsRes.blob();
                 if (audioBlob.size > 100) {
-                    // Revoke any old URL
-                    if (currentAudio) {
-                        const oldSrc = currentAudio;
-                        if (oldSrc._blobUrl) URL.revokeObjectURL(oldSrc._blobUrl);
-                    }
+                    if (currentAudio && currentAudio._blobUrl) URL.revokeObjectURL(currentAudio._blobUrl);
                     const audioUrl = URL.createObjectURL(audioBlob);
-                    // Reuse the persistent audio element (already user-gesture-primed)
                     persistentAudio.pause();
                     persistentAudio.currentTime = 0;
                     persistentAudio._blobUrl = audioUrl;
                     persistentAudio.src = audioUrl;
-                    persistentAudio.onended = () => {
-                        orb.className = 'orb';
-                        URL.revokeObjectURL(audioUrl);
-                        currentAudio = null;
-                    };
-                    persistentAudio.onerror = () => {
-                        console.warn('Audio playback error');
-                        orb.className = 'orb';
-                    };
+                    persistentAudio.onended = () => { orb.className = 'orb'; URL.revokeObjectURL(audioUrl); currentAudio = null; };
+                    persistentAudio.onerror = () => { orb.className = 'orb'; };
                     currentAudio = persistentAudio;
                     orb.className = 'orb speaking';
                     await persistentAudio.play();
                     return;
                 }
             }
-        } catch (ttsErr) {
-            console.warn('TTS error:', ttsErr);
-        }
+        } catch (ttsErr) { console.warn('TTS error:', ttsErr); }
         orb.className = 'orb';
-
     } catch (err) {
         responseEl.textContent = 'Connection error: ' + err.message;
         orb.className = 'orb';
     }
 }
 
-// ── Settings ──
+// ══════════════════════════════════════════════════════════════════════════════
+// SETTINGS
+// ══════════════════════════════════════════════════════════════════════════════
+
 function toggleSettings() {
     document.getElementById('settingsPanel').classList.toggle('open');
 }
 
+function updateModeUI() {
+    const classic = document.getElementById('classicSettings');
+    if (audioMode === 'gemini') {
+        classic.style.display = 'none';
+        statusBar.textContent = 'GEMINI LIVE AUDIO';
+    } else {
+        classic.style.display = 'block';
+        statusBar.textContent = 'POWERED BY OLLAMA CLOUD + ELEVENLABS';
+    }
+}
+
+async function setAudioMode(mode) {
+    audioMode = mode;
+    updateModeUI();
+    // Stop any active Gemini session
+    if (mode === 'classic' && geminiWs) {
+        stopGeminiMic();
+        geminiWs.close();
+        geminiWs = null;
+        geminiSessionActive = false;
+    }
+    const status = document.getElementById('settingsStatus');
+    status.textContent = 'Switching audio mode...';
+    try {
+        await fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ audio_mode: mode }),
+        });
+        status.textContent = mode === 'gemini' ? 'Gemini Live Audio' : 'Classic mode';
+    } catch { status.textContent = 'Error switching mode'; }
+}
+
 async function loadSettings() {
     const status = document.getElementById('settingsStatus');
+
+    // Load audio mode
+    try {
+        const res = await fetch('/api/settings');
+        const data = await res.json();
+        if (data.audio_mode) {
+            audioMode = data.audio_mode;
+            document.getElementById('audioModeSelect').value = audioMode;
+            updateModeUI();
+        }
+    } catch {}
+
     // Load models
     try {
         const res = await fetch('/api/models');
@@ -510,26 +973,18 @@ async function setModel(model) {
     const status = document.getElementById('settingsStatus');
     status.textContent = 'Switching model...';
     try {
-        await fetch('/api/settings', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ model }),
-        });
+        await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model }) });
         status.textContent = 'Model: ' + model;
-    } catch(e) { status.textContent = 'Error switching model'; }
+    } catch { status.textContent = 'Error switching model'; }
 }
 
 async function setVoice(voice_id) {
     const status = document.getElementById('settingsStatus');
     status.textContent = 'Switching voice...';
     try {
-        await fetch('/api/settings', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ voice_id }),
-        });
+        await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ voice_id }) });
         status.textContent = 'Voice updated';
-    } catch(e) { status.textContent = 'Error switching voice'; }
+    } catch { status.textContent = 'Error switching voice'; }
 }
 
 // Close settings when clicking outside
@@ -540,6 +995,72 @@ document.addEventListener('click', (e) => {
         panel.classList.remove('open');
     }
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// AGENT VIEW — live browser feed from Computer Use
+// ══════════════════════════════════════════════════════════════════════════════
+
+let agentPollTimer = null;
+
+function toggleAgentView() {
+    const panel = document.getElementById('agentPanel');
+    panel.classList.toggle('open');
+    if (panel.classList.contains('open')) {
+        startAgentPolling();
+    } else {
+        stopAgentPolling();
+    }
+}
+
+function startAgentPolling() {
+    if (agentPollTimer) return;
+    pollAgent();
+    agentPollTimer = setInterval(pollAgent, 1000);
+}
+
+function stopAgentPolling() {
+    if (agentPollTimer) {
+        clearInterval(agentPollTimer);
+        agentPollTimer = null;
+    }
+}
+
+async function pollAgent() {
+    try {
+        const res = await fetch('/api/agent/status');
+        const status = await res.json();
+        const statusEl = document.getElementById('agentStatus');
+        const screenEl = document.getElementById('agentScreen');
+        const logEl = document.getElementById('agentLog');
+        const toggleBtn = document.getElementById('agentToggle');
+
+        if (status.active) {
+            toggleBtn.classList.add('active');
+            statusEl.textContent = `Step ${status.step}: ${status.goal}`;
+
+            // Fetch screenshot
+            try {
+                const imgRes = await fetch('/api/agent/screenshot');
+                if (imgRes.ok && imgRes.headers.get('content-type')?.includes('image')) {
+                    const blob = await imgRes.blob();
+                    screenEl.src = URL.createObjectURL(blob);
+                    screenEl.style.display = 'block';
+                }
+            } catch {}
+
+            if (status.thinking) {
+                logEl.textContent = status.thinking + '\n' + (status.actions || []).map(a => JSON.stringify(a)).join('\n');
+            }
+        } else if (status.done) {
+            toggleBtn.classList.remove('active');
+            statusEl.textContent = 'Agent finished: ' + (status.thinking || 'Done');
+        } else {
+            toggleBtn.classList.remove('active');
+            statusEl.textContent = 'No active agent session';
+            screenEl.style.display = 'none';
+        }
+    } catch {}
+}
 
 loadSettings();
 inputEl.focus();

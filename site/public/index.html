@@ -435,7 +435,9 @@ async function geminiConnect() {
 You are dry-witted, efficient, and occasionally sardonic — but always helpful and loyal.
 British-accented speech patterns. Concise and direct, but with personality.
 Addresses the user as "sir" or "ma'am" naturally. Shows quiet competence.
-Keep responses concise (1-3 sentences unless more detail is needed).${memoryCtx}`
+Keep responses concise (1-3 sentences unless more detail is needed).
+
+You may receive camera images from the user's device. When you see images, you can describe what you see, identify objects, read text, help with tasks shown on screen, etc. If the user asks "what do you see", "what's in front of me", "what am I looking at", or similar — describe the camera feed in detail. The camera is live so the images update in real time.${memoryCtx}`
                             }]
                         }
                     }
@@ -456,24 +458,28 @@ Keep responses concise (1-3 sentences unless more detail is needed).${memoryCtx}
 
                     // Server content (audio + text)
                     if (msg.serverContent) {
+                        // Interruption — user started speaking over Gemini
+                        if (msg.serverContent.interrupted) {
+                            stopGeminiPlayback();
+                            responseEl.textContent += ' [interrupted]';
+                            orb.className = isRecording ? 'orb listening' : 'orb';
+                            return;
+                        }
+
                         const parts = msg.serverContent.modelTurn?.parts || [];
                         for (const part of parts) {
-                            // Audio data
                             if (part.inlineData?.mimeType?.includes('audio')) {
                                 playGeminiAudio(part.inlineData.data);
-                                orb.className = 'orb speaking';
                             }
-                            // Text transcript
                             if (part.text) {
                                 responseEl.textContent += part.text;
                             }
                         }
+
                         // Turn complete — Gemini is done responding
                         if (msg.serverContent.turnComplete) {
-                            // Brief delay for final audio chunk to finish playing
-                            setTimeout(() => { orb.className = 'orb'; }, 500);
                             // Save to history
-                            const text = responseEl.textContent;
+                            const text = responseEl.textContent.replace(' [interrupted]', '');
                             if (text) {
                                 fetch('/api/history', {
                                     method: 'POST',
@@ -529,6 +535,11 @@ function fallbackToClassic() {
 }
 
 // ── Gemini audio playback (PCM 24kHz → AudioContext) ──
+// Queue-based: audio chunks are scheduled sequentially so they don't overlap.
+// Interruption: stopGeminiPlayback() cancels all queued audio instantly.
+
+let geminiPlaybackSources = []; // active AudioBufferSourceNodes
+let geminiNextPlayTime = 0;     // when to schedule the next chunk
 
 function playGeminiAudio(base64Data) {
     if (!geminiAudioCtx) {
@@ -540,7 +551,6 @@ function playGeminiAudio(base64Data) {
     const bytes = new Uint8Array(raw.length);
     for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
 
-    // Convert Int16 LE PCM to Float32
     const int16 = new Int16Array(bytes.buffer);
     const float32 = new Float32Array(int16.length);
     for (let i = 0; i < int16.length; i++) {
@@ -553,12 +563,36 @@ function playGeminiAudio(base64Data) {
     const source = geminiAudioCtx.createBufferSource();
     source.buffer = buffer;
     source.connect(geminiAudioCtx.destination);
+
+    // Schedule sequentially
+    const now = geminiAudioCtx.currentTime;
+    const startTime = Math.max(now, geminiNextPlayTime);
+    source.start(startTime);
+    geminiNextPlayTime = startTime + buffer.duration;
+
     source.onended = () => {
-        if (!geminiPlaying) orb.className = 'orb';
+        geminiPlaybackSources = geminiPlaybackSources.filter(s => s !== source);
+        if (geminiPlaybackSources.length === 0) {
+            geminiPlaying = false;
+            if (orb.classList.contains('speaking')) {
+                orb.className = isRecording ? 'orb listening' : 'orb';
+            }
+        }
     };
-    source.start();
+
+    geminiPlaybackSources.push(source);
     geminiPlaying = true;
-    setTimeout(() => { geminiPlaying = false; }, (float32.length / 24000) * 1000);
+    orb.className = 'orb speaking';
+}
+
+function stopGeminiPlayback() {
+    // Immediately stop all queued audio (for interruption)
+    for (const source of geminiPlaybackSources) {
+        try { source.stop(); } catch {}
+    }
+    geminiPlaybackSources = [];
+    geminiNextPlayTime = 0;
+    geminiPlaying = false;
 }
 
 // ── Gemini mic streaming (capture → 16kHz PCM → WebSocket) ──
@@ -611,9 +645,9 @@ async function startGeminiMic() {
                 }
             };
 
-            // Send a camera frame every ~10 audio chunks (~1 fps)
+            // Send a camera frame every ~3 audio chunks (~3 fps for real-time vision)
             frameCounter++;
-            if (cameraActive && cameraCanvas && frameCounter % 10 === 0) {
+            if (cameraActive && cameraCanvas && frameCounter % 3 === 0) {
                 const frame = captureFrame();
                 if (frame) {
                     msg.realtimeInput.mediaChunks.push({
@@ -745,21 +779,28 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
 async function toggleMic() {
     if (audioMode === 'gemini') {
         if (isRecording) {
-            // Stop Gemini mic
+            // Stop entire Gemini session
+            stopGeminiPlayback();
             stopGeminiMic();
+            if (geminiWs) { geminiWs.close(); geminiWs = null; }
+            geminiSessionActive = false;
             isRecording = false;
             micBtn.classList.remove('recording');
             orb.className = 'orb';
+            statusBar.textContent = 'GEMINI PAUSED — TAP MIC TO RESUME';
         } else {
-            // Connect to Gemini if needed, then start streaming
+            // Start Gemini session — mic stays on continuously,
+            // Gemini's VAD detects when you speak vs silence
             orb.className = 'orb thinking';
-            responseEl.textContent = '';
+            responseEl.textContent = 'Connecting to Gemini...';
             const ok = await geminiConnect();
             if (ok) {
                 isRecording = true;
                 micBtn.classList.add('recording');
                 orb.className = 'orb listening';
+                responseEl.textContent = '';
                 await startGeminiMic();
+                // Mic now streams continuously — just talk naturally
             }
         }
         return;

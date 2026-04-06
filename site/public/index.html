@@ -422,7 +422,7 @@ async function geminiConnect() {
                     setup: {
                         model: `models/${tokenData.model}`,
                         generation_config: {
-                            response_modalities: ['AUDIO'],
+                            response_modalities: ['AUDIO', 'TEXT'],
                             speech_config: {
                                 voice_config: {
                                     prebuilt_voice_config: { voice_name: 'Kore' }
@@ -468,8 +468,10 @@ Keep responses concise (1-3 sentences unless more detail is needed).${memoryCtx}
                                 responseEl.textContent += part.text;
                             }
                         }
-                        // Turn complete
+                        // Turn complete — Gemini is done responding
                         if (msg.serverContent.turnComplete) {
+                            // Brief delay for final audio chunk to finish playing
+                            setTimeout(() => { orb.className = 'orb'; }, 500);
                             // Save to history
                             const text = responseEl.textContent;
                             if (text) {
@@ -488,17 +490,19 @@ Keep responses concise (1-3 sentences unless more detail is needed).${memoryCtx}
                 }
             };
 
-            geminiWs.onerror = () => {
-                console.warn('Gemini WebSocket error — falling back to classic');
+            geminiWs.onerror = (ev) => {
+                console.warn('Gemini WebSocket error:', ev);
                 geminiSessionActive = false;
                 fallbackToClassic();
                 reject(new Error('WebSocket error'));
             };
 
-            geminiWs.onclose = () => {
+            geminiWs.onclose = (ev) => {
+                console.warn('Gemini WebSocket closed:', ev.code, ev.reason);
                 geminiSessionActive = false;
                 if (audioMode === 'gemini') {
-                    statusBar.textContent = 'GEMINI DISCONNECTED — RECONNECT BY TAPPING MIC';
+                    statusBar.textContent = `GEMINI DISCONNECTED (${ev.code}) — TAP MIC TO RECONNECT`;
+                    responseEl.textContent = ev.reason || 'Connection closed';
                 }
             };
 
@@ -564,21 +568,31 @@ async function startGeminiMic() {
 
     try {
         geminiMicStream = await navigator.mediaDevices.getUserMedia({
-            audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true, noiseSuppression: true }
+            audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
         });
 
-        const micCtx = new AudioContext({ sampleRate: 16000 });
+        // Create AudioContext at device's native rate, we'll resample to 16kHz
+        const micCtx = new AudioContext();
+        const nativeRate = micCtx.sampleRate;
+        const targetRate = 16000;
         const source = micCtx.createMediaStreamSource(geminiMicStream);
 
-        // Use ScriptProcessorNode (widely supported) to capture PCM
         const processor = micCtx.createScriptProcessor(4096, 1, 1);
+        let frameCounter = 0;
+
         processor.onaudioprocess = (e) => {
             if (!geminiWs || geminiWs.readyState !== WebSocket.OPEN) return;
 
-            const float32 = e.inputBuffer.getChannelData(0);
-            const int16 = new Int16Array(float32.length);
-            for (let i = 0; i < float32.length; i++) {
-                int16[i] = Math.max(-32768, Math.min(32767, Math.floor(float32[i] * 32768)));
+            const inputData = e.inputBuffer.getChannelData(0);
+
+            // Resample from native rate to 16kHz
+            const ratio = nativeRate / targetRate;
+            const outputLen = Math.floor(inputData.length / ratio);
+            const int16 = new Int16Array(outputLen);
+            for (let i = 0; i < outputLen; i++) {
+                const srcIdx = Math.floor(i * ratio);
+                const sample = inputData[srcIdx] || 0;
+                int16[i] = Math.max(-32768, Math.min(32767, Math.floor(sample * 32768)));
             }
 
             // Base64 encode
@@ -587,7 +601,7 @@ async function startGeminiMic() {
             for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
             const b64 = btoa(binary);
 
-            // Send to Gemini
+            // Build message
             const msg = {
                 realtimeInput: {
                     mediaChunks: [{
@@ -597,8 +611,9 @@ async function startGeminiMic() {
                 }
             };
 
-            // If camera is active, also send a frame
-            if (cameraActive && cameraCanvas) {
+            // Send a camera frame every ~10 audio chunks (~1 fps)
+            frameCounter++;
+            if (cameraActive && cameraCanvas && frameCounter % 10 === 0) {
                 const frame = captureFrame();
                 if (frame) {
                     msg.realtimeInput.mediaChunks.push({
@@ -786,23 +801,30 @@ async function send() {
     if (audioMode === 'gemini') {
         orb.className = 'orb thinking';
         responseEl.textContent = '';
-        const ok = await geminiConnect();
-        if (ok && geminiWs.readyState === WebSocket.OPEN) {
-            geminiWs.send(JSON.stringify({
-                clientContent: {
-                    turns: [{ role: 'user', parts: [{ text }] }],
-                    turnComplete: true
-                }
-            }));
-            // Save user message to history
-            fetch('/api/history', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ messages: [{ role: 'user', content: text }] }),
-            }).catch(() => {});
-        } else {
+        try {
+            const ok = await geminiConnect();
+            if (ok && geminiWs && geminiWs.readyState === WebSocket.OPEN) {
+                // Send the user's text turn
+                geminiWs.send(JSON.stringify({
+                    clientContent: {
+                        turns: [{ role: 'user', parts: [{ text: text }] }],
+                        turnComplete: true
+                    }
+                }));
+                // Save user message to history
+                fetch('/api/history', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ messages: [{ role: 'user', content: text }] }),
+                }).catch(() => {});
+            } else {
+                fallbackToClassic();
+                inputEl.value = text;
+                send();
+            }
+        } catch (err) {
+            console.warn('Gemini send error:', err);
             fallbackToClassic();
-            // Re-send in classic mode
             inputEl.value = text;
             send();
         }

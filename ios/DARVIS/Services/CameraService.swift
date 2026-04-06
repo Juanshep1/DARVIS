@@ -3,7 +3,6 @@ import AVFoundation
 import UIKit
 import SwiftUI
 
-// Camera frame capture + live preview for vision analysis
 class CameraService: NSObject, ObservableObject, AVCaptureVideoDataOutputSampleBufferDelegate {
     @Published var isActive = false
     @Published var previewImage: UIImage?
@@ -11,37 +10,44 @@ class CameraService: NSObject, ObservableObject, AVCaptureVideoDataOutputSampleB
     private var captureSession: AVCaptureSession?
     private var lastFrame: UIImage?
     private let queue = DispatchQueue(label: "camera", qos: .userInteractive)
-    private let ciContext = CIContext() // Reuse — expensive to create
+    private let ciContext = CIContext()
     private var frameCount = 0
 
     func start() {
         guard !isActive else { return }
 
         AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
-            guard granted else {
-                DispatchQueue.main.async { self?.isActive = false }
-                return
-            }
+            guard granted else { return }
             DispatchQueue.main.async { self?.setupSession() }
         }
     }
 
     private func setupSession() {
+        // Configure audio session to allow both camera and mic
+        let audioSession = AVAudioSession.sharedInstance()
+        try? audioSession.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetoothA2DP])
+        try? audioSession.setActive(true)
+
         captureSession = AVCaptureSession()
         captureSession?.sessionPreset = .hd1280x720
 
-        // Try rear camera, fall back to front
         let camera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back)
             ?? AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front)
 
         guard let cam = camera, let input = try? AVCaptureDeviceInput(device: cam) else { return }
-        captureSession?.addInput(input)
+
+        if captureSession?.canAddInput(input) == true {
+            captureSession?.addInput(input)
+        }
 
         let output = AVCaptureVideoDataOutput()
         output.setSampleBufferDelegate(self, queue: queue)
         output.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
         output.alwaysDiscardsLateVideoFrames = true
-        captureSession?.addOutput(output)
+
+        if captureSession?.canAddOutput(output) == true {
+            captureSession?.addOutput(output)
+        }
 
         // Fix orientation
         if let connection = output.connection(with: .video) {
@@ -56,20 +62,26 @@ class CameraService: NSObject, ObservableObject, AVCaptureVideoDataOutputSampleB
             }
         }
 
+        isActive = true
+
         queue.async { [weak self] in
             self?.captureSession?.startRunning()
         }
-        isActive = true
     }
 
     func stop() {
-        queue.async { [weak self] in
-            self?.captureSession?.stopRunning()
-        }
+        let session = captureSession
         captureSession = nil
-        isActive = false
-        lastFrame = nil
-        DispatchQueue.main.async { self.previewImage = nil }
+
+        queue.async {
+            session?.stopRunning()
+        }
+
+        DispatchQueue.main.async {
+            self.isActive = false
+            self.lastFrame = nil
+            self.previewImage = nil
+        }
     }
 
     func captureFrame() -> String? {
@@ -78,19 +90,16 @@ class CameraService: NSObject, ObservableObject, AVCaptureVideoDataOutputSampleB
         return jpegData.base64EncodedString()
     }
 
-    // Delegate — process every 3rd frame (~10fps preview) to save CPU
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
-        frameCount += 1
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
 
         let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
         guard let cgImage = ciContext.createCGImage(ciImage, from: ciImage.extent) else { return }
         let uiImage = UIImage(cgImage: cgImage)
 
-        // Always update lastFrame for capture
         lastFrame = uiImage
 
-        // Update preview at ~10fps
+        frameCount += 1
         if frameCount % 3 == 0 {
             DispatchQueue.main.async { [weak self] in
                 self?.previewImage = uiImage
@@ -99,7 +108,6 @@ class CameraService: NSObject, ObservableObject, AVCaptureVideoDataOutputSampleB
     }
 }
 
-// SwiftUI wrapper for camera preview
 struct CameraPreviewView: View {
     @ObservedObject var camera: CameraService
 
@@ -109,12 +117,11 @@ struct CameraPreviewView: View {
                 Image(uiImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
+            } else if camera.isActive {
+                Color.black
+                    .overlay(ProgressView().tint(.darvisCyan))
             } else {
                 Color.black
-                    .overlay(
-                        ProgressView()
-                            .tint(.darvisCyan)
-                    )
             }
         }
     }

@@ -1,5 +1,6 @@
 import SwiftUI
 import AVFoundation
+import Speech
 
 @MainActor
 class ChatViewModel: ObservableObject {
@@ -18,6 +19,10 @@ class ChatViewModel: ObservableObject {
     let onDeviceLLM = OnDeviceLLM()
 
     private var audioPlayer: AVAudioPlayer?
+    private var speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
+    private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
+    private var recognitionTask: SFSpeechRecognitionTask?
+    private var speechAudioEngine = AVAudioEngine()
 
     // Mode cycling: classic → gemini → ondevice → classic
     var modeLabel: String {
@@ -185,6 +190,7 @@ class ChatViewModel: ObservableObject {
         orbState = .listening
 
         if audioMode == "gemini" {
+            // Gemini mode: stream raw PCM audio to WebSocket
             Task {
                 if !geminiLive.isConnected {
                     let ok = await geminiLive.connect()
@@ -200,16 +206,90 @@ class ChatViewModel: ObservableObject {
                 }
                 audioService.startCapture()
             }
+        } else {
+            // Classic/On-Device: use iOS Speech Recognition
+            startSpeechRecognition()
         }
-        // Classic mode: would use Speech framework (simplified for now)
     }
 
     private func stopListening() {
         isRecording = false
-        audioService.stopCapture()
-        if audioMode != "gemini" {
+
+        if audioMode == "gemini" {
+            audioService.stopCapture()
+        } else {
+            stopSpeechRecognition()
+        }
+
+        // Send whatever was transcribed
+        let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !text.isEmpty {
+            send()
+        } else {
             orbState = .idle
         }
+    }
+
+    private func startSpeechRecognition() {
+        SFSpeechRecognizer.requestAuthorization { [weak self] status in
+            guard status == .authorized else {
+                DispatchQueue.main.async {
+                    self?.responseText = "Speech recognition not authorized."
+                    self?.isRecording = false
+                    self?.orbState = .idle
+                }
+                return
+            }
+            DispatchQueue.main.async { self?.beginRecognition() }
+        }
+    }
+
+    private func beginRecognition() {
+        recognitionTask?.cancel()
+        recognitionTask = nil
+
+        let audioSession = AVAudioSession.sharedInstance()
+        try? audioSession.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetoothA2DP])
+        try? audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+
+        recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
+        guard let request = recognitionRequest else { return }
+        request.shouldReportPartialResults = true
+
+        let inputNode = speechAudioEngine.inputNode
+        let recordingFormat = inputNode.outputFormat(forBus: 0)
+
+        inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
+            self?.recognitionRequest?.append(buffer)
+        }
+
+        speechAudioEngine.prepare()
+        try? speechAudioEngine.start()
+
+        recognitionTask = speechRecognizer?.recognitionTask(with: request) { [weak self] result, error in
+            guard let self = self else { return }
+            if let result = result {
+                DispatchQueue.main.async {
+                    self.inputText = result.bestTranscription.formattedString
+                }
+            }
+            if error != nil || (result?.isFinal == true) {
+                DispatchQueue.main.async {
+                    if self.isRecording {
+                        self.stopListening()
+                    }
+                }
+            }
+        }
+    }
+
+    private func stopSpeechRecognition() {
+        speechAudioEngine.stop()
+        speechAudioEngine.inputNode.removeTap(onBus: 0)
+        recognitionRequest?.endAudio()
+        recognitionRequest = nil
+        recognitionTask?.cancel()
+        recognitionTask = nil
     }
 
     // MARK: - Camera

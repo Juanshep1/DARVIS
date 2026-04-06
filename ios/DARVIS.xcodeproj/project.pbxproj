@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 63;
+	objectVersion = 77;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -25,6 +25,7 @@
 		7B9A438F30C939C6278F8C4C /* OrbView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89B3A8E19F62DDFF548B0A0A /* OrbView.swift */; };
 		8CCD4E9D58FBEBDFF9C8623E /* AudioService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28C520675AED1176CD5623DA /* AudioService.swift */; };
 		AE5E8DF86C65DA34907025F2 /* DARVISApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A56A3B062FFB5E699C752225 /* DARVISApp.swift */; };
+		C569DDD89B038147B9452A3E /* OnDeviceModelSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7690C6A5E7900C4EB2BA920 /* OnDeviceModelSection.swift */; };
 		DDE5CC9B988467FFDF9538AD /* CameraService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EAAC5913B03FBA4F6DA8DC48 /* CameraService.swift */; };
 		ED71C94A77A0BC618927082A /* AgentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BB77D4AA1C392C2E7A0D2FF /* AgentView.swift */; };
 /* End PBXBuildFile section */
@@ -45,11 +46,12 @@
 		89B3A8E19F62DDFF548B0A0A /* OrbView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrbView.swift; sourceTree = "<group>"; };
 		91A86AD774262FD1B10D7352 /* ChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViewModel.swift; sourceTree = "<group>"; };
 		A56A3B062FFB5E699C752225 /* DARVISApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DARVISApp.swift; sourceTree = "<group>"; };
+		B7690C6A5E7900C4EB2BA920 /* OnDeviceModelSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnDeviceModelSection.swift; sourceTree = "<group>"; };
 		C593753D851D269E7D1F224B /* GeminiLiveService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeminiLiveService.swift; sourceTree = "<group>"; };
 		CE4B8156BCCE7D1B336F5B39 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
 		D67A076FD3C8DD3FC8FFC95F /* OnDeviceLLM.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnDeviceLLM.swift; sourceTree = "<group>"; };
 		EAAC5913B03FBA4F6DA8DC48 /* CameraService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraService.swift; sourceTree = "<group>"; };
-		F165F40D77684EA2C4518B5E /* DARVIS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DARVIS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F165F40D77684EA2C4518B5E /* DARVIS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = DARVIS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F263F0DB28CC9CF7BEC34C4B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -138,6 +140,7 @@
 				5BB77D4AA1C392C2E7A0D2FF /* AgentView.swift */,
 				14CD49F8C9CDAFEB75CDA43E /* MainTabView.swift */,
 				3FEFD354307DB1E6E4635287 /* MemoryView.swift */,
+				B7690C6A5E7900C4EB2BA920 /* OnDeviceModelSection.swift */,
 				1B6B622EA9A9A91096DF2695 /* SettingsView.swift */,
 				D6F4CB00FF702B59C43C1494 /* Chat */,
 				5C406E48343889CE68A45BD5 /* Theme */,
@@ -176,6 +179,7 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					0C01E3BF914BDFE2D2A37CD6 = {
+						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -190,6 +194,7 @@
 			);
 			mainGroup = B6A70156C1B55396E447CCAF;
 			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -231,6 +236,7 @@
 				42F66B9BD3DEF4E594C7BF58 /* Memory.swift in Sources */,
 				7A5ED8E621DC81CD14901875 /* MemoryView.swift in Sources */,
 				044E8F3F2F4AFD104D165D8E /* OnDeviceLLM.swift in Sources */,
+				C569DDD89B038147B9452A3E /* OnDeviceModelSection.swift in Sources */,
 				7B9A438F30C939C6278F8C4C /* OrbView.swift in Sources */,
 				2E978154AD1D846FC3940523 /* SettingsView.swift in Sources */,
 			);
@@ -301,13 +307,13 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = 78RJ6F9JL2;
+				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSCameraUsageDescription = "DARVIS uses the camera for visual analysis";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "DARVIS needs microphone access for voice commands";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortraitUpsideDown";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortraitUpsideDown";
+				"INFOPLIST_KEY_UISupportedInterfaceOrientations~ipad" = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortraitUpsideDown";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -388,13 +394,13 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = 78RJ6F9JL2;
+				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSCameraUsageDescription = "DARVIS uses the camera for visual analysis";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "DARVIS needs microphone access for voice commands";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortraitUpsideDown";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortraitUpsideDown";
+				"INFOPLIST_KEY_UISupportedInterfaceOrientations~ipad" = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortraitUpsideDown";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",

@@ -95,6 +95,11 @@ struct SettingsView: View {
                         }
                     }
 
+                    // On-Device Models
+                    settingSection("ON-DEVICE MODELS") {
+                        OnDeviceModelSection()
+                    }
+
                     // Info
                     settingSection("STATUS") {
                         infoRow("Platform", "iOS")

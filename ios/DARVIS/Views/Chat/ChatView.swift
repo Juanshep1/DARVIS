@@ -18,21 +18,20 @@ struct ChatView: View {
 
                     Spacer()
 
-                    // On-device toggle
-                    Button(action: { vm.useOnDevice.toggle() }) {
+                    // Mode toggle: Cloud → Gemini → On-Device → Cloud
+                    Button(action: { vm.cycleMode() }) {
                         HStack(spacing: 4) {
-                            Image(systemName: vm.useOnDevice ? "cpu.fill" : "cloud.fill")
+                            Image(systemName: vm.modeIcon)
                                 .font(.system(size: 9))
-                            Text(vm.useOnDevice ? "ON-DEVICE" : vm.audioMode == "gemini" ? "GEMINI" : "CLOUD")
+                            Text(vm.modeLabel)
                                 .font(.system(size: 8, weight: .bold, design: .monospaced))
                         }
-                        .foregroundColor(vm.useOnDevice ? .darvisOrange : vm.audioMode == "gemini" ? .darvisGreen : .darvisCyan)
+                        .foregroundColor(vm.modeColor)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .background(Color.darvisBackground)
                         .cornerRadius(4)
-                        .overlay(RoundedRectangle(cornerRadius: 4).stroke(
-                            vm.useOnDevice ? Color.darvisOrange.opacity(0.3) : Color.darvisCyan.opacity(0.2), lineWidth: 0.5))
+                        .overlay(RoundedRectangle(cornerRadius: 4).stroke(vm.modeColor.opacity(0.3), lineWidth: 0.5))
                     }
                 }
                 .padding(.horizontal, 16)

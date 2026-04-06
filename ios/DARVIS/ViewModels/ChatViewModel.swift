@@ -19,6 +19,40 @@ class ChatViewModel: ObservableObject {
 
     private var audioPlayer: AVAudioPlayer?
 
+    // Mode cycling: classic → gemini → ondevice → classic
+    var modeLabel: String {
+        if useOnDevice { return "ON-DEVICE" }
+        if audioMode == "gemini" { return "GEMINI" }
+        return "CLOUD"
+    }
+    var modeIcon: String {
+        if useOnDevice { return "cpu.fill" }
+        if audioMode == "gemini" { return "bolt.fill" }
+        return "cloud.fill"
+    }
+    var modeColor: Color {
+        if useOnDevice { return .darvisOrange }
+        if audioMode == "gemini" { return .darvisGreen }
+        return .darvisCyan
+    }
+    func cycleMode() {
+        if audioMode == "classic" && !useOnDevice {
+            // Cloud → Gemini
+            audioMode = "gemini"
+            useOnDevice = false
+            Task { try? await APIClient.shared.updateSettings(AppSettings(model: "", voice_id: "", audio_mode: "gemini")) }
+        } else if audioMode == "gemini" && !useOnDevice {
+            // Gemini → On-Device
+            audioMode = "classic"
+            useOnDevice = true
+        } else {
+            // On-Device → Cloud
+            audioMode = "classic"
+            useOnDevice = false
+            Task { try? await APIClient.shared.updateSettings(AppSettings(model: "", voice_id: "", audio_mode: "classic")) }
+        }
+    }
+
     init() {
         setupGeminiCallbacks()
         Task { await loadSettings() }

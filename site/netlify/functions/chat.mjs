@@ -37,6 +37,22 @@ async function tavilySearch(query) {
   }
 }
 
+// ── Detect if a message needs browser agent ─────────────────────────────────
+
+function needsBrowse(msg) {
+  const lower = msg.toLowerCase();
+  const browseTriggers = [
+    "go to ", "go on ", "open amazon", "open youtube", "open ebay",
+    "open walmart", "open netflix", "open espn", "open reddit",
+    "find me on ", "find on ", "search amazon", "search youtube",
+    "search ebay", "check amazon", "check ebay", "look up flights",
+    "google flights", "book a flight", "buy ", "shop for",
+    "go to amazon", "go to youtube", "go to ebay", "go to espn",
+    "go to walmart", "go to netflix", "go to reddit",
+  ];
+  return browseTriggers.some((t) => lower.includes(t));
+}
+
 // ── Detect if a message needs web search ────────────────────────────────────
 
 function needsSearch(msg) {
@@ -163,8 +179,8 @@ When the user asks you to do something in a browser that requires visual interac
 \`\`\`command
 {"action": "computer_use", "goal": "describe the task here"}
 \`\`\`
-Use this when the user says things like "go to...", "find me... on [website]", "buy...", "book...", "search [website] for...", "look up flights", "check Amazon for...", "go on [site] and...".
-Do NOT use computer_use for simple web searches or general knowledge questions — use web search for those. Use computer_use when the task requires clicking, scrolling, or interacting with a specific website.${memoryContext}${searchContext}`;
+CRITICAL: When the user says "go to...", "go on...", "find me... on [website]", "buy...", "book...", "search [website] for...", "look up flights", "check Amazon for...", "open [site] and..." — you MUST include a computer_use command block. Do NOT just say you'll do it — actually include the command block.
+Do NOT use computer_use for simple web searches or general knowledge questions — use web search for those.${memoryContext}${searchContext}`;
 
   const userMsg = { role: "user", content: `[${now}]\n${message}` };
   const messages = [
@@ -243,6 +259,15 @@ Do NOT use computer_use for simple web searches or general knowledge questions �
           clientActions.push({ action: "agent_started", goal: cmd.goal });
         }
       } catch {}
+    }
+
+    // Fallback: if message looks like a browse request but LLM didn't output computer_use, force it
+    const hasAgentAction = clientActions.some((a) => a.action === "agent_started");
+    if (!hasAgentAction && needsBrowse(message)) {
+      const agentStore = getStore("darvis-agent");
+      await agentStore.setJSON("pending_goal", { goal: message, ts: Date.now() });
+      await agentStore.setJSON("status", { active: true, goal: message, step: 0, thinking: "Waiting for terminal agent...", actions: [], done: false });
+      clientActions.push({ action: "agent_started", goal: message });
     }
 
     // Clean command blocks from visible reply

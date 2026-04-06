@@ -1435,12 +1435,14 @@ def main():
 
     # Start in /type mode (text-only, no auto-listening)
     listening_active = False
+    gemini_line = "[bold]/gemini[/bold]     — Gemini Live Audio (speech-to-speech + mic on)\n" if gemini_available else ""
     console.print(
         Panel(
             f"Input: [bold]text[/bold] | Voice: [bold]{tts.voice_name.title()}[/bold] | Model: [bold]{model}[/bold]\n"
             + "Type your message, or use commands below:\n"
             + "[bold]/listen[/bold]     — start listening via microphone\n"
             + "[bold]/type[/bold]       — stop listening, text-only mode\n"
+            + gemini_line
             + "[bold]/voices[/bold]     — change voice\n"
             + "[bold]/voice NAME[/bold] — quick switch voice\n"
             + "[bold]/help[/bold]       — all commands\n"
@@ -1578,15 +1580,56 @@ def main():
             if lower == "/gemini":
                 if gemini_available:
                     audio_mode = "gemini"
-                    console.print(f"  [green]✓[/green] Gemini Live Audio mode. Type [bold]/classic[/bold] to switch back.")
-                    console.print(f"  [dim]Voice input/output handled by Gemini natively.[/dim]")
+                    if has_mic:
+                        listening_active = True
+                    console.print(f"  [green]✓[/green] Gemini Live Audio mode — mic on, listening.")
+                    console.print(f"  [dim]Speech-to-speech via Gemini. Type [bold]/classic[/bold] to switch back.[/dim]")
                 else:
                     console.print(f"  [red]Gemini not available[/red] — set GEMINI_API_KEY in .env and install websockets")
                 continue
 
             if lower == "/classic":
                 audio_mode = "classic"
-                console.print(f"  [green]✓[/green] Classic mode (Ollama + ElevenLabs). Type [bold]/gemini[/bold] to switch.")
+                console.print(f"  [green]✓[/green] Classic mode (Ollama + ElevenLabs). Mic still {'on' if listening_active else 'off'}.")
+                console.print(f"  [dim]Type [bold]/gemini[/bold] to switch back.[/dim]")
+                continue
+
+            if lower.startswith("/browse "):
+                goal = user_input.strip()[8:].strip()
+                if goal:
+                    env = load_env()
+                    gkey = env.get("GEMINI_API_KEY", os.environ.get("GEMINI_API_KEY", ""))
+                    if gkey:
+                        try:
+                            from computer_use import run_agent
+                            console.print(f"  [{BLUE}]Launching browser agent: {goal}[/{BLUE}]")
+                            ear.suppressed = True
+                            was_listening = listening_active
+                            if was_listening:
+                                listening_active = False
+                            summary = run_agent(gkey, goal)
+                            console.print(
+                                Panel(summary, title=f"[bold {CYAN}]Agent Complete[/bold {CYAN}]", border_style=BLUE)
+                            )
+                            tts.speak(summary)
+                            tts.wait_for_speech()
+                            import time
+                            time.sleep(1)
+                            try:
+                                while not speech_queue.empty():
+                                    speech_queue.get_nowait()
+                            except queue.Empty:
+                                pass
+                            ear.suppressed = False
+                            if was_listening:
+                                listening_active = True
+                        except Exception as e:
+                            console.print(f"  [red]Agent error: {e}[/red]")
+                            ear.suppressed = False
+                    else:
+                        console.print(f"  [red]No GEMINI_API_KEY — add it to .env[/red]")
+                else:
+                    console.print(f"  [dim]Usage: /browse <goal>[/dim]")
                 continue
 
             if lower == "/voices" or lower.startswith("/voice "):
@@ -1639,8 +1682,9 @@ def main():
                         "[bold]/voice ID[/bold]    — switch voice by ElevenLabs ID\n"
                         "[bold]/models[/bold]      — pick a new LLM model\n"
                         "[bold]/model NAME[/bold]  — switch model directly (e.g. /model deepseek-r1:70b)\n"
-                        "[bold]/gemini[/bold]      — switch to Gemini Live Audio (speech-to-speech)\n"
+                        "[bold]/gemini[/bold]      — Gemini Live Audio (speech-to-speech + mic on)\n"
                         "[bold]/classic[/bold]     — switch back to Ollama + ElevenLabs\n"
+                        "[bold]/browse GOAL[/bold] — launch browser agent (e.g. /browse find Spurs score on ESPN)\n"
                         "[bold]goodbye[/bold]      — exit D.A.R.V.I.S.\n\n"
                         "[dim]Settings (model + voice) are saved automatically.[/dim]",
                         title=f"[bold {CYAN}]Commands[/bold {CYAN}]",

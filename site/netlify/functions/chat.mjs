@@ -157,7 +157,14 @@ When the user asks you to remember something, respond normally AND include this 
 When asked to forget something, include:
 \`\`\`command
 {"action": "forget", "id": <memory_id>}
-\`\`\`${memoryContext}${searchContext}`;
+\`\`\`
+
+When the user asks you to do something in a browser that requires visual interaction (fill forms, navigate complex sites, shop, compare products, find specific content on a page), use computer use:
+\`\`\`command
+{"action": "computer_use", "goal": "describe the task here"}
+\`\`\`
+Use this when the user says things like "go to...", "find me... on [website]", "buy...", "book...", "search [website] for...", "look up flights", "check Amazon for...", "go on [site] and...".
+Do NOT use computer_use for simple web searches or general knowledge questions — use web search for those. Use computer_use when the task requires clicking, scrolling, or interacting with a specific website.${memoryContext}${searchContext}`;
 
   const userMsg = { role: "user", content: `[${now}]\n${message}` };
   const messages = [

@@ -172,7 +172,7 @@ class OnDeviceLLM: ObservableObject {
     @Published var useLocalModel = false
 
     let downloadManager = ModelDownloadManager.shared
-    private let apiKey = "AIzaSyB5bZqg9H3ABY5bivM0F_9CTmFqfLzMB9E"
+    private let apiKey = "AIzaSyAlEAA4rBjH0wHFfia2p6g0rCjKR-7JFvw"
 
     init() {
         downloadManager.setup()

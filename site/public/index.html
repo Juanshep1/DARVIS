@@ -209,13 +209,14 @@ body {
 .cam-preview {
     position: fixed;
     bottom: 90px; right: 15px;
-    width: 180px; height: 135px;
-    border-radius: 12px;
-    border: 2px solid rgba(80, 255, 150, 0.4);
+    width: 260px; height: 195px;
+    border-radius: 14px;
+    border: 2px solid rgba(80, 255, 150, 0.5);
     object-fit: cover;
     z-index: 90;
     display: none;
-    box-shadow: 0 0 20px rgba(80, 255, 150, 0.15);
+    box-shadow: 0 0 30px rgba(80, 255, 150, 0.2), 0 4px 20px rgba(0,0,0,0.5);
+    background: #000;
 }
 .cam-preview.active { display: block; }
 
@@ -235,7 +236,7 @@ body {
     .input-area { padding: 12px 12px calc(env(safe-area-inset-bottom, 0px) + 16px); }
     .input-area input { padding: 12px 16px; font-size: 0.95rem; }
     .settings-panel { width: calc(100vw - 30px); right: 15px; }
-    .cam-preview { width: 140px; height: 105px; bottom: 80px; right: 10px; }
+    .cam-preview { width: 200px; height: 150px; bottom: 80px; right: 10px; }
     .agent-panel { width: calc(100vw - 30px); max-height: 70vh; }
 }
 @media (max-height: 600px) {
@@ -953,28 +954,42 @@ async function toggleCamera() {
         stopCamera();
     } else {
         try {
-            cameraStream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
-            });
-            camPreview.srcObject = cameraStream;
+            // Try rear camera first, fall back to any camera
+            let stream;
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
+                });
+            } catch {
+                stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            }
+            cameraStream = stream;
+            camPreview.srcObject = stream;
             camPreview.classList.add('active');
             camBtn.classList.add('active');
 
-            // Wait for video to actually start playing before marking active
-            await new Promise(resolve => {
-                camPreview.onloadedmetadata = () => {
-                    camPreview.play();
-                    resolve();
+            // Wait for video to be ready and playing
+            await new Promise((resolve) => {
+                const check = () => {
+                    if (camPreview.videoWidth > 0) {
+                        resolve();
+                    } else {
+                        camPreview.addEventListener('loadeddata', resolve, { once: true });
+                        camPreview.play().catch(() => {});
+                    }
                 };
+                if (camPreview.readyState >= 2) resolve();
+                else check();
             });
-            cameraActive = true;
 
-            // Create canvas matching actual video dimensions
+            cameraActive = true;
             cameraCanvas = document.createElement('canvas');
             cameraCanvas.width = camPreview.videoWidth || 1280;
             cameraCanvas.height = camPreview.videoHeight || 720;
+            responseEl.textContent = 'Camera on — ask "what do you see?"';
         } catch (err) {
-            responseEl.textContent = 'Camera access denied.';
+            console.warn('Camera error:', err);
+            responseEl.textContent = 'Camera access denied: ' + err.message;
         }
     }
 }

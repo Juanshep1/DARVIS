@@ -16,7 +16,7 @@ class AudioService: NSObject, ObservableObject {
 
     func setupSession() {
         let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetooth])
+        try? session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetoothA2DP])
         try? session.setActive(true)
     }
 

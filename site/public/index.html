@@ -450,9 +450,16 @@ You may receive camera images from the user's device. When you see images, you c
                 }));
             };
 
-            ws.onmessage = (event) => {
+            ws.onmessage = async (event) => {
                 try {
-                    const msg = JSON.parse(event.data);
+                    // Gemini sends binary frames containing JSON text
+                    let raw = event.data;
+                    if (raw instanceof Blob) {
+                        raw = await raw.text();
+                    } else if (raw instanceof ArrayBuffer) {
+                        raw = new TextDecoder().decode(raw);
+                    }
+                    const msg = JSON.parse(raw);
 
                     // Setup complete — session is ready
                     if (msg.setupComplete !== undefined) {

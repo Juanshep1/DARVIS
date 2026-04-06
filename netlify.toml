@@ -1,0 +1,11 @@
+[build]
+  base = "site"
+  publish = "public"
+  functions = "netlify/functions"
+
+[functions]
+  node_bundler = "esbuild"
+  external_node_modules = ["@netlify/blobs"]
+
+[functions."chat"]
+  timeout = 60

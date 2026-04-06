@@ -3,7 +3,6 @@ options:
   bundleIdPrefix: com.darvis
   deploymentTarget:
     iOS: "16.0"
-  xcodeVersion: "15.0"
 targets:
   DARVIS:
     type: application
@@ -12,9 +11,14 @@ targets:
       - DARVIS
     settings:
       base:
-        INFOPLIST_FILE: DARVIS/Info.plist
         PRODUCT_BUNDLE_IDENTIFIER: com.darvis.app
         DEVELOPMENT_TEAM: ""
         CODE_SIGN_STYLE: Automatic
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         SWIFT_VERSION: "5.9"
+        GENERATE_INFOPLIST_FILE: "YES"
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: "DARVIS needs microphone access for voice commands"
+        INFOPLIST_KEY_NSCameraUsageDescription: "DARVIS uses the camera for visual analysis"
+        INFOPLIST_KEY_UILaunchScreen_Generation: "YES"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortraitUpsideDown"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortraitUpsideDown"

@@ -11,8 +11,11 @@ class AgentViewModel: ObservableObject {
     func startPolling() {
         guard timer == nil else { return }
         isPolling = true
-        timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
-            Task { await self?.poll() }
+        // Timer on main run loop
+        DispatchQueue.main.async {
+            self.timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+                Task { @MainActor in await self?.poll() }
+            }
         }
         Task { await poll() }
     }

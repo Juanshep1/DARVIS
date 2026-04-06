@@ -1,6 +1,6 @@
 import Foundation
 
-// Available models for on-device download
+// Available Gemma 4 models for on-device download
 struct LocalModel: Identifiable, Codable {
     let id: String
     let name: String
@@ -39,18 +39,29 @@ let AVAILABLE_MODELS: [LocalModel] = [
 
 // MARK: - Model Download Manager
 
-@MainActor
 class ModelDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate {
+    static let shared = ModelDownloadManager()
+
     @Published var downloadProgress: Double = 0
     @Published var isDownloading = false
     @Published var downloadedModels: [String] = []
     @Published var currentDownload: String?
+    @Published var downloadComplete = false
+    @Published var errorMessage: String?
 
     private var downloadTask: URLSessionDownloadTask?
-    private var bgSession: URLSession?
+    private var urlSession: URLSession?
+    private var downloadingModel: LocalModel?
 
     override init() {
         super.init()
+    }
+
+    // Called separately since we can't use self in super.init delegate
+    func setup() {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 300
+        urlSession = URLSession(configuration: config, delegate: self, delegateQueue: .main)
         refreshDownloadedModels()
     }
 
@@ -77,16 +88,23 @@ class ModelDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelega
 
     func downloadModel(_ model: LocalModel) {
         guard !isDownloading else { return }
+
+        if urlSession == nil { setup() }
+
         isDownloading = true
         downloadProgress = 0
+        downloadComplete = false
+        errorMessage = nil
         currentDownload = model.name
+        downloadingModel = model
 
-        let config = URLSessionConfiguration.background(withIdentifier: "com.darvis.modeldownload.\(model.id)")
-        config.isDiscretionary = false
-        config.sessionSendsLaunchEvents = true
-        bgSession = URLSession(configuration: config, delegate: self, delegateQueue: .main)
-        let request = URLRequest(url: URL(string: model.url)!)
-        downloadTask = bgSession?.downloadTask(with: request)
+        guard let url = URL(string: model.url) else {
+            errorMessage = "Invalid URL"
+            isDownloading = false
+            return
+        }
+
+        downloadTask = urlSession?.downloadTask(with: url)
         downloadTask?.resume()
     }
 
@@ -94,6 +112,7 @@ class ModelDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelega
         downloadTask?.cancel()
         isDownloading = false
         currentDownload = nil
+        downloadingModel = nil
     }
 
     func deleteModel(_ model: LocalModel) {
@@ -102,31 +121,43 @@ class ModelDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelega
         refreshDownloadedModels()
     }
 
-    nonisolated func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
-        Task { @MainActor in
-            if let name = currentDownload, let model = AVAILABLE_MODELS.first(where: { $0.name == name }) {
-                let dest = modelsDir.appendingPathComponent(model.filename)
-                try? FileManager.default.removeItem(at: dest)
-                try? FileManager.default.moveItem(at: location, to: dest)
+    // MARK: - URLSessionDownloadDelegate
+
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
+        guard let model = downloadingModel else { return }
+        let dest = modelsDir.appendingPathComponent(model.filename)
+        do {
+            try? FileManager.default.removeItem(at: dest)
+            try FileManager.default.moveItem(at: location, to: dest)
+            DispatchQueue.main.async {
+                self.isDownloading = false
+                self.downloadComplete = true
+                self.currentDownload = nil
+                self.downloadingModel = nil
+                self.refreshDownloadedModels()
             }
-            isDownloading = false
-            currentDownload = nil
-            refreshDownloadedModels()
+        } catch {
+            DispatchQueue.main.async {
+                self.errorMessage = "Failed to save: \(error.localizedDescription)"
+                self.isDownloading = false
+            }
         }
     }
 
-    nonisolated func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
         let progress = Double(totalBytesWritten) / Double(max(totalBytesExpectedToWrite, 1))
-        Task { @MainActor in
-            downloadProgress = progress
+        DispatchQueue.main.async {
+            self.downloadProgress = progress
         }
     }
 
-    nonisolated func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) {
-        if error != nil {
-            Task { @MainActor in
-                isDownloading = false
-                currentDownload = nil
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) {
+        if let error = error {
+            DispatchQueue.main.async {
+                self.errorMessage = error.localizedDescription
+                self.isDownloading = false
+                self.currentDownload = nil
+                self.downloadingModel = nil
             }
         }
     }
@@ -137,38 +168,22 @@ class ModelDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelega
 @MainActor
 class OnDeviceLLM: ObservableObject {
     @Published var isLoaded = false
-    @Published var currentModelName = "Gemini 2.5 Flash (Cloud)"
+    @Published var currentModelName = "Cloud (Gemini 2.5 Flash)"
     @Published var useLocalModel = false
 
-    let downloadManager = ModelDownloadManager()
+    let downloadManager = ModelDownloadManager.shared
     private let apiKey = "AIzaSyB5bZqg9H3ABY5bivM0F_9CTmFqfLzMB9E"
 
-    // Check if any local model is downloaded
+    init() {
+        downloadManager.setup()
+    }
+
     var hasLocalModel: Bool {
         AVAILABLE_MODELS.contains(where: { downloadManager.isModelDownloaded($0) })
     }
 
-    func selectModel(_ model: LocalModel) {
-        if downloadManager.isModelDownloaded(model) {
-            useLocalModel = true
-            currentModelName = "\(model.name) (On-Device)"
-            isLoaded = true
-            // Note: actual llama.cpp inference requires the llama SPM package.
-            // For now, downloaded models are stored and ready for when the
-            // llama.cpp framework is integrated. Using Gemini API as bridge.
-        }
-    }
-
-    func useCloudMode() {
-        useLocalModel = false
-        currentModelName = "Gemini 2.5 Flash (Cloud)"
-        isLoaded = false
-    }
-
     func generate(prompt: String, maxTokens: Int = 200) async -> String? {
-        // TODO: When llama.cpp SPM is integrated, use local inference here
-        // For now, use Gemini API (free, fast, same quality)
-        return await generateViaAPI(prompt: prompt)
+        return await generateViaAPI(prompt: prompt, maxTokens: maxTokens)
     }
 
     private func generateViaAPI(prompt: String, maxTokens: Int = 200) async -> String? {
@@ -228,4 +243,3 @@ class OnDeviceLLM: ObservableObject {
         return nil
     }
 }
-

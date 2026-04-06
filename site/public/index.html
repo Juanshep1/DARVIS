@@ -857,6 +857,26 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
     recognition.onend = () => {
         clearTimeout(silenceTimer);
         const hadText = inputEl.value.trim().length > 0;
+        if (audioMode === 'gemini' && cameraActive) {
+            // In Gemini+camera mode, don't stop recording — restart recognition
+            // and route the transcribed text through send()
+            if (hadText) {
+                send(); // send() will detect camera requests and route accordingly
+                // Restart recognition for continuous listening
+                setTimeout(() => {
+                    if (isRecording && audioMode === 'gemini' && cameraActive) {
+                        try { recognition.start(); } catch {}
+                    }
+                }, 500);
+            } else {
+                // No text — restart recognition silently
+                if (isRecording) {
+                    try { recognition.start(); } catch {}
+                }
+            }
+            return;
+        }
+        // Classic mode
         isRecording = false;
         micBtn.classList.remove('recording');
         if (hadText) send();
@@ -878,7 +898,7 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
 async function toggleMic() {
     if (audioMode === 'gemini') {
         if (isRecording) {
-            // Stop entire Gemini session
+            // Stop Gemini session
             stopGeminiPlayback();
             stopGeminiMic();
             if (geminiWs) { geminiWs.close(); geminiWs = null; }
@@ -887,9 +907,9 @@ async function toggleMic() {
             micBtn.classList.remove('recording');
             orb.className = 'orb';
             statusBar.textContent = 'GEMINI PAUSED — TAP MIC TO RESUME';
+            // Also stop Web Speech if it was running for camera mode
+            if (recognition) try { recognition.stop(); } catch {}
         } else {
-            // Start Gemini session — mic stays on continuously,
-            // Gemini's VAD detects when you speak vs silence
             orb.className = 'orb thinking';
             responseEl.textContent = 'Connecting to Gemini...';
             try {
@@ -899,7 +919,17 @@ async function toggleMic() {
                     micBtn.classList.add('recording');
                     orb.className = 'orb listening';
                     responseEl.textContent = '';
-                    await startGeminiMic();
+
+                    if (cameraActive && recognition) {
+                        // Camera + Gemini mode: use Web Speech API for transcription
+                        // so we can detect camera requests and route to vision API.
+                        // Non-camera questions get sent to Gemini WebSocket as text.
+                        recognition.start();
+                        statusBar.textContent = 'GEMINI LIVE + CAMERA — SPEAK NATURALLY';
+                    } else {
+                        // No camera: stream raw audio to Gemini (speech-to-speech)
+                        await startGeminiMic();
+                    }
                 } else {
                     orb.className = 'orb';
                     responseEl.textContent = 'Could not connect to Gemini. Try again.';

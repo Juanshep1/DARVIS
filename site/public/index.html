@@ -752,64 +752,102 @@ async function analyzeCamera(userPrompt) {
     if (!cameraActive || !cameraCanvas || cameraAnalyzing) return;
     cameraAnalyzing = true;
     orb.className = 'orb thinking';
+    responseEl.textContent = 'Analyzing camera...';
 
     try {
         const frame = captureFrame();
-        if (!frame) { cameraAnalyzing = false; return; }
+        if (!frame) {
+            responseEl.textContent = 'Camera not ready yet. Try again.';
+            cameraAnalyzing = false;
+            orb.className = isRecording ? 'orb listening' : 'orb';
+            return;
+        }
 
-        // Get API key
-        const tokenRes = await fetch('/api/gemini-token');
-        const tokenData = await tokenRes.json();
+        let description = '';
 
-        // Fetch current memories for context
-        let memCtx = '';
-        try {
-            const memRes = await fetch('/api/memory');
-            const memData = await memRes.json();
-            if (memData.memories?.length) {
-                memCtx = '\n\nUser memories: ' + memData.memories.map(m => m.content).join('; ');
-            }
-        } catch {}
+        if (audioMode === 'gemini') {
+            // Gemini mode: use Gemini REST API directly
+            const tokenRes = await fetch('/api/gemini-token');
+            const tokenData = await tokenRes.json();
 
-        // Call Gemini REST API with the image
-        const prompt = `You are DARVIS, a dry-witted British AI assistant. The user is showing you a live camera image and asked: "${userPrompt || 'What do you see?'}"
+            const prompt = `You are DARVIS, a dry-witted British AI assistant. The user is showing you a live camera image and asked: "${userPrompt || 'What do you see?'}"
 
-Describe EXACTLY what is in this image — the actual objects, text, colors, people, scene, etc. that you can see. Be specific and accurate. Do NOT make things up or guess if the image is unclear. If the image is dark or blurry, say so. Keep it to 1-3 sentences.${memCtx}`;
+Describe EXACTLY what is in this image — the actual objects, text, colors, people, scene, etc. Be specific. Do NOT make things up. If unclear, say so. 1-3 sentences.`;
 
-        const res = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${tokenData.token}`,
-            {
+            const res = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${tokenData.token}`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [
+                            { inlineData: { mimeType: 'image/jpeg', data: frame } },
+                            { text: prompt }
+                        ]}],
+                        generationConfig: { maxOutputTokens: 300, temperature: 0.3 }
+                    })
+                }
+            );
+            const data = await res.json();
+            description = data.candidates?.[0]?.content?.parts?.[0]?.text || 'I couldn\'t make that out, sir.';
+        } else {
+            // Classic mode: use Ollama vision model via /api/vision
+            const res = await fetch('/api/vision', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    contents: [{
-                        parts: [
-                            { inlineData: { mimeType: 'image/jpeg', data: frame } },
-                            { text: prompt }
-                        ]
-                    }],
-                    generationConfig: { maxOutputTokens: 300, temperature: 0.3 }
-                })
-            }
-        );
+                    image: frame,
+                    prompt: userPrompt || 'What do you see in this image?'
+                }),
+            });
+            const data = await res.json();
+            description = data.description || 'I couldn\'t make that out, sir.';
+        }
 
-        const data = await res.json();
-        const description = data.candidates?.[0]?.content?.parts?.[0]?.text || 'I couldn\'t make out what I\'m seeing, sir.';
         responseEl.textContent = description;
 
-        // If Gemini Live session is active, feed the description as text
-        // so DARVIS speaks it aloud
-        if (geminiWs && geminiWs.readyState === WebSocket.OPEN && geminiSessionActive) {
+        // Speak the description
+        if (audioMode === 'gemini' && geminiWs && geminiWs.readyState === WebSocket.OPEN && geminiSessionActive) {
+            // Feed to Gemini Live for audio output
             geminiWs.send(JSON.stringify({
                 clientContent: {
                     turns: [{
                         role: 'user',
-                        parts: [{ text: `[The user is showing you their camera. You described what you saw as: "${description}"] Now say this description aloud naturally to the user, as DARVIS. Keep it brief.` }]
+                        parts: [{ text: `[Camera description: "${description}"] Say this to the user naturally as DARVIS. Keep it brief.` }]
                     }],
                     turnComplete: true
                 }
             }));
+        } else {
+            // Classic mode: use ElevenLabs TTS
+            try {
+                const ttsRes = await fetch('/api/tts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: description }),
+                });
+                const contentType = ttsRes.headers.get('content-type') || '';
+                if (ttsRes.ok && contentType.includes('audio')) {
+                    const audioBlob = await ttsRes.blob();
+                    if (audioBlob.size > 100) {
+                        const audioUrl = URL.createObjectURL(audioBlob);
+                        persistentAudio.pause();
+                        persistentAudio.currentTime = 0;
+                        persistentAudio.src = audioUrl;
+                        persistentAudio.onended = () => {
+                            orb.className = 'orb';
+                            URL.revokeObjectURL(audioUrl);
+                        };
+                        orb.className = 'orb speaking';
+                        await persistentAudio.play();
+                        cameraAnalyzing = false;
+                        return;
+                    }
+                }
+            } catch {}
         }
+
+        orb.className = isRecording ? 'orb listening' : 'orb';
     } catch (err) {
         console.warn('Camera analysis error:', err);
         responseEl.textContent = 'Camera analysis failed: ' + err.message;

@@ -12,20 +12,28 @@ struct LocalModel: Identifiable, Codable {
 
 let AVAILABLE_MODELS: [LocalModel] = [
     LocalModel(
-        id: "gemma2-2b-q4",
-        name: "Gemma 2 2B (Q4)",
-        size: "1.5 GB",
-        url: "https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q4_K_M.gguf",
-        filename: "gemma-2-2b-it-Q4_K_M.gguf",
+        id: "gemma4-e2b-q4",
+        name: "Gemma 4 E2B (Q4 - Recommended)",
+        size: "3.1 GB",
+        url: "https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/resolve/main/gemma-4-E2B-it-Q4_K_M.gguf",
+        filename: "gemma-4-E2B-it-Q4_K_M.gguf",
         params: "2B"
     ),
     LocalModel(
-        id: "gemma2-2b-q8",
-        name: "Gemma 2 2B (Q8 - Higher Quality)",
-        size: "2.7 GB",
-        url: "https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q8_0.gguf",
-        filename: "gemma-2-2b-it-Q8_0.gguf",
+        id: "gemma4-e2b-q8",
+        name: "Gemma 4 E2B (Q8 - Best Quality)",
+        size: "5.0 GB",
+        url: "https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/resolve/main/gemma-4-E2B-it-Q8_0.gguf",
+        filename: "gemma-4-E2B-it-Q8_0.gguf",
         params: "2B"
+    ),
+    LocalModel(
+        id: "gemma4-e4b-q4",
+        name: "Gemma 4 E4B (Q4 - Larger Model)",
+        size: "5.0 GB",
+        url: "https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main/gemma-4-E4B-it-Q4_K_M.gguf",
+        filename: "gemma-4-E4B-it-Q4_K_M.gguf",
+        params: "4B"
     ),
 ]
 

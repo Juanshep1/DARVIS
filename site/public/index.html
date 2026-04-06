@@ -674,17 +674,8 @@ async function startGeminiMic() {
                 }
             };
 
-            // Send a camera frame every ~3 audio chunks (~3 fps for real-time vision)
-            frameCounter++;
-            if (cameraActive && cameraCanvas && frameCounter % 3 === 0) {
-                const frame = captureFrame();
-                if (frame) {
-                    msg.realtimeInput.mediaChunks.push({
-                        data: frame,
-                        mimeType: 'image/jpeg'
-                    });
-                }
-            }
+            // Note: native audio model doesn't accept images in the WebSocket stream.
+            // Camera vision is handled separately via REST API when user asks about it.
 
             geminiWs.send(JSON.stringify(msg));
         };
@@ -697,6 +688,69 @@ async function startGeminiMic() {
         console.warn('Mic access error:', err);
         responseEl.textContent = 'Microphone access denied.';
     }
+}
+
+// ── Camera vision via Gemini REST API ──
+// The native audio model can't see images, so we use the regular
+// Gemini API to describe what the camera sees, then feed the
+// description into the live audio session for speech output.
+
+let cameraAnalyzing = false;
+
+async function analyzeCamera(userPrompt) {
+    if (!cameraActive || !cameraCanvas || cameraAnalyzing) return;
+    cameraAnalyzing = true;
+    orb.className = 'orb thinking';
+
+    try {
+        const frame = captureFrame();
+        if (!frame) { cameraAnalyzing = false; return; }
+
+        // Get API key
+        const tokenRes = await fetch('/api/gemini-token');
+        const tokenData = await tokenRes.json();
+
+        // Call Gemini REST API with the image
+        const res = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${tokenData.token}`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [
+                            { text: userPrompt || 'Describe what you see in this image. Be concise and conversational, as if you are DARVIS — a dry-witted British AI assistant. 1-3 sentences.' },
+                            { inlineData: { mimeType: 'image/jpeg', data: frame } }
+                        ]
+                    }],
+                    generationConfig: { maxOutputTokens: 200 }
+                })
+            }
+        );
+
+        const data = await res.json();
+        const description = data.candidates?.[0]?.content?.parts?.[0]?.text || 'I couldn\'t make out what I\'m seeing, sir.';
+        responseEl.textContent = description;
+
+        // If Gemini Live session is active, feed the description as text
+        // so DARVIS speaks it aloud
+        if (geminiWs && geminiWs.readyState === WebSocket.OPEN && geminiSessionActive) {
+            geminiWs.send(JSON.stringify({
+                clientContent: {
+                    turns: [{
+                        role: 'user',
+                        parts: [{ text: `[The user is showing you their camera. You described what you saw as: "${description}"] Now say this description aloud naturally to the user, as DARVIS. Keep it brief.` }]
+                    }],
+                    turnComplete: true
+                }
+            }));
+        }
+    } catch (err) {
+        console.warn('Camera analysis error:', err);
+        responseEl.textContent = 'Camera analysis failed: ' + err.message;
+        orb.className = isRecording ? 'orb listening' : 'orb';
+    }
+    cameraAnalyzing = false;
 }
 
 function stopGeminiMic() {
@@ -870,6 +924,22 @@ function looksLikeOpenRequest(text) {
     return triggers.some(t => lower.startsWith(t) || lower.includes('open '));
 }
 
+function looksLikeCameraRequest(text) {
+    const lower = text.toLowerCase();
+    const triggers = [
+        'what do you see', 'what can you see', "what's in front",
+        'what is in front', 'what am i looking at', 'what is this',
+        "what's this", 'what are these', 'what is that', "what's that",
+        'describe what', 'look at this', 'can you see', 'do you see',
+        'read this', 'read that', 'what does this say', 'what does it say',
+        'identify', 'recognize', 'what color', 'what brand',
+        'how many', 'tell me about this', 'what kind of',
+        'camera', 'looking at', 'in front of me', 'show you',
+        'see this', 'see that', 'point', 'scan',
+    ];
+    return triggers.some(t => lower.includes(t));
+}
+
 async function send() {
     const text = inputEl.value.trim();
     if (!text) return;
@@ -877,6 +947,12 @@ async function send() {
 
     // Gemini text mode — send via WebSocket
     if (audioMode === 'gemini') {
+        // If camera is active and user is asking about what they see, use camera vision
+        if (cameraActive && looksLikeCameraRequest(text)) {
+            await analyzeCamera(text);
+            return;
+        }
+
         orb.className = 'orb thinking';
         responseEl.textContent = '';
         try {
@@ -909,7 +985,12 @@ async function send() {
         return;
     }
 
-    // Classic mode
+    // Classic mode — camera vision works here too
+    if (cameraActive && looksLikeCameraRequest(text)) {
+        await analyzeCamera(text);
+        return;
+    }
+
     if (currentAudio) { persistentAudio.pause(); persistentAudio.currentTime = 0; currentAudio = null; }
 
     let pendingTab = null;

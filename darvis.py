@@ -397,21 +397,62 @@ def run_startup_actions() -> dict:
     except Exception:
         ctx["weather"] = "unavailable"
 
-    # Top headlines
+    # Top headlines with summaries via Tavily
     headlines = ""
-    try:
-        req = urllib.request.Request(
-            "https://html.duckduckgo.com/html/?q=top+news+today",
-            headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"},
-        )
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            html = resp.read().decode("utf-8", errors="replace")
-        links = re.findall(r'<a[^>]*class="result__a"[^>]*>(.*?)</a>', html, re.DOTALL)
-        top = [re.sub(r'<[^>]+>', '', l).strip() for l in links[:5]]
-        headlines = "\n".join(f"  {i+1}. {h}" for i, h in enumerate(top) if h)
-        ctx["headlines"] = headlines
-    except Exception:
-        pass
+    env = {}
+    if CONFIG_PATH.exists():
+        for line in CONFIG_PATH.read_text().splitlines():
+            if "=" in line and not line.startswith("#"):
+                k, v = line.split("=", 1)
+                env[k.strip()] = v.strip()
+    tavily_key = env.get("TAVILY_API_KEY", os.environ.get("TAVILY_API_KEY", ""))
+    if tavily_key:
+        try:
+            payload = json.dumps({
+                "api_key": tavily_key,
+                "query": "top breaking news today",
+                "search_depth": "basic",
+                "max_results": 5,
+                "include_answer": True,
+            }).encode()
+            req = urllib.request.Request(
+                "https://api.tavily.com/search",
+                data=payload,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                data = json.loads(resp.read().decode())
+            stories = []
+            for i, r in enumerate(data.get("results", [])[:5]):
+                title = r.get("title", "")
+                snippet = r.get("content", "")[:200]
+                stories.append(f"  {i+1}. {title}\n     {snippet}")
+            headlines = "\n\n".join(stories)
+            ctx["headlines"] = headlines
+            if data.get("answer"):
+                ctx["news_summary"] = data["answer"]
+        except Exception:
+            pass
+    if not headlines:
+        # Fallback to DuckDuckGo
+        try:
+            req = urllib.request.Request(
+                "https://html.duckduckgo.com/html/?q=top+news+today",
+                headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"},
+            )
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                html = resp.read().decode("utf-8", errors="replace")
+            links = re.findall(r'<a[^>]*class="result__a"[^>]*>(.*?)</a>', html, re.DOTALL)
+            snippets = re.findall(r'<a[^>]*class="result__snippet"[^>]*>(.*?)</a>', html, re.DOTALL)
+            for i, (link, snip) in enumerate(zip(links[:5], snippets[:5])):
+                title = re.sub(r'<[^>]+>', '', link).strip()
+                summary = re.sub(r'<[^>]+>', '', snip).strip()
+                if title:
+                    headlines += f"  {i+1}. {title}\n     {summary}\n\n"
+            ctx["headlines"] = headlines.strip()
+        except Exception:
+            pass
 
     # Memories
     try:
@@ -430,24 +471,47 @@ def run_startup_actions() -> dict:
     try:
         desktop = Path.home() / "Desktop"
         briefing_file = desktop / f"DARVIS_Briefing_{now.strftime('%Y-%m-%d')}.txt"
-        content = f"""D.A.R.V.I.S. Daily Briefing
-{'=' * 40}
-Date: {ctx['date']}
-Time: {ctx['time']}
+        content = f"""
+╔══════════════════════════════════════════════════════╗
+║           D.A.R.V.I.S. DAILY BRIEFING               ║
+╚══════════════════════════════════════════════════════╝
+
+Date:    {ctx['date']}
+Time:    {ctx['time']}
 Weather: {ctx.get('weather', 'N/A')}
-
-Top Headlines:
-{headlines or '  (unavailable)'}
-
 Battery: {ctx.get('battery', 'N/A')} {'(charging)' if ctx.get('charging') else ''}
-"""
-        if ctx.get("reminders"):
-            content += f"\nReminders:\n" + "\n".join(f"  - {r}" for r in ctx["reminders"]) + "\n"
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                    NEWS BRIEFING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+"""
+        if ctx.get("news_summary"):
+            content += f"Summary: {ctx['news_summary']}\n\n"
+
+        content += f"{headlines or '  No headlines available.'}\n"
+
+        if ctx.get("reminders"):
+            content += f"""
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                     REMINDERS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+"""
+            content += "\n".join(f"  • {r}" for r in ctx["reminders"]) + "\n"
+
+        content += f"""
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Generated by D.A.R.V.I.S. at {ctx['time']}
+"""
         briefing_file.write_text(content)
         ctx["briefing_file"] = str(briefing_file)
-    except Exception:
-        pass
+
+        # Open the briefing file in TextEdit
+        if IS_MAC:
+            subprocess.Popen(["open", str(briefing_file)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception as e:
+        ctx["briefing_error"] = str(e)
 
     # 2. Open news in Safari (macOS only)
     if IS_MAC:
@@ -1610,24 +1674,30 @@ def main():
                 )
 
             # Ask Brain for a natural briefing based on what we gathered
-            briefing_prompt = f"""You just started up. Here's what's happening:
+            news_summary = ctx.get('news_summary', '')
+            briefing_prompt = f"""You just started up and took these actions:
+- Saved a daily briefing to the Desktop and opened it
+- Opened Google News in Safari
+- Enabled microphone listening
+
+Context:
 - Time: {ctx.get('time', '?')} ({ctx.get('period', '?')}) on {ctx.get('date', '?')}
 - Weather: {ctx.get('weather', 'unavailable')}
 - Battery: {ctx.get('battery', 'unknown')} {'(charging)' if ctx.get('charging') else ''}
-- Top headlines: {ctx.get('headlines', 'none')}
-- I saved a briefing file to the Desktop and opened Google News in Safari.
-{f"- User has {ctx.get('memory_count', 0)} saved memories" if ctx.get('memory_count') else ""}
+{f'- News overview: {news_summary}' if news_summary else ''}
+- Headlines:
+{ctx.get('headlines', '(none)')}
 {f"- Reminders: {', '.join(ctx.get('reminders', []))}" if ctx.get('reminders') else ""}
 
-Give a JARVIS-style spoken briefing. Cover:
-1. Greeting appropriate to the time
-2. Weather in one phrase
-3. Mention 1-2 interesting headlines
-4. Note battery if low
+Give a JARVIS-style spoken briefing. This should sound like a real executive assistant briefing:
+1. Time-appropriate greeting
+2. Weather conditions in a natural way
+3. Give a 2-3 sentence summary of what's happening in the news — actual events, not just headline titles. What are the big stories today?
+4. Mention battery if below 40%
 5. Mention any reminders
-6. Say you've opened the news and saved the briefing to Desktop
+6. Say you've opened the news in Safari and saved the briefing to their Desktop, and that you're now listening
 
-Keep it to 3-4 sentences. Be witty, British, and concise. Do NOT include command blocks."""
+5-7 sentences total. Sound like a real assistant giving a morning/evening rundown. British, witty, but informative. Do NOT include command blocks."""
 
             greeting = brain.think(briefing_prompt)
             greeting = re.sub(r'```command\s*\n.*?\n```', '', greeting, flags=re.DOTALL).strip()
@@ -1643,6 +1713,12 @@ Keep it to 3-4 sentences. Be witty, British, and concise. Do NOT include command
                 console.print()
                 tts.speak(greeting)
                 tts.wait_for_speech()
+
+            # Auto-enable listening after briefing
+            if has_mic:
+                nonlocal listening_active
+                listening_active = True
+                console.print(f"  [{BLUE}]● Mic on — listening. Say something or type.[/{BLUE}]")
         except Exception as e:
             console.print(f"  [dim]Briefing skipped: {e}[/dim]")
 

@@ -195,7 +195,8 @@ class OnDeviceLLM: ObservableObject {
     }
 
     private func generateViaAPI(prompt: String, maxTokens: Int = 200) async -> String? {
-        guard let key = apiKey else { await fetchKey(); guard let key = apiKey else { return nil }; return await generateViaAPI(prompt: prompt, maxTokens: maxTokens) }
+        if apiKey == nil { await fetchKey() }
+        guard let key = apiKey else { return nil }
         let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=\(key)")!
 
         let body: [String: Any] = [
@@ -224,7 +225,8 @@ class OnDeviceLLM: ObservableObject {
     }
 
     func analyzeImage(base64JPEG: String, prompt: String) async -> String? {
-        guard let key = apiKey else { await fetchKey(); return await analyzeImage(base64JPEG: base64JPEG, prompt: prompt) }
+        if apiKey == nil { await fetchKey() }
+        guard let key = apiKey else { return nil }
         let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=\(key)")!
 
         let body: [String: Any] = [

@@ -8,7 +8,7 @@ struct ChatView: View {
             Color.darvisBackground.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // Title
+                // Title bar
                 HStack {
                     Text("D . A . R . V . I . S .")
                         .font(.system(size: 10, weight: .medium, design: .monospaced))
@@ -18,7 +18,6 @@ struct ChatView: View {
 
                     Spacer()
 
-                    // Mode toggle: Cloud → Gemini → On-Device → Cloud
                     Button(action: { vm.cycleMode() }) {
                         HStack(spacing: 4) {
                             Image(systemName: vm.modeIcon)
@@ -37,28 +36,39 @@ struct ChatView: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 12)
 
-                Spacer()
+                // Orb area — takes up available space, orb centered
+                GeometryReader { geo in
+                    VStack(spacing: 0) {
+                        Spacer()
 
-                // Orb
-                OrbView(state: vm.orbState)
-                    .onTapGesture { vm.toggleMic() }
+                        // Orb
+                        OrbView(state: vm.orbState)
+                            .onTapGesture { vm.toggleMic() }
 
-                // Response text
-                if !vm.responseText.isEmpty {
-                    ScrollView {
-                        Text(vm.responseText)
-                            .font(.system(size: 15, design: .monospaced))
-                            .foregroundColor(Color(red: 0.69, green: 0.77, blue: 0.87))
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 24)
+                        // Response text — sits below orb, scrollable, fills remaining space
+                        ScrollViewReader { proxy in
+                            ScrollView {
+                                Text(vm.responseText)
+                                    .font(.system(size: 14, design: .monospaced))
+                                    .foregroundColor(Color(red: 0.69, green: 0.77, blue: 0.87))
+                                    .multilineTextAlignment(.center)
+                                    .padding(.horizontal, 20)
+                                    .frame(maxWidth: .infinity)
+                                    .id("response")
+                            }
+                            .frame(maxHeight: geo.size.height * 0.4) // Up to 40% of orb area
+                            .opacity(vm.responseText.isEmpty ? 0 : 1)
+                            .onChange(of: vm.responseText) { _ in
+                                proxy.scrollTo("response", anchor: .bottom)
+                            }
+                        }
+                        .padding(.top, 8)
+
+                        Spacer()
                     }
-                    .frame(maxHeight: 250)
-                    .padding(.top, 12)
                 }
 
-                Spacer()
-
-                // Input bar
+                // Input bar — pinned to bottom
                 InputBar(
                     text: $vm.inputText,
                     isRecording: vm.isRecording,
@@ -69,30 +79,30 @@ struct ChatView: View {
                 )
             }
 
-            // Camera preview — native AVCaptureVideoPreviewLayer (no lag)
+            // Camera preview — bottom left so it doesn't overlap response text
             if vm.cameraActive {
                 VStack {
                     Spacer()
                     HStack {
-                        Spacer()
                         ZStack(alignment: .topLeading) {
                             CameraPreviewView(session: vm.cameraService.captureSession)
-                                .frame(width: 200, height: 260)
-                                .clipShape(RoundedRectangle(cornerRadius: 14))
-                                .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.darvisGreen.opacity(0.5), lineWidth: 2))
-                                .shadow(color: .darvisGreen.opacity(0.2), radius: 15)
+                                .frame(width: 130, height: 175)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.darvisGreen.opacity(0.5), lineWidth: 2))
+                                .shadow(color: .darvisGreen.opacity(0.2), radius: 10)
 
                             Text("LIVE")
-                                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                .font(.system(size: 7, weight: .bold, design: .monospaced))
                                 .foregroundColor(.darvisGreen)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 3)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 2)
                                 .background(Color.black.opacity(0.7))
-                                .cornerRadius(4)
-                                .padding(6)
+                                .cornerRadius(3)
+                                .padding(5)
                         }
-                        .padding(.trailing, 12)
-                        .padding(.bottom, 85)
+                        .padding(.leading, 12)
+                        .padding(.bottom, 80)
+                        Spacer()
                     }
                 }
             }

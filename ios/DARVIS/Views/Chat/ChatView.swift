@@ -52,7 +52,7 @@ struct ChatView: View {
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 24)
                     }
-                    .frame(maxHeight: 160)
+                    .frame(maxHeight: 250)
                     .padding(.top, 12)
                 }
 

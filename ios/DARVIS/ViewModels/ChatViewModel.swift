@@ -24,6 +24,8 @@ class ChatViewModel: ObservableObject {
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
     private var speechEngine: AVAudioEngine?
+    private var silenceTimer: Timer?
+    private let silenceDelay: TimeInterval = 2.5 // seconds of silence before auto-send
 
     // Mode cycling
     var modeLabel: String {
@@ -285,20 +287,47 @@ class ChatViewModel: ObservableObject {
         }
 
         recognitionTask = speechRecognizer?.recognitionTask(with: request) { [weak self] result, error in
+            guard let self = self else { return }
             if let result = result {
                 DispatchQueue.main.async {
-                    self?.inputText = result.bestTranscription.formattedString
+                    self.inputText = result.bestTranscription.formattedString
+
+                    // Reset silence timer on every new speech
+                    self.silenceTimer?.invalidate()
+                    self.silenceTimer = Timer.scheduledTimer(withTimeInterval: self.silenceDelay, repeats: false) { _ in
+                        DispatchQueue.main.async {
+                            if self.isRecording { self.stopVoice() }
+                        }
+                    }
+                }
+                // Also handle isFinal
+                if result.isFinal {
+                    DispatchQueue.main.async {
+                        self.silenceTimer?.invalidate()
+                        if self.isRecording { self.stopVoice() }
+                    }
                 }
             }
-            if error != nil || result?.isFinal == true {
+            if let error = error {
+                // Ignore "no speech detected" — just means silence
+                let nsError = error as NSError
+                if nsError.domain == "kAFAssistantErrorDomain" && nsError.code == 1110 {
+                    // No speech — auto-send what we have
+                    DispatchQueue.main.async {
+                        if self.isRecording { self.stopVoice() }
+                    }
+                    return
+                }
                 DispatchQueue.main.async {
-                    if self?.isRecording == true { self?.stopVoice() }
+                    if self.isRecording { self.stopVoice() }
                 }
             }
         }
     }
 
     private func stopSpeechRecognition() {
+        silenceTimer?.invalidate()
+        silenceTimer = nil
         speechEngine?.stop()
         speechEngine?.inputNode.removeTap(onBus: 0)
         speechEngine = nil

@@ -19,7 +19,7 @@ COMPUTER_USE_MODEL = "gemini-2.5-flash"  # Vision-capable model for screenshot a
 VIEWPORT_W = 1280
 VIEWPORT_H = 800
 GRID_SIZE = 1000  # Gemini uses 1000x1000 coordinate grid
-MAX_STEPS = 20
+MAX_STEPS = 30
 CLOUD_URL = "https://darvis1.netlify.app"
 
 import re as _re
@@ -161,10 +161,23 @@ class ComputerUseAgent:
 
         # Build prompt
         if self.step_count == 1:
-            prompt = f"Goal: {goal}\n\nThis is a screenshot of the browser. Tell me what to click/type to accomplish the goal."
+            prompt = f"""Goal: {goal}
+
+This is a screenshot of the browser. Look carefully at what's on the page.
+- What URL are we on?
+- What elements are visible (search bars, buttons, links)?
+- What SPECIFIC actions will accomplish the goal?
+
+Give precise coordinates for clicks. If you need to type in a search bar, click it first, then type."""
         else:
             prev_actions = json.dumps(self._status.get("actions", []))
-            prompt = f"Goal: {goal}\n\nPrevious actions taken: {prev_actions}\n\nThis is the updated screenshot. Continue toward the goal, or set done=true if accomplished."
+            prompt = f"""Goal: {goal}
+
+Previous actions: {prev_actions}
+Current URL: {self.page.url}
+
+Look at this screenshot CAREFULLY. What changed? Is the goal accomplished?
+If not, what's the next specific action needed? Give precise coordinates."""
 
         # Single-turn API call (most reliable)
         payload = json.dumps({
@@ -215,7 +228,10 @@ Coordinates: 0-{GRID_SIZE} scale for {VIEWPORT_W}x{VIEWPORT_H} viewport."""}
                 clean = clean.strip()
             result = json.loads(clean)
         except json.JSONDecodeError:
-            result = {"thinking": reply_text[:200], "actions": [], "done": True, "summary": "Could not parse response"}
+            # If we can't parse JSON, check if the text indicates completion
+            lower_reply = reply_text.lower()
+            is_done = "done" in lower_reply or "complete" in lower_reply or "accomplish" in lower_reply
+            result = {"thinking": reply_text[:200], "actions": [], "done": is_done, "summary": reply_text[:100] if is_done else ""}
 
         # Execute actions
         actions_taken = []
@@ -225,6 +241,60 @@ Coordinates: 0-{GRID_SIZE} scale for {VIEWPORT_W}x{VIEWPORT_H} viewport."""}
                 actions_taken.append(action)
             except Exception as e:
                 actions_taken.append({"type": "error", "message": str(e)})
+
+        # Wait for page to settle after actions
+        await self.page.wait_for_timeout(1500)
+
+        # ── VERIFICATION: Take a new screenshot and confirm actions worked ──
+        if actions_taken and not result.get("done"):
+            verify_img = await self.screenshot()
+            verify_b64 = base64.b64encode(verify_img).decode()
+            self._upload_screenshot(verify_img)
+
+            verify_payload = json.dumps({
+                "contents": [{"parts": [
+                    {"inlineData": {"mimeType": "image/png", "data": verify_b64}},
+                    {"text": f"""I just executed these actions: {json.dumps(actions_taken)}
+The goal was: {goal}
+
+Look at this screenshot AFTER the actions. Did they actually work?
+- Did the page change as expected?
+- Did the search/navigation/click succeed?
+- Is there an error, blank page, or unexpected state?
+
+Respond with ONLY a JSON object:
+{{"verified": true/false, "issue": "description of what went wrong (only if verified=false)", "done": true/false, "summary": "only if the overall goal is now complete"}}"""}
+                ]}],
+                "generationConfig": {"temperature": 0.1, "maxOutputTokens": 512}
+            }).encode()
+
+            try:
+                vreq = urllib.request.Request(
+                    f"{GEMINI_API_URL}/models/{self.model}:generateContent?key={self.api_key}",
+                    data=verify_payload, headers={"Content-Type": "application/json"}, method="POST",
+                )
+                with urllib.request.urlopen(vreq, timeout=30) as vresp:
+                    vdata = json.loads(vresp.read().decode())
+                vtext = ""
+                for c in vdata.get("candidates", []):
+                    for p in c.get("content", {}).get("parts", []):
+                        if "text" in p: vtext += p["text"]
+                vclean = vtext.strip()
+                if vclean.startswith("```"):
+                    vclean = vclean.split("\n", 1)[1] if "\n" in vclean else vclean[3:]
+                    if vclean.endswith("```"): vclean = vclean[:-3]
+                    vclean = vclean.strip()
+                vresult = json.loads(vclean)
+
+                if not vresult.get("verified", True):
+                    # Actions failed — report the issue, don't mark done
+                    result["thinking"] = f"Verification failed: {vresult.get('issue', 'unknown')}. Retrying..."
+                    result["done"] = False
+                elif vresult.get("done"):
+                    result["done"] = True
+                    result["summary"] = vresult.get("summary", result.get("summary", "Task completed."))
+            except Exception:
+                pass  # Verification failed to parse — continue normally
 
         # Update status
         self._status.update({

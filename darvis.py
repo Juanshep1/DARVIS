@@ -244,63 +244,78 @@ Only use search_web for general knowledge questions. Only use safari for reading
 PLATFORM_BROWSER_SECTION
 
 IMPORTANT RULES:
-- You can use MULTIPLE command blocks in a single response if needed.
-- When the user asks a question that requires current/real-time information (news, weather, prices, sports scores, "who is the current president", recent events, etc.), ALWAYS use search_web or fetch_url. Do NOT say you don't have access to the internet — you DO.
+- You MUST use MULTIPLE command blocks in a single response when the task requires multiple steps. Do NOT describe steps without command blocks. Every action you describe MUST have a corresponding command block.
+- When the user asks a question that requires current/real-time information (news, weather, prices, sports scores, recent events, etc.), ALWAYS use search_web or fetch_url. Do NOT say you don't have access to the internet — you DO.
 - When creating files, show the full content in the create_file block.
 - For weather, use: fetch_url with https://wttr.in/CITY?format=3
 - Keep spoken responses concise (1-3 sentences) but be thorough in file contents.
-- Only use dangerous shell commands after warning the user first."""
+- Only use dangerous shell commands after warning the user first.
+- NEVER say "I'll do X" or "Let me do X" without actually including the command blocks. If you say it, DO it.
+- If you're unsure how to do something, try using a shell command — you have full system access."""
 
 SAFARI_PROMPT_SECTION = """## 9. Safari Browser Control (macOS)
-You can control Safari directly — click links, read page content, fill forms, scroll, and more.
+You can control Safari directly — navigate, search, click links, read pages, fill forms, scroll.
 
-Get info about the current Safari tab (URL, title, all clickable links):
-```command
-{"action": "safari", "method": "get_page_info"}
-```
+Available safari methods:
+- navigate: go to a URL
+- get_page_info: see current URL, title, and all clickable links
+- read_page: read the visible text content
+- click_link: click a link by index number or text
+- click_button: click a button by text
+- type_text: type into the focused field
+- scroll: scroll up or down
+- run_js: run JavaScript on the page
+- back: go back
 
-Click a link by its number (from get_page_info results) or by text match:
-```command
-{"action": "safari", "method": "click_link", "index": 0}
-```
-```command
-{"action": "safari", "method": "click_link", "text": "Sign in"}
-```
+CRITICAL — ALWAYS include ALL command blocks needed to complete the task in ONE response. Examples:
 
-Read the visible text content of the current page:
+"Search for Spurs score on Safari":
+```command
+{"action": "safari", "method": "navigate", "url": "https://www.google.com"}
+```
+```command
+{"action": "safari", "method": "type_text", "text": "Spurs score"}
+```
+```command
+{"action": "safari", "method": "run_js", "code": "document.querySelector('form').submit()"}
+```
 ```command
 {"action": "safari", "method": "read_page"}
 ```
 
-Run any JavaScript on the current page:
+"Read what's on my Safari":
 ```command
-{"action": "safari", "method": "run_js", "code": "document.title"}
+{"action": "safari", "method": "get_page_info"}
+```
+```command
+{"action": "safari", "method": "read_page"}
 ```
 
-Navigate, scroll, click buttons, type into fields:
+"Open YouTube and search for music":
 ```command
-{"action": "safari", "method": "navigate", "url": "https://example.com"}
+{"action": "safari", "method": "navigate", "url": "https://www.youtube.com"}
 ```
 ```command
-{"action": "safari", "method": "scroll", "direction": "down"}
+{"action": "safari", "method": "type_text", "text": "chill music"}
 ```
 ```command
-{"action": "safari", "method": "click_button", "text": "Submit"}
-```
-```command
-{"action": "safari", "method": "type_text", "text": "hello world"}
-```
-```command
-{"action": "safari", "method": "back"}
+{"action": "safari", "method": "run_js", "code": "document.querySelector('form').submit()"}
 ```
 
-SAFARI WORKFLOW: When the user asks you to "click the first link" or interact with a page:
-1. First use get_page_info to see what's on the page
-2. Then use click_link with the right index or text
-3. Then optionally read_page to see what loaded
-Always chain these steps.
+"Click the first link":
+```command
+{"action": "safari", "method": "click_link", "index": 0}
+```
+```command
+{"action": "safari", "method": "read_page"}
+```
 
-CRITICAL: When the user asks "what tab is open", "what's on my screen", "what page am I on", "what site is this", "read my Safari", "what am I looking at", or ANYTHING about the current Safari page/tab, you MUST use get_page_info. Do NOT say you can't see the screen — you CAN read Safari tabs. ALWAYS use the safari command block."""
+RULES:
+- When the user says "search for X on Safari/Google", navigate to google.com, type the query, submit the form, then read the page. Use ALL 4 command blocks.
+- When asked "what's on my screen/tab/page", use BOTH get_page_info AND read_page.
+- NEVER just open Safari without also performing the requested action. If they say "search", you MUST navigate, type, submit, AND read.
+- Include ALL steps in one response — don't say "I'll do X" without the command blocks.
+- You can include as many command blocks as needed."""
 
 ANDROID_BROWSER_SECTION = """## 9. Browser (Android)
 You can open URLs in the user's default Android browser (Chrome, Firefox, etc.):

@@ -320,7 +320,20 @@ class ChatViewModel: ObservableObject {
                 orbState = .idle
             }
             cameraService.start()
-            cameraActive = true
+            // Wait for camera to actually be running before showing preview
+            Task {
+                for _ in 0..<20 { // Wait up to 2 seconds
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                    if cameraService.isActive {
+                        cameraActive = true
+                        return
+                    }
+                }
+                cameraActive = cameraService.isActive
+                if !cameraActive {
+                    statusMessage = "Camera failed to start"
+                }
+            }
         }
     }
 

@@ -677,7 +677,7 @@ def copy_path(src: str, dst: str) -> str:
 def search_web(query: str) -> str:
     try:
         encoded_q = urllib.parse.quote(query)
-        _open_url_in_browser(f"https://www.google.com/search?q={encoded_q}")
+        # Don't open Safari — just return text results. Use computer_use for browsing.
 
         ddg_url = f"https://html.duckduckgo.com/html/?q={encoded_q}"
         req = urllib.request.Request(ddg_url, headers={

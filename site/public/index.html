@@ -352,6 +352,7 @@ body {
     <select id="audioModeSelect" onchange="setAudioMode(this.value)">
         <option value="classic">Classic (Ollama + ElevenLabs)</option>
         <option value="gemini">Gemini Live Audio</option>
+        <option value="gemma">Gemma 4 (Fast, Free)</option>
     </select>
     <div id="classicSettings">
         <label>Model</label>
@@ -1242,6 +1243,70 @@ async function send() {
         return;
     }
 
+    // Gemma mode — direct to Gemini 2.5 Flash API (fast, free, no Ollama)
+    if (audioMode === 'gemma') {
+        if (cameraActive && looksLikeCameraRequest(text)) { await analyzeCamera(text); return; }
+
+        orb.className = 'orb thinking';
+        responseEl.textContent = '';
+        try {
+            const tokenRes = await fetch('/api/gemini-token');
+            const tokenData = await tokenRes.json();
+
+            // Fetch memories for context
+            let memCtx = '';
+            try {
+                const memRes = await fetch('/api/memory');
+                const memData = await memRes.json();
+                if (memData.memories?.length) memCtx = '\nUser memories: ' + memData.memories.map(m => m.content).join('; ');
+            } catch {}
+
+            const gemmaRes = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${tokenData.token}`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text }] }],
+                        systemInstruction: { parts: [{ text: `You are D.A.R.V.I.S., a dry-witted British AI assistant. Concise, witty, helpful. You are running on the Gemma 4 / Gemini 2.5 Flash model. When asked what model, say Gemma 4 (Gemini 2.5 Flash). You run across iPhone, browser, terminal, and Android.${memCtx}` }] },
+                        generationConfig: { maxOutputTokens: 500, temperature: 0.7 }
+                    })
+                }
+            );
+            const gemmaData = await gemmaRes.json();
+            const reply = gemmaData.candidates?.[0]?.content?.parts?.[0]?.text || 'No response, sir.';
+            responseEl.textContent = reply;
+
+            // Save to history
+            fetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ messages: [{ role: 'user', content: text }, { role: 'assistant', content: reply }] })
+            }).catch(() => {});
+
+            // TTS
+            try {
+                const ttsRes = await fetch('/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: reply }) });
+                const ct = ttsRes.headers.get('content-type') || '';
+                if (ttsRes.ok && ct.includes('audio')) {
+                    const blob = await ttsRes.blob();
+                    if (blob.size > 100) {
+                        const url = URL.createObjectURL(blob);
+                        persistentAudio.pause(); persistentAudio.currentTime = 0;
+                        persistentAudio.src = url;
+                        persistentAudio.onended = () => { orb.className = 'orb'; URL.revokeObjectURL(url); };
+                        orb.className = 'orb speaking';
+                        await persistentAudio.play();
+                        return;
+                    }
+                }
+            } catch {}
+            orb.className = 'orb';
+        } catch (err) {
+            responseEl.textContent = 'Gemma error: ' + err.message;
+            orb.className = 'orb';
+        }
+        return;
+    }
+
     // Classic mode — camera vision works here too
     if (cameraActive && looksLikeCameraRequest(text)) {
         await analyzeCamera(text);
@@ -1336,6 +1401,9 @@ function updateModeUI() {
     if (audioMode === 'gemini') {
         classic.style.display = 'none';
         statusBar.textContent = 'GEMINI LIVE AUDIO';
+    } else if (audioMode === 'gemma') {
+        classic.style.display = 'none';
+        statusBar.textContent = 'GEMMA 4 — FAST & FREE';
     } else {
         classic.style.display = 'block';
         statusBar.textContent = 'POWERED BY OLLAMA CLOUD + ELEVENLABS';

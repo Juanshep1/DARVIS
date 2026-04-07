@@ -2,18 +2,31 @@ import SwiftUI
 
 struct OnDeviceModelSection: View {
     @ObservedObject var dm = ModelDownloadManager.shared
+    @EnvironmentObject var llm: OnDeviceLLM
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Download Gemma 4 to run DARVIS offline on your iPhone.")
+            Text("Download Gemma to run DARVIS directly on your iPhone. No internet needed after download.")
                 .font(.system(size: 11, design: .monospaced))
                 .foregroundColor(.darvisDim)
+
+            if llm.isLoaded {
+                HStack(spacing: 6) {
+                    Image(systemName: "bolt.fill")
+                        .foregroundColor(.darvisGreen)
+                    Text(llm.currentModelName)
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .foregroundColor(.darvisGreen)
+                }
+                .padding(10)
+                .background(Color.darvisGreen.opacity(0.05))
+                .cornerRadius(8)
+            }
 
             ForEach(AVAILABLE_MODELS) { model in
                 modelRow(model)
             }
 
-            // Download progress
             if dm.isDownloading {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
@@ -27,7 +40,7 @@ struct OnDeviceModelSection: View {
                     }
                     ProgressView(value: dm.downloadProgress)
                         .tint(.darvisCyan)
-                    Text(formatProgress(dm.downloadProgress))
+                    Text("\(Int(dm.downloadProgress * 100))%")
                         .font(.system(size: 9, design: .monospaced))
                         .foregroundColor(.darvisDim)
                 }
@@ -36,35 +49,25 @@ struct OnDeviceModelSection: View {
                 .cornerRadius(8)
             }
 
-            // Download complete
             if dm.downloadComplete {
                 HStack(spacing: 6) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.darvisGreen)
-                    Text("Download complete! Model ready.")
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    Image(systemName: "checkmark.circle.fill").foregroundColor(.darvisGreen)
+                    Text("Downloaded! Tap 'Load' to activate.")
+                        .font(.system(size: 11, design: .monospaced))
                         .foregroundColor(.darvisGreen)
                 }
-                .padding(10)
-                .background(Color.darvisGreen.opacity(0.05))
-                .cornerRadius(8)
             }
 
-            // Error
             if let error = dm.errorMessage {
                 HStack(spacing: 6) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundColor(.darvisRed)
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.darvisRed)
                     Text(error)
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundColor(.darvisRed)
+                        .lineLimit(2)
                 }
-                .padding(10)
-                .background(Color.darvisRed.opacity(0.05))
-                .cornerRadius(8)
             }
         }
-        .onAppear { dm.setup(); dm.refreshDownloadedModels() }
     }
 
     private func modelRow(_ model: LocalModel) -> some View {
@@ -81,18 +84,19 @@ struct OnDeviceModelSection: View {
 
             if dm.isModelDownloaded(model) {
                 HStack(spacing: 8) {
-                    VStack(spacing: 2) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(.darvisGreen)
-                            .font(.system(size: 18))
-                        Text("Ready")
-                            .font(.system(size: 8, design: .monospaced))
-                            .foregroundColor(.darvisGreen)
+                    Button(action: { Task { _ = await llm.loadModel(model) } }) {
+                        Text(llm.isLoaded && llm.currentModelName.contains(model.name) ? "Active" : "Load")
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .foregroundColor(llm.isLoaded && llm.currentModelName.contains(model.name) ? .darvisGreen : .darvisCyan)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background((llm.isLoaded && llm.currentModelName.contains(model.name) ? Color.darvisGreen : Color.darvisCyan).opacity(0.1))
+                            .cornerRadius(6)
                     }
                     Button(action: { dm.deleteModel(model) }) {
                         Image(systemName: "trash")
                             .foregroundColor(.darvisRed.opacity(0.7))
-                            .font(.system(size: 14))
+                            .font(.system(size: 12))
                     }
                 }
             } else if !dm.isDownloading {
@@ -107,16 +111,9 @@ struct OnDeviceModelSection: View {
                     .padding(.vertical, 8)
                     .background(Color.darvisCyan.opacity(0.1))
                     .cornerRadius(8)
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.darvisCyan.opacity(0.3), lineWidth: 1))
                 }
             }
         }
-        .padding(.vertical, 6)
-    }
-
-    private func formatProgress(_ progress: Double) -> String {
-        let pct = Int(progress * 100)
-        if pct < 1 { return "Starting download..." }
-        return "\(pct)% downloaded"
+        .padding(.vertical, 4)
     }
 }

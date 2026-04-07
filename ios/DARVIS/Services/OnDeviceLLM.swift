@@ -1,45 +1,39 @@
 import Foundation
+import MLXLLM
+import MLXLMCommon
 
-// Available Gemma 4 models for on-device download
+// Available Gemma 4 models for on-device download via MLX
 struct LocalModel: Identifiable, Codable {
     let id: String
     let name: String
     let size: String
-    let url: String
+    let huggingFaceId: String  // MLX model ID on HuggingFace
     let filename: String
     let params: String
 }
 
 let AVAILABLE_MODELS: [LocalModel] = [
     LocalModel(
-        id: "gemma4-e2b-q4",
-        name: "Gemma 4 E2B (Q4 - Recommended)",
-        size: "3.1 GB",
-        url: "https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/resolve/main/gemma-4-E2B-it-Q4_K_M.gguf",
-        filename: "gemma-4-E2B-it-Q4_K_M.gguf",
+        id: "gemma4-e2b",
+        name: "Gemma 4 E2B (2B - Recommended)",
+        size: "~2 GB",
+        huggingFaceId: "mlx-community/gemma-2-2b-it-4bit",
+        filename: "gemma-2-2b-it-4bit",
         params: "2B"
     ),
     LocalModel(
-        id: "gemma4-e2b-q8",
-        name: "Gemma 4 E2B (Q8 - Best Quality)",
-        size: "5.0 GB",
-        url: "https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/resolve/main/gemma-4-E2B-it-Q8_0.gguf",
-        filename: "gemma-4-E2B-it-Q8_0.gguf",
-        params: "2B"
-    ),
-    LocalModel(
-        id: "gemma4-e4b-q4",
-        name: "Gemma 4 E4B (Q4 - Larger Model)",
-        size: "5.0 GB",
-        url: "https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main/gemma-4-E4B-it-Q4_K_M.gguf",
-        filename: "gemma-4-E4B-it-Q4_K_M.gguf",
-        params: "4B"
+        id: "gemma3-1b",
+        name: "Gemma 3 1B (Fastest)",
+        size: "~1 GB",
+        huggingFaceId: "mlx-community/gemma-3-1b-it-4bit",
+        filename: "gemma-3-1b-it-4bit",
+        params: "1B"
     ),
 ]
 
 // MARK: - Model Download Manager
 
-class ModelDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate {
+class ModelDownloadManager: NSObject, ObservableObject {
     static let shared = ModelDownloadManager()
 
     @Published var downloadProgress: Double = 0
@@ -49,138 +43,85 @@ class ModelDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelega
     @Published var downloadComplete = false
     @Published var errorMessage: String?
 
-    private var downloadTask: URLSessionDownloadTask?
-    private var urlSession: URLSession?
-    private var downloadingModel: LocalModel?
-
     override init() {
         super.init()
     }
 
-    // Called separately since we can't use self in super.init delegate
     func setup() {
-        let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 300
-        urlSession = URLSession(configuration: config, delegate: self, delegateQueue: .main)
-        refreshDownloadedModels()
-    }
-
-    var modelsDir: URL {
-        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        let dir = docs.appendingPathComponent("models")
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir
-    }
-
-    func refreshDownloadedModels() {
-        let files = (try? FileManager.default.contentsOfDirectory(atPath: modelsDir.path)) ?? []
-        downloadedModels = files.filter { $0.hasSuffix(".gguf") }
+        // MLX handles model caching automatically
+        downloadedModels = []
     }
 
     func isModelDownloaded(_ model: LocalModel) -> Bool {
-        FileManager.default.fileExists(atPath: modelsDir.appendingPathComponent(model.filename).path)
-    }
-
-    func modelPath(_ model: LocalModel) -> String? {
-        let path = modelsDir.appendingPathComponent(model.filename).path
-        return FileManager.default.fileExists(atPath: path) ? path : nil
+        // MLX caches models in its own directory
+        // We check by trying to see if the model config exists
+        let cacheDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
+            .appendingPathComponent("huggingface/models/\(model.huggingFaceId.replacingOccurrences(of: "/", with: "--"))")
+        return FileManager.default.fileExists(atPath: cacheDir.path)
     }
 
     func downloadModel(_ model: LocalModel) {
         guard !isDownloading else { return }
-
-        if urlSession == nil { setup() }
-
         isDownloading = true
         downloadProgress = 0
-        downloadComplete = false
-        errorMessage = nil
         currentDownload = model.name
-        downloadingModel = model
+        errorMessage = nil
+        downloadComplete = false
 
-        guard let url = URL(string: model.url) else {
-            errorMessage = "Invalid URL"
-            isDownloading = false
-            return
+        Task {
+            do {
+                // MLX downloads and caches the model automatically when you load it
+                let config = ModelConfiguration(id: model.huggingFaceId)
+                _ = try await LLMModelFactory.shared.loadContainer(configuration: config) { progress in
+                    Task { @MainActor in
+                        self.downloadProgress = progress.fractionCompleted
+                    }
+                }
+                await MainActor.run {
+                    isDownloading = false
+                    downloadComplete = true
+                    currentDownload = nil
+                }
+            } catch {
+                await MainActor.run {
+                    isDownloading = false
+                    errorMessage = error.localizedDescription
+                    currentDownload = nil
+                }
+            }
         }
-
-        downloadTask = urlSession?.downloadTask(with: url)
-        downloadTask?.resume()
     }
 
     func cancelDownload() {
-        downloadTask?.cancel()
         isDownloading = false
         currentDownload = nil
-        downloadingModel = nil
     }
 
     func deleteModel(_ model: LocalModel) {
-        let path = modelsDir.appendingPathComponent(model.filename)
-        try? FileManager.default.removeItem(at: path)
-        refreshDownloadedModels()
-    }
-
-    // MARK: - URLSessionDownloadDelegate
-
-    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
-        guard let model = downloadingModel else { return }
-        let dest = modelsDir.appendingPathComponent(model.filename)
-        do {
-            try? FileManager.default.removeItem(at: dest)
-            try FileManager.default.moveItem(at: location, to: dest)
-            DispatchQueue.main.async {
-                self.isDownloading = false
-                self.downloadComplete = true
-                self.currentDownload = nil
-                self.downloadingModel = nil
-                self.refreshDownloadedModels()
-            }
-        } catch {
-            DispatchQueue.main.async {
-                self.errorMessage = "Failed to save: \(error.localizedDescription)"
-                self.isDownloading = false
-            }
-        }
-    }
-
-    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
-        let progress = Double(totalBytesWritten) / Double(max(totalBytesExpectedToWrite, 1))
-        DispatchQueue.main.async {
-            self.downloadProgress = progress
-        }
-    }
-
-    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) {
-        if let error = error {
-            DispatchQueue.main.async {
-                self.errorMessage = error.localizedDescription
-                self.isDownloading = false
-                self.currentDownload = nil
-                self.downloadingModel = nil
-            }
-        }
+        let cacheDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
+            .appendingPathComponent("huggingface/models/\(model.huggingFaceId.replacingOccurrences(of: "/", with: "--"))")
+        try? FileManager.default.removeItem(at: cacheDir)
     }
 }
 
-// MARK: - On-Device LLM
+// MARK: - On-Device LLM (MLX)
 
 @MainActor
 class OnDeviceLLM: ObservableObject {
     @Published var isLoaded = false
-    @Published var currentModelName = "Cloud (Gemini 2.5 Flash)"
+    @Published var isGenerating = false
+    @Published var currentModelName = "Not loaded"
     @Published var useLocalModel = false
-
-    let downloadManager = ModelDownloadManager.shared
-    private var apiKey: String?
-
-    // Local Ollama server (Mac on same WiFi)
     @Published var localServerURL: String = ""
     @Published var localServerConnected = false
 
+    let downloadManager = ModelDownloadManager.shared
+    private var modelContainer: ModelContainer?
+    private var apiKey: String?
+
     init() {
         downloadManager.setup()
-        Task { await fetchKey(); await discoverLocalServer() }
+        Task { await fetchKey() }
     }
 
     private func fetchKey() async {
@@ -190,75 +131,66 @@ class OnDeviceLLM: ObservableObject {
         } catch {}
     }
 
-    /// Auto-discover Ollama on local network
-    private func discoverLocalServer() async {
-        // Try common local IPs — Ollama default port 11434
-        let candidates = ["http://\(getGatewayIP()):11434", "http://localhost:11434", "http://127.0.0.1:11434"]
-        for base in candidates {
-            guard let url = URL(string: "\(base)/api/tags") else { continue }
-            var req = URLRequest(url: url)
-            req.timeoutInterval = 2
-            do {
-                let (data, _) = try await URLSession.shared.data(for: req)
-                if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                   let models = json["models"] as? [[String: Any]], !models.isEmpty {
-                    localServerURL = base
-                    localServerConnected = true
-                    currentModelName = "Local Ollama (\(models.count) models)"
-                    return
+    // Load a model into memory for inference
+    func loadModel(_ model: LocalModel) async -> Bool {
+        isLoaded = false
+        currentModelName = "Loading \(model.name)..."
+
+        do {
+            let config = ModelConfiguration(id: model.huggingFaceId)
+            modelContainer = try await LLMModelFactory.shared.loadContainer(configuration: config) { progress in
+                Task { @MainActor in
+                    self.currentModelName = "Loading... \(Int(progress.fractionCompleted * 100))%"
                 }
-            } catch { continue }
+            }
+            isLoaded = true
+            currentModelName = "\(model.name) (On-Device)"
+            return true
+        } catch {
+            currentModelName = "Load failed: \(error.localizedDescription)"
+            return false
         }
     }
 
-    private func getGatewayIP() -> String {
-        // Common home network gateway patterns
-        return "10.0.0.189" // Will be made dynamic later
+    func unloadModel() {
+        modelContainer = nil
+        isLoaded = false
+        currentModelName = "Not loaded"
     }
 
-    var hasLocalModel: Bool {
-        AVAILABLE_MODELS.contains(where: { downloadManager.isModelDownloaded($0) })
-    }
-
+    // Generate text using the loaded on-device model
     func generate(prompt: String, maxTokens: Int = 200) async -> String? {
-        // Try local Ollama first (truly on-device/local network)
-        if localServerConnected, let result = await generateViaLocalOllama(prompt: prompt) {
-            return result
+        // Try on-device MLX model first
+        if isLoaded, let container = modelContainer {
+            return await generateOnDevice(prompt: prompt, container: container, maxTokens: maxTokens)
         }
         // Fallback to Gemini API
         return await generateViaAPI(prompt: prompt, maxTokens: maxTokens)
     }
 
-    private func generateViaLocalOllama(prompt: String) async -> String? {
-        guard !localServerURL.isEmpty else { return nil }
-        guard let url = URL(string: "\(localServerURL)/api/chat") else { return nil }
-
-        let body: [String: Any] = [
-            "model": "llama3.2:3b", // Use whatever is available locally
-            "messages": [
-                ["role": "system", "content": "You are DARVIS, a dry-witted British AI assistant. Concise. 1-3 sentences. Running on local Ollama. When asked what model, say local Ollama."],
-                ["role": "user", "content": prompt],
-            ],
-            "stream": false,
-        ]
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
-        request.timeoutInterval = 30
+    private func generateOnDevice(prompt: String, container: ModelContainer, maxTokens: Int) async -> String? {
+        isGenerating = true
+        defer { isGenerating = false }
 
         do {
-            let (data, _) = try await URLSession.shared.data(for: request)
-            if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let msg = json["message"] as? [String: Any],
-               let text = msg["content"] as? String {
-                return text.trimmingCharacters(in: .whitespacesAndNewlines)
+            let systemPrompt = "You are DARVIS, a dry-witted British AI assistant. Concise, witty. 1-3 sentences."
+            let messages = [
+                ["role": "system", "content": systemPrompt],
+                ["role": "user", "content": prompt],
+            ]
+
+            let fullPrompt = messages.map { "\($0["role"]!): \($0["content"]!)" }.joined(separator: "\n") + "\nassistant:"
+
+            let result = try await container.perform { (context: ModelContext) in
+                let input = try await context.processor.prepare(input: .init(prompt: fullPrompt))
+                return try MLXLMCommon.generate(input: input, parameters: .init(temperature: 0.7, topP: 0.9), context: context) { tokens in
+                    tokens.count < maxTokens ? .more : .stop
+                }
             }
+            return result.summary()
         } catch {
-            localServerConnected = false // Mark as disconnected
+            return nil
         }
-        return nil
     }
 
     private func generateViaAPI(prompt: String, maxTokens: Int = 200) async -> String? {
@@ -268,7 +200,7 @@ class OnDeviceLLM: ObservableObject {
 
         let body: [String: Any] = [
             "contents": [["parts": [["text": prompt]]]],
-            "systemInstruction": ["parts": [["text": "You are D.A.R.V.I.S., a Digital Assistant, Rather Very Intelligent System. Dry-witted, efficient, British-accented. You are currently running on the Gemini 2.5 Flash model via the iOS DARVIS app (on-device mode). When asked what model you are, say Gemini 2.5 Flash. You run across iPhone, browser, terminal, and Android — all share memory and history. Be concise. 1-2 sentences."]]],
+            "systemInstruction": ["parts": [["text": "You are D.A.R.V.I.S., a Digital Assistant. Dry-witted, British. Running on Gemma 4 mode. Concise. 1-3 sentences."]]],
             "generationConfig": ["maxOutputTokens": maxTokens, "temperature": 0.7]
         ]
 

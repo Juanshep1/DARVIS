@@ -174,9 +174,13 @@ class OnDeviceLLM: ObservableObject {
     let downloadManager = ModelDownloadManager.shared
     private var apiKey: String?
 
+    // Local Ollama server (Mac on same WiFi)
+    @Published var localServerURL: String = ""
+    @Published var localServerConnected = false
+
     init() {
         downloadManager.setup()
-        Task { await fetchKey() }
+        Task { await fetchKey(); await discoverLocalServer() }
     }
 
     private func fetchKey() async {
@@ -186,12 +190,75 @@ class OnDeviceLLM: ObservableObject {
         } catch {}
     }
 
+    /// Auto-discover Ollama on local network
+    private func discoverLocalServer() async {
+        // Try common local IPs — Ollama default port 11434
+        let candidates = ["http://\(getGatewayIP()):11434", "http://localhost:11434", "http://127.0.0.1:11434"]
+        for base in candidates {
+            guard let url = URL(string: "\(base)/api/tags") else { continue }
+            var req = URLRequest(url: url)
+            req.timeoutInterval = 2
+            do {
+                let (data, _) = try await URLSession.shared.data(for: req)
+                if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let models = json["models"] as? [[String: Any]], !models.isEmpty {
+                    localServerURL = base
+                    localServerConnected = true
+                    currentModelName = "Local Ollama (\(models.count) models)"
+                    return
+                }
+            } catch { continue }
+        }
+    }
+
+    private func getGatewayIP() -> String {
+        // Common home network gateway patterns
+        return "10.0.0.189" // Will be made dynamic later
+    }
+
     var hasLocalModel: Bool {
         AVAILABLE_MODELS.contains(where: { downloadManager.isModelDownloaded($0) })
     }
 
     func generate(prompt: String, maxTokens: Int = 200) async -> String? {
+        // Try local Ollama first (truly on-device/local network)
+        if localServerConnected, let result = await generateViaLocalOllama(prompt: prompt) {
+            return result
+        }
+        // Fallback to Gemini API
         return await generateViaAPI(prompt: prompt, maxTokens: maxTokens)
+    }
+
+    private func generateViaLocalOllama(prompt: String) async -> String? {
+        guard !localServerURL.isEmpty else { return nil }
+        guard let url = URL(string: "\(localServerURL)/api/chat") else { return nil }
+
+        let body: [String: Any] = [
+            "model": "llama3.2:3b", // Use whatever is available locally
+            "messages": [
+                ["role": "system", "content": "You are DARVIS, a dry-witted British AI assistant. Concise. 1-3 sentences. Running on local Ollama. When asked what model, say local Ollama."],
+                ["role": "user", "content": prompt],
+            ],
+            "stream": false,
+        ]
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        request.timeoutInterval = 30
+
+        do {
+            let (data, _) = try await URLSession.shared.data(for: request)
+            if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let msg = json["message"] as? [String: Any],
+               let text = msg["content"] as? String {
+                return text.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        } catch {
+            localServerConnected = false // Mark as disconnected
+        }
+        return nil
     }
 
     private func generateViaAPI(prompt: String, maxTokens: Int = 200) async -> String? {

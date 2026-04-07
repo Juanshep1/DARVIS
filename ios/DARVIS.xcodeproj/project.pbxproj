@@ -314,6 +314,7 @@
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSCameraUsageDescription = "DARVIS uses the camera for visual analysis";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "DARVIS connects to local AI servers on your network";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "DARVIS needs microphone access for voice commands";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "DARVIS uses speech recognition for voice commands";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -323,6 +324,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				NSAppTransportSecurity = "{'NSAllowsLocalNetworking': true, 'NSAllowsArbitraryLoads': true}";
 				PRODUCT_BUNDLE_IDENTIFIER = com.darvis.app;
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.9;
@@ -402,6 +404,7 @@
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSCameraUsageDescription = "DARVIS uses the camera for visual analysis";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "DARVIS connects to local AI servers on your network";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "DARVIS needs microphone access for voice commands";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "DARVIS uses speech recognition for voice commands";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -411,6 +414,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				NSAppTransportSecurity = "{'NSAllowsLocalNetworking': true, 'NSAllowsArbitraryLoads': true}";
 				PRODUCT_BUNDLE_IDENTIFIER = com.darvis.app;
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.9;

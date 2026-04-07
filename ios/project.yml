@@ -19,6 +19,8 @@ targets:
         GENERATE_INFOPLIST_FILE: "YES"
         INFOPLIST_KEY_NSMicrophoneUsageDescription: "DARVIS needs microphone access for voice commands"
         INFOPLIST_KEY_NSCameraUsageDescription: "DARVIS uses the camera for visual analysis"
+        INFOPLIST_KEY_NSLocalNetworkUsageDescription: "DARVIS connects to local AI servers on your network"
+        NSAppTransportSecurity: "{'NSAllowsLocalNetworking': true, 'NSAllowsArbitraryLoads': true}"
         INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: "DARVIS uses speech recognition for voice commands"
         INFOPLIST_KEY_UILaunchScreen_Generation: "YES"
         "INFOPLIST_KEY_UISupportedInterfaceOrientations": "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortraitUpsideDown"

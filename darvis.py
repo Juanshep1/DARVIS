@@ -1772,7 +1772,9 @@ def main():
                     from gemini_live import run_gemini_text_turn
                     from memory import get_memory_context
 
-                    sys_instr = SYSTEM_PROMPT.replace("HOME_DIR", HOME_DIR) + get_memory_context()
+                    sys_instr = SYSTEM_PROMPT.replace("HOME_DIR", HOME_DIR)
+                    sys_instr += f"\n\nYou are currently running the Gemini 2.5 Flash Native Audio model in Gemini mode on the terminal. When asked what model you use, say Gemini 2.5 Flash Native Audio. You run across iPhone, browser, terminal, and Android — all share memory and history."
+                    sys_instr += get_memory_context()
 
                     # Suppress mic while Gemini speaks
                     ear.suppressed = True
@@ -1788,22 +1790,40 @@ def main():
                         )
 
                     if text_response:
-                        console.print()
-                        console.print(
-                            Panel(
-                                Markdown(text_response),
-                                title=f"[bold {CYAN}]D.A.R.V.I.S. (Gemini)[/bold {CYAN}]",
-                                border_style=BLUE,
-                                padding=(1, 2),
+                        # Execute any commands in the Gemini response (same as classic mode)
+                        cmd_results = extract_and_run_commands(text_response)
+                        if cmd_results:
+                            # If commands were executed, get a follow-up from Gemini
+                            context = "\n".join(cmd_results)
+                            with console.status(f"[{BLUE}]Processing results...", spinner="arc"):
+                                follow_up = run_gemini_text_turn(
+                                    api_key=gemini_key,
+                                    text=f"(Report the results of the command you just ran to the user naturally. Be concise.)\n\nResults:\n{context}",
+                                    system_instruction=sys_instr,
+                                )
+                            if follow_up:
+                                text_response = follow_up
+
+                        # Display clean response
+                        display_text = re.sub(r'```command\s*\n.*?\n```', '', text_response, flags=re.DOTALL).strip()
+                        if display_text:
+                            console.print()
+                            console.print(
+                                Panel(
+                                    Markdown(display_text),
+                                    title=f"[bold {CYAN}]D.A.R.V.I.S. (Gemini)[/bold {CYAN}]",
+                                    border_style=BLUE,
+                                    padding=(1, 2),
+                                )
                             )
-                        )
-                        console.print()
+                            console.print()
+
                         # Sync to history
                         try:
                             from history import append_history
                             append_history(
                                 {"role": "user", "content": user_input},
-                                {"role": "assistant", "content": text_response},
+                                {"role": "assistant", "content": display_text or text_response},
                             )
                         except Exception:
                             pass

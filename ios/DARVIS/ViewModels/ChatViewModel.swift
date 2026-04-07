@@ -12,19 +12,20 @@ class ChatViewModel: ObservableObject {
     @Published var cameraActive = false
     @Published var audioMode: String = "classic"
     @Published var useOnDevice = false
+    @Published var statusMessage: String = ""
 
     let audioService = AudioService()
     let cameraService = CameraService()
     let geminiLive = GeminiLiveService()
     let onDeviceLLM = OnDeviceLLM()
 
-    private var audioPlayer: AVAudioPlayer?
-    private var speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
+    // Speech recognition
+    private let speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
-    private var speechAudioEngine = AVAudioEngine()
+    private var speechEngine: AVAudioEngine?
 
-    // Mode cycling: classic → gemini → ondevice → classic
+    // Mode cycling
     var modeLabel: String {
         if useOnDevice { return "ON-DEVICE" }
         if audioMode == "gemini" { return "GEMINI" }
@@ -40,20 +41,15 @@ class ChatViewModel: ObservableObject {
         if audioMode == "gemini" { return .darvisGreen }
         return .darvisCyan
     }
+
     func cycleMode() {
         if audioMode == "classic" && !useOnDevice {
-            // Cloud → Gemini
-            audioMode = "gemini"
-            useOnDevice = false
+            audioMode = "gemini"; useOnDevice = false
             Task { try? await APIClient.shared.updateSettings(AppSettings(model: "", voice_id: "", audio_mode: "gemini")) }
         } else if audioMode == "gemini" && !useOnDevice {
-            // Gemini → On-Device
-            audioMode = "classic"
-            useOnDevice = true
+            audioMode = "classic"; useOnDevice = true
         } else {
-            // On-Device → Cloud
-            audioMode = "classic"
-            useOnDevice = false
+            audioMode = "classic"; useOnDevice = false
             Task { try? await APIClient.shared.updateSettings(AppSettings(model: "", voice_id: "", audio_mode: "classic")) }
         }
     }
@@ -78,12 +74,12 @@ class ChatViewModel: ObservableObject {
         }
         geminiLive.onTurnComplete = { [weak self] in
             Task { @MainActor in
-                self?.orbState = self?.isRecording == true ? .listening : .idle
-                // Save to history
-                if let text = self?.geminiLive.responseText, !text.isEmpty {
-                    self?.responseText = text
+                guard let self = self else { return }
+                self.orbState = self.isRecording ? .listening : .idle
+                if !self.geminiLive.responseText.isEmpty {
+                    self.responseText = self.geminiLive.responseText
                     try? await APIClient.shared.appendHistory(messages: [
-                        ChatMessage(role: "assistant", content: text)
+                        ChatMessage(role: "assistant", content: self.geminiLive.responseText)
                     ])
                 }
             }
@@ -94,17 +90,25 @@ class ChatViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Send Message
+    // MARK: - Permissions
+
+    func requestPermissions() {
+        // Mic
+        AVAudioSession.sharedInstance().requestRecordPermission { _ in }
+        // Speech
+        SFSpeechRecognizer.requestAuthorization { _ in }
+        // Camera requested on first use by CameraService
+    }
+
+    // MARK: - Send
 
     func send() {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         inputText = ""
-
-        // Detect memory intent
         detectAndSaveMemory(text)
 
-        // Camera vision check
+        // Camera vision
         if cameraActive && looksLikeCameraRequest(text) {
             analyzeCamera(prompt: text)
             return
@@ -115,41 +119,32 @@ class ChatViewModel: ObservableObject {
         responseText = ""
 
         Task {
-            // On-device mode
             if useOnDevice {
                 if let response = await onDeviceLLM.generate(prompt: text) {
                     responseText = response
                     messages.append(ChatMessage(role: "assistant", content: response))
-                    orbState = .idle
-                    return
+                    await playTTS(response)
                 }
+                orbState = .idle
+                return
             }
 
-            // Gemini mode — send text via WebSocket
             if audioMode == "gemini" {
-                if !geminiLive.isConnected {
-                    let ok = await geminiLive.connect()
-                    if !ok {
-                        audioMode = "classic" // fallback
-                    }
-                }
+                if !geminiLive.isConnected { _ = await geminiLive.connect() }
                 if geminiLive.isConnected {
                     geminiLive.responseText = ""
                     geminiLive.sendText(text)
-                    try? await APIClient.shared.appendHistory(messages: [
-                        ChatMessage(role: "user", content: text)
-                    ])
+                    try? await APIClient.shared.appendHistory(messages: [ChatMessage(role: "user", content: text)])
                     return
                 }
+                audioMode = "classic"
             }
 
-            // Classic mode
             do {
                 let response = try await APIClient.shared.sendChat(message: text)
                 responseText = response.reply
                 messages.append(ChatMessage(role: "assistant", content: response.reply))
 
-                // Handle actions
                 if let actions = response.actions {
                     for action in actions {
                         if action.action == "open_url", let urlStr = action.url, let url = URL(string: urlStr) {
@@ -165,8 +160,6 @@ class ChatViewModel: ObservableObject {
                     ChatMessage(role: "user", content: text),
                     ChatMessage(role: "assistant", content: response.reply),
                 ])
-
-                // TTS
                 await playTTS(response.reply)
             } catch {
                 responseText = "Error: \(error.localizedDescription)"
@@ -175,29 +168,28 @@ class ChatViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Mic Toggle
+    // MARK: - Voice
 
     func toggleMic() {
         if isRecording {
-            stopListening()
+            stopVoice()
         } else {
-            startListening()
+            startVoice()
         }
     }
 
-    private func startListening() {
+    private func startVoice() {
         isRecording = true
         orbState = .listening
 
         if audioMode == "gemini" {
-            // Gemini mode: stream raw PCM audio to WebSocket
             Task {
                 if !geminiLive.isConnected {
-                    let ok = await geminiLive.connect()
-                    if !ok {
+                    if !(await geminiLive.connect()) {
                         audioMode = "classic"
                         isRecording = false
                         orbState = .idle
+                        statusMessage = "Gemini unavailable — switched to Classic"
                         return
                     }
                 }
@@ -207,53 +199,57 @@ class ChatViewModel: ObservableObject {
                 audioService.startCapture()
             }
         } else {
-            // Classic/On-Device: use iOS Speech Recognition
             startSpeechRecognition()
         }
     }
 
-    private func stopListening() {
+    private func stopVoice() {
         isRecording = false
 
         if audioMode == "gemini" {
             audioService.stopCapture()
         } else {
             stopSpeechRecognition()
+            let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !text.isEmpty {
+                send()
+                return
+            }
         }
-
-        // Send whatever was transcribed
-        let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !text.isEmpty {
-            send()
-        } else {
-            orbState = .idle
-        }
+        orbState = .idle
     }
 
     private func startSpeechRecognition() {
-        SFSpeechRecognizer.requestAuthorization { [weak self] status in
-            guard status == .authorized else {
+        let authStatus = SFSpeechRecognizer.authorizationStatus()
+        guard authStatus == .authorized else {
+            SFSpeechRecognizer.requestAuthorization { [weak self] status in
                 DispatchQueue.main.async {
-                    self?.responseText = "Speech recognition not authorized."
-                    self?.isRecording = false
-                    self?.orbState = .idle
+                    if status == .authorized {
+                        self?.startSpeechRecognition()
+                    } else {
+                        self?.statusMessage = "Speech recognition not authorized"
+                        self?.isRecording = false
+                        self?.orbState = .idle
+                    }
                 }
-                return
             }
-            DispatchQueue.main.async { self?.beginRecognition() }
+            return
         }
-    }
 
-    private func beginRecognition() {
+        // Stop any existing recognition
         recognitionTask?.cancel()
         recognitionTask = nil
 
+        // Fresh audio engine every time
+        speechEngine = AVAudioEngine()
+        guard let engine = speechEngine else { return }
+
         do {
             let audioSession = AVAudioSession.sharedInstance()
-            try audioSession.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker, .allowBluetoothA2DP, .mixWithOthers])
+            try audioSession.setCategory(.record, mode: .measurement, options: .duckOthers)
             try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
         } catch {
-            responseText = "Audio session error: \(error.localizedDescription)"
+            statusMessage = "Audio error: \(error.localizedDescription)"
             isRecording = false
             orbState = .idle
             return
@@ -263,52 +259,47 @@ class ChatViewModel: ObservableObject {
         guard let request = recognitionRequest else { return }
         request.shouldReportPartialResults = true
 
-        // Reset audio engine
-        speechAudioEngine = AVAudioEngine()
-        let inputNode = speechAudioEngine.inputNode
-        let recordingFormat = inputNode.outputFormat(forBus: 0)
-
-        guard recordingFormat.sampleRate > 0 else {
-            responseText = "Microphone not available."
+        let inputNode = engine.inputNode
+        let format = inputNode.outputFormat(forBus: 0)
+        guard format.sampleRate > 0 else {
+            statusMessage = "Microphone not available"
             isRecording = false
             orbState = .idle
             return
         }
 
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
+        inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
             self?.recognitionRequest?.append(buffer)
         }
 
+        engine.prepare()
         do {
-            speechAudioEngine.prepare()
-            try speechAudioEngine.start()
+            try engine.start()
         } catch {
-            responseText = "Audio engine error: \(error.localizedDescription)"
+            statusMessage = "Mic start failed: \(error.localizedDescription)"
             isRecording = false
             orbState = .idle
             return
         }
 
         recognitionTask = speechRecognizer?.recognitionTask(with: request) { [weak self] result, error in
-            guard let self = self else { return }
             if let result = result {
                 DispatchQueue.main.async {
-                    self.inputText = result.bestTranscription.formattedString
+                    self?.inputText = result.bestTranscription.formattedString
                 }
             }
-            if error != nil || (result?.isFinal == true) {
+            if error != nil || result?.isFinal == true {
                 DispatchQueue.main.async {
-                    if self.isRecording {
-                        self.stopListening()
-                    }
+                    if self?.isRecording == true { self?.stopVoice() }
                 }
             }
         }
     }
 
     private func stopSpeechRecognition() {
-        speechAudioEngine.stop()
-        speechAudioEngine.inputNode.removeTap(onBus: 0)
+        speechEngine?.stop()
+        speechEngine?.inputNode.removeTap(onBus: 0)
+        speechEngine = nil
         recognitionRequest?.endAudio()
         recognitionRequest = nil
         recognitionTask?.cancel()
@@ -322,49 +313,50 @@ class ChatViewModel: ObservableObject {
             cameraService.stop()
             cameraActive = false
         } else {
-            // Stop speech recognition if running — can't have both audio taps
+            // Stop speech if running (audio session conflict)
             if isRecording && audioMode != "gemini" {
                 stopSpeechRecognition()
                 isRecording = false
+                orbState = .idle
             }
             cameraService.start()
-            // Wait for camera to actually activate
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                self?.cameraActive = self?.cameraService.isActive ?? false
-            }
+            cameraActive = true
         }
     }
 
     func analyzeCamera(prompt: String) {
-        guard let frame = cameraService.captureFrame() else {
-            responseText = "Camera not ready."
-            return
-        }
         orbState = .thinking
-        responseText = "Analyzing..."
+        responseText = "Looking..."
 
-        Task {
-            if let description = await onDeviceLLM.analyzeImage(base64JPEG: frame, prompt: prompt) {
-                responseText = description
-                messages.append(ChatMessage(role: "assistant", content: description))
-
-                // Speak it
-                if audioMode == "gemini" && geminiLive.isConnected {
-                    geminiLive.sendText("Say this to the user: \(description)")
-                } else {
-                    await playTTS(description)
-                }
-            } else {
-                // Fallback to Ollama vision
-                do {
-                    let desc = try await APIClient.shared.sendVision(imageBase64: frame, prompt: prompt)
-                    responseText = desc
-                    await playTTS(desc)
-                } catch {
-                    responseText = "Vision failed."
-                }
+        // Small delay to ensure camera has a frame
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            guard let self = self else { return }
+            guard let frame = self.cameraService.captureFrame() else {
+                self.responseText = "Camera not ready — try again in a moment."
+                self.orbState = .idle
+                return
             }
-            orbState = .idle
+
+            Task {
+                if let desc = await self.onDeviceLLM.analyzeImage(base64JPEG: frame, prompt: prompt) {
+                    self.responseText = desc
+                    self.messages.append(ChatMessage(role: "assistant", content: desc))
+                    if self.audioMode == "gemini" && self.geminiLive.isConnected {
+                        self.geminiLive.sendText("Say this: \(desc)")
+                    } else {
+                        await self.playTTS(desc)
+                    }
+                } else {
+                    do {
+                        let desc = try await APIClient.shared.sendVision(imageBase64: frame, prompt: prompt)
+                        self.responseText = desc
+                        await self.playTTS(desc)
+                    } catch {
+                        self.responseText = "Vision failed."
+                    }
+                }
+                self.orbState = .idle
+            }
         }
     }
 
@@ -376,20 +368,19 @@ class ChatViewModel: ObservableObject {
             let audioData = try await APIClient.shared.fetchTTS(text: text)
             audioService.playMP3(audioData)
             while audioService.isPlayingMP3 {
-                try await Task.sleep(nanoseconds: 100_000_000)
+                try await Task.sleep(nanoseconds: 200_000_000)
             }
         } catch {}
-        orbState = .idle
+        if orbState == .speaking { orbState = .idle }
     }
 
-    // MARK: - Memory Detection
+    // MARK: - Memory
 
     private func detectAndSaveMemory(_ text: String) {
         let patterns: [(String, NSRegularExpression?)] = [
             ("save", try? NSRegularExpression(pattern: "(?:remember|don'?t forget|save|note|memorize)\\s+(?:that\\s+)?(.+)", options: .caseInsensitive)),
             ("forget", try? NSRegularExpression(pattern: "(?:forget|delete|remove|erase)\\s+(?:the\\s+)?(?:memory\\s+)?(?:about\\s+)?(.+)", options: .caseInsensitive)),
         ]
-
         for (action, regex) in patterns {
             guard let regex = regex else { continue }
             let range = NSRange(text.startIndex..., in: text)
@@ -413,11 +404,11 @@ class ChatViewModel: ObservableObject {
 
     private func looksLikeCameraRequest(_ text: String) -> Bool {
         let lower = text.lowercased()
-        let triggers = ["what do you see", "what can you see", "what's in front", "what is this",
-                        "what's this", "what is that", "describe what", "look at this", "can you see",
-                        "read this", "what does this say", "identify", "what color", "in front of me",
-                        "camera", "looking at", "see this", "see that", "scan"]
-        return triggers.contains(where: { lower.contains($0) })
+        return ["what do you see", "what can you see", "what's in front", "what is this",
+                "what's this", "what is that", "describe what", "look at this", "can you see",
+                "read this", "what does this say", "identify", "what color", "in front of me",
+                "camera", "looking at", "see this", "see that", "scan"
+        ].contains(where: { lower.contains($0) })
     }
 }
 

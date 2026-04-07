@@ -8,131 +8,97 @@ class CameraService: NSObject, ObservableObject {
     @Published var previewImage: UIImage?
 
     private var captureSession: AVCaptureSession?
-    private var lastFrame: UIImage?
+    private var lastFrameData: Data?  // Store JPEG data directly
     private let sessionQueue = DispatchQueue(label: "com.darvis.camera.session")
-    private let ciContext = CIContext()
-    private var frameCount = 0
-    private var output: AVCaptureVideoDataOutput?
+    private var frameSkip = 0
 
     func start() {
         guard !isActive else { return }
 
-        switch AVCaptureDevice.authorizationStatus(for: .video) {
-        case .authorized:
-            sessionQueue.async { self.configureAndStart() }
-        case .notDetermined:
+        let status = AVCaptureDevice.authorizationStatus(for: .video)
+        if status == .notDetermined {
             AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
-                if granted {
-                    self?.sessionQueue.async { self?.configureAndStart() }
-                } else {
-                    DispatchQueue.main.async {
-                        self?.isActive = false
-                    }
-                }
+                if granted { self?.sessionQueue.async { self?.setup() } }
             }
-        default:
-            DispatchQueue.main.async { self.isActive = false }
+        } else if status == .authorized {
+            sessionQueue.async { self.setup() }
         }
     }
 
-    private func configureAndStart() {
+    private func setup() {
         let session = AVCaptureSession()
-
         session.beginConfiguration()
-        session.sessionPreset = .medium  // Safer than hd1280x720 on all devices
+        session.sessionPreset = .medium
 
-        // Get camera
-        guard let camera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back)
-                ?? AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front)
-        else {
-            session.commitConfiguration()
-            return
-        }
-
-        // Add input
-        guard let input = try? AVCaptureDeviceInput(device: camera),
+        guard let cam = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back)
+                ?? AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front),
+              let input = try? AVCaptureDeviceInput(device: cam),
               session.canAddInput(input) else {
             session.commitConfiguration()
             return
         }
         session.addInput(input)
 
-        // Add output
-        let videoOutput = AVCaptureVideoDataOutput()
-        videoOutput.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
-        videoOutput.alwaysDiscardsLateVideoFrames = true
-        videoOutput.setSampleBufferDelegate(self, queue: DispatchQueue(label: "com.darvis.camera.frames"))
+        let output = AVCaptureVideoDataOutput()
+        output.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
+        output.alwaysDiscardsLateVideoFrames = true
+        output.setSampleBufferDelegate(self, queue: DispatchQueue(label: "com.darvis.camera.output", qos: .utility))
 
-        guard session.canAddOutput(videoOutput) else {
+        guard session.canAddOutput(output) else {
             session.commitConfiguration()
             return
         }
-        session.addOutput(videoOutput)
+        session.addOutput(output)
 
-        // Fix orientation
-        if let connection = videoOutput.connection(with: .video) {
+        if let conn = output.connection(with: .video) {
             if #available(iOS 17.0, *) {
-                if connection.isVideoRotationAngleSupported(90) {
-                    connection.videoRotationAngle = 90
-                }
+                if conn.isVideoRotationAngleSupported(90) { conn.videoRotationAngle = 90 }
             } else {
-                if connection.isVideoOrientationSupported {
-                    connection.videoOrientation = .portrait
-                }
+                if conn.isVideoOrientationSupported { conn.videoOrientation = .portrait }
             }
         }
 
         session.commitConfiguration()
-
-        self.captureSession = session
-        self.output = videoOutput
-
-        // Start on session queue
+        captureSession = session
         session.startRunning()
-
-        DispatchQueue.main.async {
-            self.isActive = true
-        }
+        DispatchQueue.main.async { self.isActive = true }
     }
 
     func stop() {
-        let session = captureSession
+        let s = captureSession
         captureSession = nil
-        output = nil
-
-        sessionQueue.async {
-            session?.stopRunning()
-        }
-
+        sessionQueue.async { s?.stopRunning() }
         DispatchQueue.main.async {
             self.isActive = false
-            self.lastFrame = nil
             self.previewImage = nil
+            self.lastFrameData = nil
         }
     }
 
     func captureFrame() -> String? {
-        guard let image = lastFrame else { return nil }
-        guard let jpegData = image.jpegData(compressionQuality: 0.8) else { return nil }
-        return jpegData.base64EncodedString()
+        guard let data = lastFrameData else { return nil }
+        return data.base64EncodedString()
     }
 }
 
 extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+        frameSkip += 1
+
+        // Process every 6th frame (~5fps) to keep things smooth
+        guard frameSkip % 6 == 0 else { return }
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
 
         let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
-        guard let cgImage = ciContext.createCGImage(ciImage, from: ciImage.extent) else { return }
-        let image = UIImage(cgImage: cgImage)
+        let uiImage = UIImage(ciImage: ciImage)
 
-        lastFrame = image
+        // Store as JPEG for capture
+        let jpegData = uiImage.jpegData(compressionQuality: 0.7)
+        lastFrameData = jpegData
 
-        frameCount += 1
-        if frameCount % 5 == 0 {  // ~6fps preview
-            DispatchQueue.main.async { [weak self] in
-                self?.previewImage = image
-            }
+        // Update preview
+        DispatchQueue.main.async { [weak self] in
+            self?.previewImage = uiImage
         }
     }
 }
@@ -141,24 +107,14 @@ struct CameraPreviewView: View {
     @ObservedObject var camera: CameraService
 
     var body: some View {
-        Group {
-            if let image = camera.previewImage {
-                Image(uiImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-            } else if camera.isActive {
-                Color.black
-                    .overlay(
-                        VStack(spacing: 8) {
-                            ProgressView().tint(.darvisCyan)
-                            Text("Starting camera...")
-                                .font(.system(size: 9, design: .monospaced))
-                                .foregroundColor(.darvisDim)
-                        }
-                    )
-            } else {
-                Color.black
-            }
+        if let image = camera.previewImage {
+            Image(uiImage: image)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+        } else {
+            Color.black.overlay(
+                ProgressView().tint(Color(red: 0.29, green: 0.56, blue: 0.85))
+            )
         }
     }
 }

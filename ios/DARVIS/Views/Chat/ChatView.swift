@@ -97,6 +97,25 @@ struct ChatView: View {
                     }
                 }
             }
+
+            // Status message
+            if !vm.statusMessage.isEmpty {
+                VStack {
+                    Text(vm.statusMessage)
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(.darvisOrange)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color.black.opacity(0.8))
+                        .cornerRadius(8)
+                        .padding(.top, 50)
+                    Spacer()
+                }
+                .onAppear {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 3) { vm.statusMessage = "" }
+                }
+            }
         }
+        .onAppear { vm.requestPermissions() }
     }
 }

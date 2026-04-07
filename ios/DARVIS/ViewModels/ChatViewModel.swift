@@ -58,7 +58,10 @@ class ChatViewModel: ObservableObject {
 
     init() {
         setupGeminiCallbacks()
-        Task { await loadSettings() }
+        Task {
+            await loadSettings()
+            await loadBriefing()
+        }
     }
 
     private func loadSettings() async {
@@ -66,6 +69,16 @@ class ChatViewModel: ObservableObject {
             let settings = try await APIClient.shared.getSettings()
             audioMode = settings.audio_mode
             messages = try await APIClient.shared.getHistory()
+        } catch {}
+    }
+
+    private func loadBriefing() async {
+        do {
+            let briefing = try await APIClient.shared.getBriefing()
+            if !briefing.isEmpty {
+                responseText = briefing
+                await playTTS(briefing)
+            }
         } catch {}
     }
 

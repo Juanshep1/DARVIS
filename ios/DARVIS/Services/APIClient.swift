@@ -118,6 +118,14 @@ class APIClient {
         return try JSONDecoder().decode(GeminiTokenResponse.self, from: data)
     }
 
+    // MARK: - Briefing
+    func getBriefing() async throws -> String {
+        let data = try await request("/api/briefing")
+        struct BriefingResponse: Codable { let briefing: String }
+        let resp = try JSONDecoder().decode(BriefingResponse.self, from: data)
+        return resp.briefing
+    }
+
     // MARK: - Agent
     func getAgentStatus() async throws -> AgentStatus {
         let data = try await request("/api/agent/status")

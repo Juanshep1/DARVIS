@@ -1514,6 +1514,33 @@ async function pollAgent() {
 
 loadSettings();
 inputEl.focus();
+
+// JARVIS-style startup briefing
+(async () => {
+    try {
+        const res = await fetch('/api/briefing');
+        const data = await res.json();
+        if (data.briefing) {
+            responseEl.textContent = data.briefing;
+            // Speak it
+            if (audioMode === 'classic') {
+                try {
+                    const ttsRes = await fetch('/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: data.briefing }) });
+                    if (ttsRes.ok) {
+                        const blob = await ttsRes.blob();
+                        if (blob.size > 100) {
+                            const url = URL.createObjectURL(blob);
+                            persistentAudio.src = url;
+                            persistentAudio.onended = () => { orb.className = 'orb'; URL.revokeObjectURL(url); };
+                            orb.className = 'orb speaking';
+                            persistentAudio.play().catch(() => {});
+                        }
+                    }
+                } catch {}
+            }
+        }
+    } catch {}
+})();
 </script>
 </body>
 </html>

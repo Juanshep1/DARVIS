@@ -367,6 +367,71 @@ def banner():
     )
 
 
+def get_situational_briefing() -> str:
+    """Gather system context for JARVIS-style ambient awareness briefing."""
+    import datetime
+    now = datetime.datetime.now()
+    parts = []
+
+    # Time-based greeting
+    hour = now.hour
+    if hour < 6:
+        parts.append("late_night")
+    elif hour < 12:
+        parts.append("morning")
+    elif hour < 17:
+        parts.append("afternoon")
+    elif hour < 21:
+        parts.append("evening")
+    else:
+        parts.append("night")
+
+    parts.append(f"time:{now.strftime('%I:%M %p')}")
+    parts.append(f"date:{now.strftime('%A, %B %d, %Y')}")
+
+    # Battery (macOS)
+    if IS_MAC:
+        try:
+            result = subprocess.run(["pmset", "-g", "batt"], capture_output=True, text=True, timeout=3)
+            for line in result.stdout.split("\n"):
+                if "%" in line:
+                    pct = line.split("%")[0].split()[-1]
+                    charging = "charging" in line.lower()
+                    parts.append(f"battery:{pct}%{'(charging)' if charging else ''}")
+        except Exception:
+            pass
+
+    # Wi-Fi
+    if IS_MAC:
+        try:
+            result = subprocess.run(["networksetup", "-getairportnetwork", "en0"], capture_output=True, text=True, timeout=3)
+            if ":" in result.stdout:
+                network = result.stdout.split(":", 1)[1].strip()
+                parts.append(f"wifi:{network}")
+        except Exception:
+            pass
+
+    # Weather (quick, non-blocking)
+    try:
+        req = urllib.request.Request("https://wttr.in/?format=3", headers={"User-Agent": "curl"})
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            weather = resp.read().decode().strip()
+            parts.append(f"weather:{weather}")
+    except Exception:
+        pass
+
+    # Memory count
+    try:
+        from memory import load_memory
+        mems = load_memory()
+        if mems:
+            parts.append(f"memories:{len(mems)}")
+    except Exception:
+        pass
+
+    return "|".join(parts)
+
+
 # ── Settings Persistence ─────────────────────────────────────────────────────
 
 def load_settings() -> dict:
@@ -1490,6 +1555,40 @@ def main():
             border_style=CYAN,
         )
     )
+
+    # ── JARVIS-style Startup Briefing ──
+    def _startup_briefing():
+        try:
+            briefing_data = get_situational_briefing()
+            briefing_prompt = f"""Give a brief JARVIS-style startup greeting based on this context: {briefing_data}
+
+Be like JARVIS from Iron Man — concise, witty, and informative. Include:
+- Time-appropriate greeting ("Good morning, sir" / "Good evening, sir")
+- One weather note if available
+- Battery warning if below 30%
+- Any interesting observation
+
+Keep it to 2-3 sentences max. Be natural, not robotic."""
+
+            greeting = brain.think(briefing_prompt)
+            # Clean command blocks
+            greeting = re.sub(r'```command\s*\n.*?\n```', '', greeting, flags=re.DOTALL).strip()
+            if greeting:
+                console.print(
+                    Panel(
+                        greeting,
+                        title=f"[bold {CYAN}]D.A.R.V.I.S.[/bold {CYAN}]",
+                        border_style=BLUE,
+                        padding=(1, 2),
+                    )
+                )
+                tts.speak(greeting)
+                tts.wait_for_speech()
+        except Exception:
+            pass
+
+    briefing_thread = threading.Thread(target=_startup_briefing, daemon=True)
+    briefing_thread.start()
 
     # Background agent goal polling — picks up browse tasks from the browser app
     def _poll_agent_goals():

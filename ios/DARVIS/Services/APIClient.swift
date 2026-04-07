@@ -28,31 +28,42 @@ struct HistoryResponse: Codable {
 class APIClient {
     static let shared = APIClient()
     private let baseURL = "https://darvis1.netlify.app"
+    private let session: URLSession
+
+    private init() {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 30
+        config.timeoutIntervalForResource = 60
+        config.waitsForConnectivity = true
+        session = URLSession(configuration: config)
+    }
 
     private func request(_ path: String, method: String = "GET", body: Data? = nil) async throws -> Data {
-        var req = URLRequest(url: URL(string: "\(baseURL)\(path)")!)
+        guard let url = URL(string: "\(baseURL)\(path)") else {
+            throw URLError(.badURL)
+        }
+        var req = URLRequest(url: url)
         req.httpMethod = method
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = body
-        req.timeoutInterval = 60
-        let (data, _) = try await URLSession.shared.data(for: req)
+        let (data, response) = try await session.data(for: req)
+        if let http = response as? HTTPURLResponse, http.statusCode >= 400 {
+            throw URLError(.badServerResponse)
+        }
         return data
     }
 
-    // MARK: - Chat
     func sendChat(message: String) async throws -> ChatResponse {
         let body = try JSONEncoder().encode(["message": message])
         let data = try await request("/api/chat", method: "POST", body: body)
         return try JSONDecoder().decode(ChatResponse.self, from: data)
     }
 
-    // MARK: - TTS
     func fetchTTS(text: String) async throws -> Data {
         let body = try JSONEncoder().encode(["text": text])
         return try await request("/api/tts", method: "POST", body: body)
     }
 
-    // MARK: - Vision
     func sendVision(imageBase64: String, prompt: String? = nil) async throws -> String {
         var dict: [String: String] = ["image": imageBase64]
         if let p = prompt { dict["prompt"] = p }
@@ -62,7 +73,6 @@ class APIClient {
         return resp.description
     }
 
-    // MARK: - Memory
     func getMemories() async throws -> [Memory] {
         let data = try await request("/api/memory")
         return try JSONDecoder().decode(MemoryResponse.self, from: data).memories
@@ -79,7 +89,6 @@ class APIClient {
         _ = try await request("/api/memory", method: "DELETE", body: body)
     }
 
-    // MARK: - History
     func getHistory() async throws -> [ChatMessage] {
         let data = try await request("/api/history")
         return try JSONDecoder().decode(HistoryResponse.self, from: data).messages
@@ -90,7 +99,6 @@ class APIClient {
         _ = try await request("/api/history", method: "POST", body: body)
     }
 
-    // MARK: - Settings
     func getSettings() async throws -> AppSettings {
         let data = try await request("/api/settings")
         return try JSONDecoder().decode(AppSettings.self, from: data)
@@ -101,7 +109,6 @@ class APIClient {
         _ = try await request("/api/settings", method: "POST", body: body)
     }
 
-    // MARK: - Models & Voices
     func getModels() async throws -> ModelsResponse {
         let data = try await request("/api/models")
         return try JSONDecoder().decode(ModelsResponse.self, from: data)
@@ -112,21 +119,11 @@ class APIClient {
         return try JSONDecoder().decode(VoicesResponse.self, from: data)
     }
 
-    // MARK: - Gemini Token
     func getGeminiToken() async throws -> GeminiTokenResponse {
         let data = try await request("/api/gemini-token")
         return try JSONDecoder().decode(GeminiTokenResponse.self, from: data)
     }
 
-    // MARK: - Briefing
-    func getBriefing() async throws -> String {
-        let data = try await request("/api/briefing")
-        struct BriefingResponse: Codable { let briefing: String }
-        let resp = try JSONDecoder().decode(BriefingResponse.self, from: data)
-        return resp.briefing
-    }
-
-    // MARK: - Agent
     func getAgentStatus() async throws -> AgentStatus {
         let data = try await request("/api/agent/status")
         return try JSONDecoder().decode(AgentStatus.self, from: data)
@@ -134,5 +131,11 @@ class APIClient {
 
     func getAgentScreenshot() async throws -> Data {
         return try await request("/api/agent/screenshot")
+    }
+
+    func getBriefing() async throws -> String {
+        let data = try await request("/api/briefing")
+        struct R: Codable { let briefing: String }
+        return try JSONDecoder().decode(R.self, from: data).briefing
     }
 }

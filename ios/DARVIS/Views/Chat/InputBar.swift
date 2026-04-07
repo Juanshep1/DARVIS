@@ -19,7 +19,10 @@ struct InputBar: View {
                 .overlay(RoundedRectangle(cornerRadius: 25).stroke(Color.darvisCyan.opacity(0.3), lineWidth: 1))
                 .foregroundColor(.darvisText)
                 .font(.system(.body, design: .monospaced))
-                .onSubmit { onSend() }
+                .onSubmit {
+                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                    onSend()
+                }
 
             // Mic button
             Button(action: onMicToggle) {

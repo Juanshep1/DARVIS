@@ -1515,14 +1515,16 @@ async function pollAgent() {
 loadSettings();
 inputEl.focus();
 
-// JARVIS-style startup briefing
+// JARVIS-style proactive startup
 (async () => {
     try {
         const res = await fetch('/api/briefing');
         const data = await res.json();
         if (data.briefing) {
             responseEl.textContent = data.briefing;
-            // Speak it
+            statusBar.textContent = data.weather ? `${data.weather}` : statusBar.textContent;
+
+            // Speak the briefing
             if (audioMode === 'classic') {
                 try {
                     const ttsRes = await fetch('/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: data.briefing }) });

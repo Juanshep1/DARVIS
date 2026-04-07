@@ -367,69 +367,97 @@ def banner():
     )
 
 
-def get_situational_briefing() -> str:
-    """Gather system context for JARVIS-style ambient awareness briefing."""
+def run_startup_actions() -> dict:
+    """Gather context AND take proactive actions like a real assistant."""
     import datetime
     now = datetime.datetime.now()
-    parts = []
+    ctx = {"time": now.strftime("%I:%M %p"), "date": now.strftime("%A, %B %d, %Y")}
 
-    # Time-based greeting
     hour = now.hour
-    if hour < 6:
-        parts.append("late_night")
-    elif hour < 12:
-        parts.append("morning")
-    elif hour < 17:
-        parts.append("afternoon")
-    elif hour < 21:
-        parts.append("evening")
-    else:
-        parts.append("night")
+    ctx["period"] = "late night" if hour < 6 else "morning" if hour < 12 else "afternoon" if hour < 17 else "evening" if hour < 21 else "night"
 
-    parts.append(f"time:{now.strftime('%I:%M %p')}")
-    parts.append(f"date:{now.strftime('%A, %B %d, %Y')}")
-
-    # Battery (macOS)
+    # Battery
     if IS_MAC:
         try:
-            result = subprocess.run(["pmset", "-g", "batt"], capture_output=True, text=True, timeout=3)
-            for line in result.stdout.split("\n"):
+            r = subprocess.run(["pmset", "-g", "batt"], capture_output=True, text=True, timeout=3)
+            for line in r.stdout.split("\n"):
                 if "%" in line:
-                    pct = line.split("%")[0].split()[-1]
-                    charging = "charging" in line.lower()
-                    parts.append(f"battery:{pct}%{'(charging)' if charging else ''}")
+                    ctx["battery"] = line.split("%")[0].split()[-1] + "%"
+                    ctx["charging"] = "charging" in line.lower()
         except Exception:
             pass
 
-    # Wi-Fi
-    if IS_MAC:
-        try:
-            result = subprocess.run(["networksetup", "-getairportnetwork", "en0"], capture_output=True, text=True, timeout=3)
-            if ":" in result.stdout:
-                network = result.stdout.split(":", 1)[1].strip()
-                parts.append(f"wifi:{network}")
-        except Exception:
-            pass
-
-    # Weather (quick, non-blocking)
+    # Weather (detailed)
+    weather_text = ""
     try:
-        req = urllib.request.Request("https://wttr.in/?format=3", headers={"User-Agent": "curl"})
-        with urllib.request.urlopen(req, timeout=3) as resp:
-            weather = resp.read().decode().strip()
-            parts.append(f"weather:{weather}")
+        req = urllib.request.Request("https://wttr.in/?format=%C+%t+%h+%w", headers={"User-Agent": "curl"})
+        with urllib.request.urlopen(req, timeout=4) as resp:
+            weather_text = resp.read().decode().strip()
+            ctx["weather"] = weather_text
+    except Exception:
+        ctx["weather"] = "unavailable"
+
+    # Top headlines
+    headlines = ""
+    try:
+        req = urllib.request.Request(
+            "https://html.duckduckgo.com/html/?q=top+news+today",
+            headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"},
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            html = resp.read().decode("utf-8", errors="replace")
+        links = re.findall(r'<a[^>]*class="result__a"[^>]*>(.*?)</a>', html, re.DOTALL)
+        top = [re.sub(r'<[^>]+>', '', l).strip() for l in links[:5]]
+        headlines = "\n".join(f"  {i+1}. {h}" for i, h in enumerate(top) if h)
+        ctx["headlines"] = headlines
     except Exception:
         pass
 
-    # Memory count
+    # Memories
     try:
         from memory import load_memory
         mems = load_memory()
-        if mems:
-            parts.append(f"memories:{len(mems)}")
+        ctx["memory_count"] = len(mems)
+        reminders = [m for m in mems if m.get("category") == "reminder"]
+        if reminders:
+            ctx["reminders"] = [m["content"] for m in reminders]
     except Exception:
         pass
 
-    return "|".join(parts)
+    # ── PROACTIVE ACTIONS ──
+
+    # 1. Write daily briefing file to Desktop
+    try:
+        desktop = Path.home() / "Desktop"
+        briefing_file = desktop / f"DARVIS_Briefing_{now.strftime('%Y-%m-%d')}.txt"
+        content = f"""D.A.R.V.I.S. Daily Briefing
+{'=' * 40}
+Date: {ctx['date']}
+Time: {ctx['time']}
+Weather: {ctx.get('weather', 'N/A')}
+
+Top Headlines:
+{headlines or '  (unavailable)'}
+
+Battery: {ctx.get('battery', 'N/A')} {'(charging)' if ctx.get('charging') else ''}
+"""
+        if ctx.get("reminders"):
+            content += f"\nReminders:\n" + "\n".join(f"  - {r}" for r in ctx["reminders"]) + "\n"
+
+        briefing_file.write_text(content)
+        ctx["briefing_file"] = str(briefing_file)
+    except Exception:
+        pass
+
+    # 2. Open news in Safari (macOS only)
+    if IS_MAC:
+        try:
+            _open_url_in_browser("https://news.google.com")
+            ctx["opened_news"] = True
+        except Exception:
+            pass
+
+    return ctx
 
 
 # ── Settings Persistence ─────────────────────────────────────────────────────
@@ -1556,36 +1584,67 @@ def main():
         )
     )
 
-    # ── JARVIS-style Startup Briefing ──
+    # ── JARVIS-style Proactive Startup ──
     def _startup_briefing():
         try:
-            briefing_data = get_situational_briefing()
-            briefing_prompt = f"""Give a brief JARVIS-style startup greeting based on this context: {briefing_data}
+            ctx = run_startup_actions()
 
-Be like JARVIS from Iron Man — concise, witty, and informative. Include:
-- Time-appropriate greeting ("Good morning, sir" / "Good evening, sir")
-- One weather note if available
-- Battery warning if below 30%
-- Any interesting observation
+            # Show what we did
+            console.print()
+            actions_taken = []
+            if ctx.get("briefing_file"):
+                actions_taken.append(f"[green]✓[/green] Briefing saved to Desktop")
+            if ctx.get("opened_news"):
+                actions_taken.append(f"[green]✓[/green] Google News opened in Safari")
+            if ctx.get("headlines"):
+                actions_taken.append(f"[green]✓[/green] Top 5 headlines loaded")
 
-Keep it to 2-3 sentences max. Be natural, not robotic."""
+            if actions_taken:
+                console.print(
+                    Panel(
+                        "\n".join(actions_taken),
+                        title=f"[bold {BLUE}]Startup Actions[/bold {BLUE}]",
+                        border_style=DIM,
+                        padding=(0, 2),
+                    )
+                )
+
+            # Ask Brain for a natural briefing based on what we gathered
+            briefing_prompt = f"""You just started up. Here's what's happening:
+- Time: {ctx.get('time', '?')} ({ctx.get('period', '?')}) on {ctx.get('date', '?')}
+- Weather: {ctx.get('weather', 'unavailable')}
+- Battery: {ctx.get('battery', 'unknown')} {'(charging)' if ctx.get('charging') else ''}
+- Top headlines: {ctx.get('headlines', 'none')}
+- I saved a briefing file to the Desktop and opened Google News in Safari.
+{f"- User has {ctx.get('memory_count', 0)} saved memories" if ctx.get('memory_count') else ""}
+{f"- Reminders: {', '.join(ctx.get('reminders', []))}" if ctx.get('reminders') else ""}
+
+Give a JARVIS-style spoken briefing. Cover:
+1. Greeting appropriate to the time
+2. Weather in one phrase
+3. Mention 1-2 interesting headlines
+4. Note battery if low
+5. Mention any reminders
+6. Say you've opened the news and saved the briefing to Desktop
+
+Keep it to 3-4 sentences. Be witty, British, and concise. Do NOT include command blocks."""
 
             greeting = brain.think(briefing_prompt)
-            # Clean command blocks
             greeting = re.sub(r'```command\s*\n.*?\n```', '', greeting, flags=re.DOTALL).strip()
             if greeting:
                 console.print(
                     Panel(
-                        greeting,
+                        Markdown(greeting),
                         title=f"[bold {CYAN}]D.A.R.V.I.S.[/bold {CYAN}]",
                         border_style=BLUE,
                         padding=(1, 2),
                     )
                 )
+                console.print()
                 tts.speak(greeting)
                 tts.wait_for_speech()
-        except Exception:
-            pass
+        except Exception as e:
+            console.print(f"  [dim]Briefing skipped: {e}[/dim]")
 
     briefing_thread = threading.Thread(target=_startup_briefing, daemon=True)
     briefing_thread.start()

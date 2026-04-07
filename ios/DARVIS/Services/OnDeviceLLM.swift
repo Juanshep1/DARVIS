@@ -172,10 +172,18 @@ class OnDeviceLLM: ObservableObject {
     @Published var useLocalModel = false
 
     let downloadManager = ModelDownloadManager.shared
-    private let apiKey = "AIzaSyAlEAA4rBjH0wHFfia2p6g0rCjKR-7JFvw"
+    private var apiKey: String?
 
     init() {
         downloadManager.setup()
+        Task { await fetchKey() }
+    }
+
+    private func fetchKey() async {
+        do {
+            let token = try await APIClient.shared.getGeminiToken()
+            apiKey = token.token
+        } catch {}
     }
 
     var hasLocalModel: Bool {
@@ -187,7 +195,8 @@ class OnDeviceLLM: ObservableObject {
     }
 
     private func generateViaAPI(prompt: String, maxTokens: Int = 200) async -> String? {
-        let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=\(apiKey)")!
+        guard let key = apiKey else { await fetchKey(); guard let key = apiKey else { return nil }; return await generateViaAPI(prompt: prompt, maxTokens: maxTokens) }
+        let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=\(key)")!
 
         let body: [String: Any] = [
             "contents": [["parts": [["text": prompt]]]],
@@ -215,7 +224,8 @@ class OnDeviceLLM: ObservableObject {
     }
 
     func analyzeImage(base64JPEG: String, prompt: String) async -> String? {
-        let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=\(apiKey)")!
+        guard let key = apiKey else { await fetchKey(); return await analyzeImage(base64JPEG: base64JPEG, prompt: prompt) }
+        let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=\(key)")!
 
         let body: [String: Any] = [
             "contents": [["parts": [

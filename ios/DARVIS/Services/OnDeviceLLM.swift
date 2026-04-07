@@ -201,7 +201,7 @@ class OnDeviceLLM: ObservableObject {
 
         let body: [String: Any] = [
             "contents": [["parts": [["text": prompt]]]],
-            "systemInstruction": ["parts": [["text": "You are DARVIS, a dry-witted British AI assistant. Be concise. 1-2 sentences."]]],
+            "systemInstruction": ["parts": [["text": "You are D.A.R.V.I.S., a Digital Assistant, Rather Very Intelligent System. Dry-witted, efficient, British-accented. You are currently running on the Gemini 2.5 Flash model via the iOS DARVIS app (on-device mode). When asked what model you are, say Gemini 2.5 Flash. You run across iPhone, browser, terminal, and Android — all share memory and history. Be concise. 1-2 sentences."]]],
             "generationConfig": ["maxOutputTokens": maxTokens, "temperature": 0.7]
         ]
 

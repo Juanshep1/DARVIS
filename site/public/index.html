@@ -497,9 +497,11 @@ British-accented speech patterns. Concise and direct, but with personality.
 Addresses the user as "sir" or "ma'am" naturally. Shows quiet competence.
 Keep responses concise (1-3 sentences unless more detail is needed).
 
+You are running on the Gemini 2.5 Flash Native Audio model in Gemini Live mode via the browser at darvis1.netlify.app. When asked what model you are, say Gemini 2.5 Flash Native Audio. You run across iPhone, browser, terminal, and Android — all share memory and history.
+
 You may receive camera images from the user's device. When you see images, describe what you see accurately.
 
-When the user asks you to remember something, confirm naturally ("Noted, sir" or "I'll remember that"). The memory system saves it automatically — you don't need to do anything special.
+When the user asks you to remember something, confirm naturally ("Noted, sir" or "I'll remember that"). The memory system saves it automatically.
 When asked what you remember, refer to the user memories listed below.${memoryCtx}`
                             }]
                         }
@@ -581,13 +583,30 @@ When asked what you remember, refer to the user memories listed below.${memoryCt
                     settled = true;
                     reject(new Error(`Closed: ${ev.code} ${ev.reason}`));
                 } else if (audioMode === 'gemini' && isRecording) {
-                    // Session dropped while active — show reconnect message
-                    statusBar.textContent = 'GEMINI DISCONNECTED — TAP MIC TO RECONNECT';
-                    isRecording = false;
-                    micBtn.classList.remove('recording');
+                    // Session dropped while active — auto-reconnect
                     stopGeminiMic();
                     stopGeminiPlayback();
-                    orb.className = 'orb';
+                    statusBar.textContent = 'GEMINI RECONNECTING...';
+                    orb.className = 'orb thinking';
+                    setTimeout(async () => {
+                        try {
+                            const ok = await geminiConnect();
+                            if (ok) {
+                                statusBar.textContent = 'GEMINI LIVE — SPEAK NATURALLY';
+                                orb.className = 'orb listening';
+                                await startGeminiMic();
+                            } else {
+                                statusBar.textContent = 'GEMINI FAILED — TAP MIC TO RETRY';
+                                isRecording = false;
+                                micBtn.classList.remove('recording');
+                                orb.className = 'orb';
+                            }
+                        } catch {
+                            isRecording = false;
+                            micBtn.classList.remove('recording');
+                            orb.className = 'orb';
+                        }
+                    }, 1000);
                 }
             };
 

@@ -124,6 +124,8 @@ class ChatViewModel: ObservableObject {
                     responseText = response
                     messages.append(ChatMessage(role: "assistant", content: response))
                     await playTTS(response)
+                } else {
+                    responseText = "No response — check your connection, sir."
                 }
                 orbState = .idle
                 return

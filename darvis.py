@@ -1766,88 +1766,72 @@ def main():
                 )
                 continue
 
-            # ── Gemini Mode: speech-to-speech via Gemini Live API ──
+            # ── Gemini Mode: Use Ollama Brain for commands, Gemini for voice ──
+            # Gemini native audio can't reliably output command blocks,
+            # so we use Ollama for thinking + commands and Gemini just for TTS.
             if audio_mode == "gemini" and gemini_available:
+                # Suppress mic while processing
+                ear.suppressed = True
+                was_listening = listening_active
+                if was_listening:
+                    listening_active = False
+
                 try:
-                    from gemini_live import run_gemini_text_turn
-                    from memory import get_memory_context
+                    # Use Ollama Brain for thinking (reliable command output)
+                    with console.status(f"[{BLUE}]Thinking (Gemini mode)...", spinner="arc"):
+                        response = brain.think(user_input)
 
-                    sys_instr = SYSTEM_PROMPT.replace("HOME_DIR", HOME_DIR)
-                    sys_instr += f"\n\nYou are currently running the Gemini 2.5 Flash Native Audio model in Gemini mode on the terminal. When asked what model you use, say Gemini 2.5 Flash Native Audio. You run across iPhone, browser, terminal, and Android — all share memory and history."
-                    sys_instr += get_memory_context()
-
-                    # Suppress mic while Gemini speaks
-                    ear.suppressed = True
-                    was_listening = listening_active
-                    if was_listening:
-                        listening_active = False
-
-                    with console.status(f"[{BLUE}]Gemini thinking...", spinner="arc"):
-                        text_response = run_gemini_text_turn(
-                            api_key=gemini_key,
-                            text=user_input,
-                            system_instruction=sys_instr,
-                        )
-
-                    if text_response:
-                        # Execute any commands in the Gemini response (same as classic mode)
-                        cmd_results = extract_and_run_commands(text_response)
-                        if cmd_results:
-                            # If commands were executed, get a follow-up from Gemini
-                            context = "\n".join(cmd_results)
-                            with console.status(f"[{BLUE}]Processing results...", spinner="arc"):
-                                follow_up = run_gemini_text_turn(
-                                    api_key=gemini_key,
-                                    text=f"(Report the results of the command you just ran to the user naturally. Be concise.)\n\nResults:\n{context}",
-                                    system_instruction=sys_instr,
-                                )
-                            if follow_up:
-                                text_response = follow_up
-
-                        # Display clean response
-                        display_text = re.sub(r'```command\s*\n.*?\n```', '', text_response, flags=re.DOTALL).strip()
-                        if display_text:
-                            console.print()
-                            console.print(
-                                Panel(
-                                    Markdown(display_text),
-                                    title=f"[bold {CYAN}]D.A.R.V.I.S. (Gemini)[/bold {CYAN}]",
-                                    border_style=BLUE,
-                                    padding=(1, 2),
-                                )
+                    # Execute commands from Ollama response
+                    cmd_results = extract_and_run_commands(response)
+                    if cmd_results:
+                        context = "\n".join(cmd_results)
+                        with console.status(f"[{BLUE}]Processing results...", spinner="arc"):
+                            response = brain.think(
+                                "(Report the results of the command you just ran to the user naturally. Be concise.)",
+                                context=context,
                             )
-                            console.print()
 
-                        # Sync to history
+                    # Display clean response
+                    display_text = re.sub(r'```command\s*\n.*?\n```', '', response, flags=re.DOTALL).strip()
+                    if display_text:
+                        console.print()
+                        console.print(
+                            Panel(
+                                Markdown(display_text),
+                                title=f"[bold {CYAN}]D.A.R.V.I.S. (Gemini)[/bold {CYAN}]",
+                                border_style=BLUE,
+                                padding=(1, 2),
+                            )
+                        )
+                        console.print()
+
+                        # Use Gemini for TTS (native audio voice)
                         try:
-                            from history import append_history
-                            append_history(
-                                {"role": "user", "content": user_input},
-                                {"role": "assistant", "content": display_text or text_response},
+                            from gemini_live import run_gemini_text_turn
+                            run_gemini_text_turn(
+                                api_key=gemini_key,
+                                text=f"Say this exactly to the user (don't add anything): {display_text}",
+                                system_instruction="You are DARVIS. Just speak the text given to you naturally in a British accent. Don't add commentary.",
                             )
                         except Exception:
-                            pass
-                    else:
-                        # Gemini failed — fall back to classic for this turn
-                        console.print(f"  [yellow]Gemini failed — using classic mode[/yellow]")
-                        audio_mode = "classic"
+                            # Fallback to ElevenLabs if Gemini TTS fails
+                            tts.speak(display_text)
+                            tts.wait_for_speech()
 
-                    import time
-                    time.sleep(1)
-                    try:
-                        while not speech_queue.empty():
-                            speech_queue.get_nowait()
-                    except queue.Empty:
-                        pass
-                    ear.suppressed = False
-                    if was_listening:
-                        listening_active = True
-
-                    if audio_mode == "gemini":
-                        continue
                 except Exception as e:
-                    console.print(f"  [yellow]Gemini error: {e} — falling back to classic[/yellow]")
-                    audio_mode = "classic"
+                    console.print(f"  [yellow]Gemini mode error: {e}[/yellow]")
+
+                import time
+                time.sleep(1)
+                try:
+                    while not speech_queue.empty():
+                        speech_queue.get_nowait()
+                except queue.Empty:
+                    pass
+                ear.suppressed = False
+                if was_listening:
+                    listening_active = True
+                continue
 
             # ── Classic Mode: Thinking Phase ──
             with console.status(f"[{BLUE}]Thinking...", spinner="arc"):

@@ -5,116 +5,117 @@ import SwiftUI
 
 class CameraService: NSObject, ObservableObject {
     @Published var isActive = false
-    @Published var previewImage: UIImage?
 
-    private var captureSession: AVCaptureSession?
-    private var lastFrameData: Data?  // Store JPEG data directly
-    private let sessionQueue = DispatchQueue(label: "com.darvis.camera.session")
-    private var frameSkip = 0
+    let captureSession = AVCaptureSession()
+    private let sessionQueue = DispatchQueue(label: "com.darvis.camera")
+    private var photoOutput = AVCapturePhotoOutput()
+    private var lastImage: UIImage?
 
     func start() {
         guard !isActive else { return }
 
         let status = AVCaptureDevice.authorizationStatus(for: .video)
-        if status == .notDetermined {
-            AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
-                if granted { self?.sessionQueue.async { self?.setup() } }
+        switch status {
+        case .authorized:
+            sessionQueue.async { self.configure() }
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .video) { granted in
+                if granted { self.sessionQueue.async { self.configure() } }
             }
-        } else if status == .authorized {
-            sessionQueue.async { self.setup() }
+        default:
+            break
         }
     }
 
-    private func setup() {
-        let session = AVCaptureSession()
-        session.beginConfiguration()
-        session.sessionPreset = .medium
+    private func configure() {
+        captureSession.beginConfiguration()
+        captureSession.sessionPreset = .photo
 
+        // Input
         guard let cam = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back)
                 ?? AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front),
               let input = try? AVCaptureDeviceInput(device: cam),
-              session.canAddInput(input) else {
-            session.commitConfiguration()
+              captureSession.canAddInput(input) else {
+            captureSession.commitConfiguration()
             return
         }
-        session.addInput(input)
+        captureSession.addInput(input)
 
-        let output = AVCaptureVideoDataOutput()
-        output.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
-        output.alwaysDiscardsLateVideoFrames = true
-        output.setSampleBufferDelegate(self, queue: DispatchQueue(label: "com.darvis.camera.output", qos: .utility))
-
-        guard session.canAddOutput(output) else {
-            session.commitConfiguration()
-            return
+        // Photo output for frame capture
+        if captureSession.canAddOutput(photoOutput) {
+            captureSession.addOutput(photoOutput)
         }
-        session.addOutput(output)
 
-        if let conn = output.connection(with: .video) {
-            if #available(iOS 17.0, *) {
-                if conn.isVideoRotationAngleSupported(90) { conn.videoRotationAngle = 90 }
-            } else {
-                if conn.isVideoOrientationSupported { conn.videoOrientation = .portrait }
+        // Video output for frame grab
+        let videoOutput = AVCaptureVideoDataOutput()
+        videoOutput.alwaysDiscardsLateVideoFrames = true
+        videoOutput.setSampleBufferDelegate(self, queue: DispatchQueue(label: "com.darvis.camera.frames", qos: .utility))
+        if captureSession.canAddOutput(videoOutput) {
+            captureSession.addOutput(videoOutput)
+            if let conn = videoOutput.connection(with: .video) {
+                if #available(iOS 17.0, *) {
+                    if conn.isVideoRotationAngleSupported(90) { conn.videoRotationAngle = 90 }
+                } else {
+                    if conn.isVideoOrientationSupported { conn.videoOrientation = .portrait }
+                }
             }
         }
 
-        session.commitConfiguration()
-        captureSession = session
-        session.startRunning()
+        captureSession.commitConfiguration()
+        captureSession.startRunning()
+
         DispatchQueue.main.async { self.isActive = true }
     }
 
     func stop() {
-        let s = captureSession
-        captureSession = nil
-        sessionQueue.async { s?.stopRunning() }
+        sessionQueue.async {
+            self.captureSession.stopRunning()
+            // Remove all inputs/outputs so it can be reconfigured
+            for input in self.captureSession.inputs { self.captureSession.removeInput(input) }
+            for output in self.captureSession.outputs { self.captureSession.removeOutput(output) }
+        }
         DispatchQueue.main.async {
             self.isActive = false
-            self.previewImage = nil
-            self.lastFrameData = nil
+            self.lastImage = nil
         }
     }
 
+    /// Capture current frame as base64 JPEG for vision API
     func captureFrame() -> String? {
-        guard let data = lastFrameData else { return nil }
+        guard let image = lastImage else { return nil }
+        guard let data = image.jpegData(compressionQuality: 0.8) else { return nil }
         return data.base64EncodedString()
     }
 }
 
 extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
-        frameSkip += 1
-
-        // Process every 6th frame (~5fps) to keep things smooth
-        guard frameSkip % 6 == 0 else { return }
+        // Only grab every ~10th frame for the capture buffer (not for preview — preview layer handles that)
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
-
         let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
-        let uiImage = UIImage(ciImage: ciImage)
-
-        // Store as JPEG for capture
-        let jpegData = uiImage.jpegData(compressionQuality: 0.7)
-        lastFrameData = jpegData
-
-        // Update preview
-        DispatchQueue.main.async { [weak self] in
-            self?.previewImage = uiImage
-        }
+        lastImage = UIImage(ciImage: ciImage)
     }
 }
 
-struct CameraPreviewView: View {
-    @ObservedObject var camera: CameraService
+// MARK: - Live Preview using AVCaptureVideoPreviewLayer (Apple's recommended way)
 
-    var body: some View {
-        if let image = camera.previewImage {
-            Image(uiImage: image)
-                .resizable()
-                .aspectRatio(contentMode: .fill)
-        } else {
-            Color.black.overlay(
-                ProgressView().tint(Color(red: 0.29, green: 0.56, blue: 0.85))
-            )
-        }
+struct CameraPreviewView: UIViewRepresentable {
+    let session: AVCaptureSession
+
+    func makeUIView(context: Context) -> CameraUIView {
+        let view = CameraUIView()
+        view.previewLayer.session = session
+        view.previewLayer.videoGravity = .resizeAspectFill
+        view.backgroundColor = .black
+        return view
     }
+
+    func updateUIView(_ uiView: CameraUIView, context: Context) {
+        uiView.previewLayer.session = session
+    }
+}
+
+class CameraUIView: UIView {
+    override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
+    var previewLayer: AVCaptureVideoPreviewLayer { layer as! AVCaptureVideoPreviewLayer }
 }

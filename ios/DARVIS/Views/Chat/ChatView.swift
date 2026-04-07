@@ -69,31 +69,30 @@ struct ChatView: View {
                 )
             }
 
-            // Camera preview (bottom-right corner — large and visible)
+            // Camera preview — native AVCaptureVideoPreviewLayer (no lag)
             if vm.cameraActive {
                 VStack {
                     Spacer()
                     HStack {
                         Spacer()
                         ZStack(alignment: .topLeading) {
-                            CameraPreviewView(camera: vm.cameraService)
-                                .frame(width: 200, height: 150)
+                            CameraPreviewView(session: vm.cameraService.captureSession)
+                                .frame(width: 200, height: 260)
                                 .clipShape(RoundedRectangle(cornerRadius: 14))
                                 .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.darvisGreen.opacity(0.5), lineWidth: 2))
                                 .shadow(color: .darvisGreen.opacity(0.2), radius: 15)
 
-                            // Camera label
-                            Text("CAMERA")
-                                .font(.system(size: 7, weight: .bold, design: .monospaced))
+                            Text("LIVE")
+                                .font(.system(size: 8, weight: .bold, design: .monospaced))
                                 .foregroundColor(.darvisGreen)
                                 .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
+                                .padding(.vertical, 3)
                                 .background(Color.black.opacity(0.7))
                                 .cornerRadius(4)
                                 .padding(6)
                         }
-                        .padding(.trailing, 16)
-                        .padding(.bottom, 90)
+                        .padding(.trailing, 12)
+                        .padding(.bottom, 85)
                     }
                 }
             }

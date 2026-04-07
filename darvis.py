@@ -1173,6 +1173,7 @@ class Brain:
 
         from memory import get_memory_context
         prompt = SYSTEM_PROMPT.replace("HOME_DIR", HOME_DIR)
+        prompt += f"\n\nYou are currently running the {self.model} model on the terminal (macOS). When asked what model you use, say {self.model}. You run across iPhone, browser, terminal, and Android — all share memory and history."
         prompt += get_memory_context()
         messages = [{"role": "system", "content": prompt}] + self.history
 

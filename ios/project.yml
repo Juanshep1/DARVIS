@@ -2,7 +2,7 @@ name: DARVIS
 options:
   bundleIdPrefix: com.darvis
   deploymentTarget:
-    iOS: "16.0"
+    iOS: "17.0"
 packages:
   mlx-swift-lm:
     url: https://github.com/ml-explore/mlx-swift-lm

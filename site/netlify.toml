@@ -8,3 +8,6 @@
 
 [functions."chat"]
   timeout = 60
+
+[functions."briefing"]
+  timeout = 60

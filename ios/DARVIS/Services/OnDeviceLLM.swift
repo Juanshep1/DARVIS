@@ -173,21 +173,24 @@ class OnDeviceLLM: ObservableObject {
         defer { isGenerating = false }
 
         do {
-            let systemPrompt = "You are DARVIS, a dry-witted British AI assistant. Concise, witty. 1-3 sentences."
-            let messages = [
-                ["role": "system", "content": systemPrompt],
-                ["role": "user", "content": prompt],
+            let messages: [Chat.Message] = [
+                .init(role: .system, content: "You are DARVIS, a dry-witted British AI assistant. Concise. 1-3 sentences. Running on-device via MLX."),
+                .init(role: .user, content: prompt),
             ]
 
-            let fullPrompt = messages.map { "\($0["role"]!): \($0["content"]!)" }.joined(separator: "\n") + "\nassistant:"
+            let userInput = UserInput(prompt: .chat(messages))
+            let lmInput = try await container.prepare(input: userInput)
+            let params = GenerateParameters(temperature: 0.7)
 
-            let result = try await container.perform { (context: ModelContext) in
-                let input = try await context.processor.prepare(input: .init(prompt: fullPrompt))
-                return try MLXLMCommon.generate(input: input, parameters: .init(temperature: 0.7, topP: 0.9), context: context) { tokens in
-                    tokens.count < maxTokens ? .more : .stop
+            var output = ""
+            let stream = try await container.generate(input: lmInput, parameters: params)
+            for await generation in stream {
+                if let chunk = generation.chunk {
+                    output += chunk
                 }
+                if output.count > maxTokens * 4 { break }
             }
-            return result.summary()
+            return output.trimmingCharacters(in: .whitespacesAndNewlines)
         } catch {
             return nil
         }

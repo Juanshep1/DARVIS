@@ -1597,11 +1597,15 @@ async function runBriefing() {
     orb.className = 'orb thinking';
     responseEl.textContent = 'Preparing briefing...';
     try {
-        const res = await fetch('/api/briefing');
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 55000); // 55s timeout
+        const res = await fetch('/api/briefing', { signal: controller.signal });
+        clearTimeout(timeout);
+
+        if (!res.ok) throw new Error('Briefing failed');
         const data = await res.json();
         if (data.briefing) {
             responseEl.textContent = data.briefing;
-            // Speak it
             try {
                 const ttsRes = await fetch('/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: data.briefing }) });
                 if (ttsRes.ok) {
@@ -1617,8 +1621,12 @@ async function runBriefing() {
                     }
                 }
             } catch {}
+        } else {
+            responseEl.textContent = 'Briefing unavailable — try again later.';
         }
-    } catch {}
+    } catch (err) {
+        responseEl.textContent = err.name === 'AbortError' ? 'Briefing timed out — try again.' : 'Briefing error: ' + err.message;
+    }
     orb.className = 'orb';
 }
 

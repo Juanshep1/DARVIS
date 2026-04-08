@@ -86,42 +86,27 @@ export default async (req) => {
 
   const OLLAMA_KEY = Netlify.env.get("OLLAMA_API_KEY");
 
-  // Load persisted settings
+  // ── PARALLEL LOAD: settings + history + memory + search all at once ──
   const settingsStore = getStore("darvis-settings");
-  let MODEL = Netlify.env.get("DARVIS_MODEL") || "llama3.3:70b";
-  try {
-    const s = await settingsStore.get("current", { type: "json" });
-    if (s?.model) MODEL = s.model;
-  } catch {}
-
-  // Load conversation history
   const historyStore = getStore("darvis-history");
-  let history = [];
-  try {
-    const h = await historyStore.get("conversation", { type: "json" });
-    if (Array.isArray(h)) history = h;
-  } catch {}
-
-  // Load persisted memory
   const memoryStore = getStore("darvis-memory");
-  let memoryContext = "";
-  try {
-    const memories = await memoryStore.get("all", { type: "json" });
-    if (Array.isArray(memories) && memories.length > 0) {
-      const lines = memories.map((m) => `- [${m.category}] ${m.content}`);
-      memoryContext =
-        "\n\nUser's saved memories (things they asked you to remember):\n" +
-        lines.join("\n");
-    }
-  } catch {}
 
-  // Pre-fetch web search if the message looks like it needs current info
+  const [settingsData, historyData, memoryData, searchResults] = await Promise.all([
+    settingsStore.get("current", { type: "json" }).catch(() => null),
+    historyStore.get("conversation", { type: "json" }).catch(() => null),
+    memoryStore.get("all", { type: "json" }).catch(() => null),
+    needsSearch(message) ? tavilySearch(message) : Promise.resolve(null),
+  ]);
+
+  let MODEL = settingsData?.model || Netlify.env.get("DARVIS_MODEL") || "glm-5";
+  let history = Array.isArray(historyData) ? historyData : [];
+  let memoryContext = "";
+  if (Array.isArray(memoryData) && memoryData.length > 0) {
+    memoryContext = "\n\nUser's saved memories:\n" + memoryData.map((m) => `- [${m.category}] ${m.content}`).join("\n");
+  }
   let searchContext = "";
-  if (needsSearch(message)) {
-    const results = await tavilySearch(message);
-    if (results) {
-      searchContext = `\n\nWeb search results for the user's question:\n${results}\nUse these results to answer the user. Cite specific facts from the results.`;
-    }
+  if (searchResults) {
+    searchContext = `\n\nWeb search results:\n${searchResults}\nUse these to answer. Cite specific facts.`;
   }
 
   // Force Central Time (user's timezone) — Netlify servers run in UTC

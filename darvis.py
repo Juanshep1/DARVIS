@@ -1074,7 +1074,7 @@ def safari_control(data: dict) -> str:
             text = parts[1] if len(parts) > 1 else ""
             _safari_navigate(href)
             import time
-            time.sleep(1.5)
+            time.sleep(0.5)
             new_title = _run_applescript('tell application "Safari" to get name of current tab of front window')
             return f"✓ Clicked [{idx}] \"{text}\"\n  Navigated to: {href}\n  Page loaded: {new_title}"
 
@@ -1104,7 +1104,7 @@ def safari_control(data: dict) -> str:
             text = parts[1] if len(parts) > 1 else ""
             _safari_navigate(href)
             import time
-            time.sleep(1.5)
+            time.sleep(0.5)
             new_title = _run_applescript('tell application "Safari" to get name of current tab of front window')
             return f"✓ Clicked \"{text}\"\n  Navigated to: {href}\n  Page loaded: {new_title}"
 
@@ -1832,7 +1832,7 @@ def main():
     def _scheduler_loop():
         import time as _time
         while True:
-            _time.sleep(10)
+            _time.sleep(5)
             try:
                 darvis_scheduler.check_and_run(brain, extract_and_run_commands, console, tts)
                 darvis_scheduler.sync_from_cloud()  # Pick up tasks from other devices
@@ -2221,7 +2221,7 @@ def main():
 
                 # Wait for any in-flight listen() to finish, then drain
                 import time
-                time.sleep(1.5)
+                time.sleep(0.5)
                 try:
                     while not speech_queue.empty():
                         speech_queue.get_nowait()

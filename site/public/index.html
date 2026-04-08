@@ -1054,9 +1054,12 @@ async function send() {
                         window.open(act.url, '_blank');
                     }
                 } else if (act.action === 'agent_started') {
-                    // Open agent view automatically
                     document.getElementById('agentPanel').classList.add('open');
                     startAgentPolling();
+                } else if (act.action === 'queued' && act.message) {
+                    responseEl.textContent += '\n⏳ ' + act.message;
+                } else if (act.action === 'scheduled') {
+                    responseEl.textContent += '\n⏰ Scheduled: ' + act.task;
                 }
             });
             if (pendingTab && !usedPending) pendingTab.close();

@@ -225,7 +225,8 @@ Use when the user says "in X minutes", "at X o'clock", "later do", "remind me in
     // Extract all command blocks
     const cmdPattern = /```command\s*\n([\s\S]*?)\n```/g;
     let match;
-    const clientActions = []; // Actions for the frontend to execute
+    const clientActions = [];
+    const cmdResults = []; // Results from server-side command execution
 
     while ((match = cmdPattern.exec(reply)) !== null) {
       try {
@@ -258,6 +259,75 @@ Use when the user says "in X minutes", "at X o'clock", "later do", "remind me in
           await memoryStore.setJSON("all", memories);
         } else if (cmd.action === "open_url" && cmd.url) {
           clientActions.push({ action: "open_url", url: cmd.url });
+        } else if (cmd.action === "open_file" && cmd.path) {
+          // If it's a URL, open in browser. Otherwise queue for terminal.
+          if (cmd.path.startsWith("http")) {
+            clientActions.push({ action: "open_url", url: cmd.path });
+          } else {
+            // Queue file open for terminal
+            const cmdStore = getStore("darvis-agent");
+            let pending = [];
+            try { const d = await cmdStore.get("pending_commands", { type: "json" }); if (Array.isArray(d)) pending = d; } catch {}
+            pending.push({ action: "open_file", path: cmd.path, ts: Date.now() });
+            await cmdStore.setJSON("pending_commands", pending);
+            clientActions.push({ action: "queued", message: `Opening ${cmd.path} on your Mac` });
+          }
+        } else if (cmd.action === "create_file" && cmd.path && cmd.content) {
+          // Queue file creation for terminal
+          const cmdStore = getStore("darvis-agent");
+          let pending = [];
+          try { const d = await cmdStore.get("pending_commands", { type: "json" }); if (Array.isArray(d)) pending = d; } catch {}
+          pending.push({ action: "create_file", path: cmd.path, content: cmd.content, ts: Date.now() });
+          await cmdStore.setJSON("pending_commands", pending);
+          clientActions.push({ action: "queued", message: `Creating ${cmd.path} on your Mac` });
+        } else if (cmd.action === "create_folder" && cmd.path) {
+          const cmdStore = getStore("darvis-agent");
+          let pending = [];
+          try { const d = await cmdStore.get("pending_commands", { type: "json" }); if (Array.isArray(d)) pending = d; } catch {}
+          pending.push({ action: "create_folder", path: cmd.path, ts: Date.now() });
+          await cmdStore.setJSON("pending_commands", pending);
+          clientActions.push({ action: "queued", message: `Creating folder ${cmd.path} on your Mac` });
+        } else if (cmd.action === "shell" && cmd.command) {
+          // Queue shell command for terminal
+          const cmdStore = getStore("darvis-agent");
+          let pending = [];
+          try { const d = await cmdStore.get("pending_commands", { type: "json" }); if (Array.isArray(d)) pending = d; } catch {}
+          pending.push({ action: "shell", command: cmd.command, ts: Date.now() });
+          await cmdStore.setJSON("pending_commands", pending);
+          clientActions.push({ action: "queued", message: `Running: ${cmd.command}` });
+        } else if (cmd.action === "safari" && cmd.method) {
+          // Queue Safari command for terminal
+          const cmdStore = getStore("darvis-agent");
+          let pending = [];
+          try { const d = await cmdStore.get("pending_commands", { type: "json" }); if (Array.isArray(d)) pending = d; } catch {}
+          pending.push({ action: "safari", ...cmd, ts: Date.now() });
+          await cmdStore.setJSON("pending_commands", pending);
+          clientActions.push({ action: "queued", message: `Safari: ${cmd.method}` });
+        } else if (cmd.action === "fetch_url" && cmd.url) {
+          // Execute fetch server-side
+          try {
+            const fRes = await fetch(cmd.url, { headers: { "User-Agent": "Mozilla/5.0" } });
+            const fText = await fRes.text();
+            const clean = fText.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().substring(0, 2000);
+            cmdResults.push(`Fetched ${cmd.url}: ${clean}`);
+          } catch (e) {
+            cmdResults.push(`Fetch error: ${e.message}`);
+          }
+        } else if (cmd.action === "search_web" && cmd.query) {
+          // Use Tavily if available
+          const TAVILY_KEY = Netlify.env.get("TAVILY_API_KEY");
+          if (TAVILY_KEY) {
+            try {
+              const sRes = await fetch("https://api.tavily.com/search", {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ api_key: TAVILY_KEY, query: cmd.query, max_results: 3, include_answer: true }),
+              });
+              const sData = await sRes.json();
+              let text = sData.answer ? `Answer: ${sData.answer}\n` : "";
+              (sData.results || []).forEach((r, i) => { text += `${i+1}. ${r.title}: ${r.content?.substring(0, 150)}\n`; });
+              cmdResults.push(`Search results for "${cmd.query}":\n${text}`);
+            } catch {}
+          }
         } else if (cmd.action === "open_search" && cmd.query) {
           clientActions.push({
             action: "open_url",

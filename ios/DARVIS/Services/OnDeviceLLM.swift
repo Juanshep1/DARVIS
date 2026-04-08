@@ -1,6 +1,7 @@
 import Foundation
 import MLXLLM
 import MLXLMCommon
+import MLXHuggingFace
 
 // Models available for on-device download
 struct LocalModel: Identifiable {
@@ -55,14 +56,15 @@ class OnDeviceLLM: ObservableObject {
         Task {
             do {
                 let config = ModelConfiguration(id: model.huggingFaceId)
-                let container = try await LLMModelFactory.shared.loadContainer(
-                    configuration: config
-                ) { progress in
-                    Task { @MainActor in
-                        self.downloadProgress = progress.fractionCompleted
-                        self.statusMessage = "Downloading... \(Int(progress.fractionCompleted * 100))%"
+                let container = try await #huggingFaceLoadModelContainer(
+                    configuration: config,
+                    progressHandler: { progress in
+                        Task { @MainActor in
+                            self.downloadProgress = progress.fractionCompleted
+                            self.statusMessage = "Downloading... \(Int(progress.fractionCompleted * 100))%"
+                        }
                     }
-                }
+                )
                 modelContainer = container
                 isLoaded = true
                 currentModelName = "\(model.name) (On-Device)"

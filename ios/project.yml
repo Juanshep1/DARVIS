@@ -16,6 +16,8 @@ targets:
     dependencies:
       - package: mlx-swift-lm
         product: MLXLLM
+      - package: mlx-swift-lm
+        product: MLXHuggingFace
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.darvis.app

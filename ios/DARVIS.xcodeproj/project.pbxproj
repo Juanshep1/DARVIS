@@ -21,6 +21,7 @@
 		4A9294DD3CE4B1E0E7B62347 /* GeminiLiveService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C593753D851D269E7D1F224B /* GeminiLiveService.swift */; };
 		64F8310BB90B380759389A5F /* ChatMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BB8B395EAFB415A83AF0DC0 /* ChatMessage.swift */; };
 		680FADB1B66AFDD1024B059E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F263F0DB28CC9CF7BEC34C4B /* Assets.xcassets */; };
+		70D06C956FECA736BE41AEA3 /* MLXHuggingFace in Frameworks */ = {isa = PBXBuildFile; productRef = 849D15F33E1A37937592D903 /* MLXHuggingFace */; };
 		7A5ED8E621DC81CD14901875 /* MemoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FEFD354307DB1E6E4635287 /* MemoryView.swift */; };
 		7B9A438F30C939C6278F8C4C /* OrbView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89B3A8E19F62DDFF548B0A0A /* OrbView.swift */; };
 		8710F8EF125FD82B6B1AD742 /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = C67A6E5F90D2C179D7D8F33D /* MLXLLM */; };
@@ -64,6 +65,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				8710F8EF125FD82B6B1AD742 /* MLXLLM in Frameworks */,
+				70D06C956FECA736BE41AEA3 /* MLXHuggingFace in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -181,6 +183,7 @@
 			name = DARVIS;
 			packageProductDependencies = (
 				C67A6E5F90D2C179D7D8F33D /* MLXLLM */,
+				849D15F33E1A37937592D903 /* MLXHuggingFace */,
 			);
 			productName = DARVIS;
 			productReference = F165F40D77684EA2C4518B5E /* DARVIS.app */;
@@ -474,6 +477,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		849D15F33E1A37937592D903 /* MLXHuggingFace */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FA30968D79084CCBAB3496DE /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
+			productName = MLXHuggingFace;
+		};
 		C67A6E5F90D2C179D7D8F33D /* MLXLLM */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = FA30968D79084CCBAB3496DE /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;

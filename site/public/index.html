@@ -1200,8 +1200,14 @@ async function send() {
     if (!text) return;
     inputEl.value = '';
 
-    // Handle memory saves/forgets directly from user input (reliable, doesn't depend on LLM)
+    // Handle memory saves/forgets directly from user input
     handleMemoryFromUserInput(text);
+
+    // On-demand briefing
+    if (text.toLowerCase().includes('briefing') || text.toLowerCase().includes('brief me') || text.toLowerCase().includes('news update')) {
+        runBriefing();
+        return;
+    }
 
     // Gemini text mode — send via WebSocket
     if (audioMode === 'gemini') {
@@ -1583,8 +1589,53 @@ async function pollAgent() {
 loadSettings();
 inputEl.focus();
 
-// No auto-briefing on startup. Briefings run on schedule (8 AM / 9:30 PM)
-// or on-demand via voice: "give me a briefing"
+// ══════════════════════════════════════════════════════════════════════════════
+// SCHEDULED BRIEFINGS — 8:00 AM and 9:30 PM (runs in browser independently)
+// ══════════════════════════════════════════════════════════════════════════════
+
+async function runBriefing() {
+    orb.className = 'orb thinking';
+    responseEl.textContent = 'Preparing briefing...';
+    try {
+        const res = await fetch('/api/briefing');
+        const data = await res.json();
+        if (data.briefing) {
+            responseEl.textContent = data.briefing;
+            // Speak it
+            try {
+                const ttsRes = await fetch('/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: data.briefing }) });
+                if (ttsRes.ok) {
+                    const blob = await ttsRes.blob();
+                    if (blob.size > 100) {
+                        const url = URL.createObjectURL(blob);
+                        persistentAudio.pause(); persistentAudio.currentTime = 0;
+                        persistentAudio.src = url;
+                        persistentAudio.onended = () => { orb.className = 'orb'; URL.revokeObjectURL(url); };
+                        orb.className = 'orb speaking';
+                        persistentAudio.play().catch(() => {});
+                        return;
+                    }
+                }
+            } catch {}
+        }
+    } catch {}
+    orb.className = 'orb';
+}
+
+// Check every minute if it's briefing time
+let lastBriefingCheck = '';
+setInterval(() => {
+    const now = new Date();
+    const timeKey = `${now.getHours()}:${now.getMinutes()}`;
+    if (timeKey === lastBriefingCheck) return; // Already checked this minute
+    lastBriefingCheck = timeKey;
+
+    const h = now.getHours();
+    const m = now.getMinutes();
+    if ((h === 8 && m === 0) || (h === 21 && m === 30)) {
+        runBriefing();
+    }
+}, 30000); // Check every 30 seconds
 </script>
 </body>
 </html>

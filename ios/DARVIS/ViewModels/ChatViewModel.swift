@@ -52,8 +52,37 @@ class ChatViewModel: ObservableObject {
     init() {
         setupGeminiCallbacks()
         Task { await loadSettings() }
-        // No auto-briefing. Briefings run on schedule (8 AM / 9:30 PM)
-        // or on-demand: "give me a briefing"
+        startBriefingSchedule()
+    }
+
+    // Check every 30s if it's 8:00 AM or 9:30 PM
+    private func startBriefingSchedule() {
+        Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
+            let now = Calendar.current.dateComponents([.hour, .minute], from: Date())
+            let h = now.hour ?? 0
+            let m = now.minute ?? 0
+            if (h == 8 && m == 0) || (h == 21 && m == 30) {
+                Task { @MainActor in await self?.runBriefing() }
+            }
+        }
+    }
+
+    func runBriefing() async {
+        orbState = .thinking
+        responseText = "Preparing briefing..."
+        do {
+            let briefing = try await APIClient.shared.getBriefing()
+            if !briefing.isEmpty {
+                responseText = briefing
+                await playTTS(briefing)
+            } else {
+                responseText = "Briefing unavailable, sir."
+                orbState = .idle
+            }
+        } catch {
+            responseText = "Briefing error."
+            orbState = .idle
+        }
     }
 
     private func loadSettings() async {
@@ -115,6 +144,12 @@ class ChatViewModel: ObservableObject {
         dismissKeyboard()
         phoneControl.haptic(.light)
         detectAndSaveMemory(text)
+
+        // On-demand briefing
+        if text.lowercased().contains("briefing") || text.lowercased().contains("brief me") || text.lowercased().contains("news update") {
+            Task { await runBriefing() }
+            return
+        }
 
         // iPhone control commands
         if isPhoneControlRequest(text) {

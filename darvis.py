@@ -1457,44 +1457,54 @@ def list_cloud_models(api_key: str) -> list[str]:
         return []
 
 
-CLOUD_MODELS = [
-    "llama3.3:70b",
-    "llama3.1:8b",
-    "qwen2.5:72b",
-    "qwen2.5:7b",
-    "deepseek-r1:70b",
-    "deepseek-r1:8b",
-    "mistral:7b",
-    "gemma2:27b",
-    "phi4:14b",
-]
-
-
 def select_model(api_key: str, saved_model: str = "") -> str:
+    """Interactive model picker with live Ollama Cloud models."""
     if saved_model:
-        console.print(f"  [dim]Saved model:[/dim] [bold]{saved_model}[/bold]")
-        choice = console.input(f"  [bold]Keep {saved_model}? [enter=yes, n=change]: [/bold]").strip().lower()
+        console.print(f"  [dim]Current model:[/dim] [bold {CYAN}]{saved_model}[/bold {CYAN}]")
+        choice = console.input(f"  [bold]Keep? [enter=yes, n=change]: [/bold]").strip().lower()
         if choice not in ("n", "no", "change"):
             return saved_model
 
+    # Fetch live models
     models = list_cloud_models(api_key)
     if not models:
-        models = CLOUD_MODELS
-        console.print(f"  [dim]Known Ollama Cloud models:[/dim]")
-    else:
-        console.print(f"  [dim]Available cloud models:[/dim]")
+        models = ["glm-5", "gemma4:31b", "deepseek-v3.2", "qwen3.5:397b", "mistral-large-3:675b"]
 
-    for i, name in enumerate(models, 1):
-        marker = " [green](default)[/green]" if name == MODEL else ""
-        console.print(f"    {i}. {name}{marker}")
+    console.print()
+    console.print(
+        Panel(
+            _format_model_list(models, saved_model),
+            title=f"[bold {CYAN}]Available Models ({len(models)})[/bold {CYAN}]",
+            border_style=BLUE,
+            padding=(1, 2),
+        )
+    )
 
-    choice = console.input(f"\n  [bold]Select model [enter for {MODEL}]: [/bold]").strip()
+    choice = console.input(f"\n  [bold]Select # or name [enter={saved_model or 'glm-5'}]: [/bold]").strip()
 
     if not choice:
-        return MODEL
+        return saved_model or "glm-5"
     if choice.isdigit() and 1 <= int(choice) <= len(models):
         return models[int(choice) - 1]
     return choice
+
+
+def _format_model_list(models: list, current: str = "") -> str:
+    """Format models in columns with categories."""
+    lines = []
+    for i, name in enumerate(models, 1):
+        marker = " [green]◀ current[/green]" if name == current else ""
+        # Color-code by family
+        if "gemma" in name: color = "bright_green"
+        elif "deepseek" in name: color = "bright_cyan"
+        elif "qwen" in name: color = "bright_magenta"
+        elif "glm" in name: color = "bright_yellow"
+        elif "mistral" in name or "ministral" in name: color = "bright_red"
+        elif "kimi" in name: color = "bright_blue"
+        elif "gemini" in name: color = "bright_green"
+        else: color = "white"
+        lines.append(f"  [{color}]{i:2d}. {name}[/{color}]{marker}")
+    return "\n".join(lines)
 
 
 # ── Voice Selection ───────────────────────────────────────────────────────────
@@ -2005,19 +2015,15 @@ def main():
                     tts.speak("Voice updated. How do I sound, sir?")
                 continue
 
-            if lower == "/models" or lower.startswith("/model "):
+            if lower in ("/models", "/model", "/m") or lower.startswith("/model "):
                 if lower.startswith("/model ") and len(lower) > 7:
                     new_model = user_input.strip().split(None, 1)[1]
-                    brain.model = new_model
-                    settings["model"] = new_model
-                    save_settings(settings)
-                    console.print(f"  [green]✓[/green] Model changed to [bold]{new_model}[/bold]")
                 else:
-                    new_model = select_model(ollama_key)
-                    brain.model = new_model
-                    settings["model"] = new_model
-                    save_settings(settings)
-                    console.print(f"  [green]✓[/green] Model changed to [bold]{new_model}[/bold]")
+                    new_model = select_model(ollama_key, brain.model)
+                brain.model = new_model
+                settings["model"] = new_model
+                save_settings(settings)
+                console.print(f"  [green]✓[/green] Model: [bold {CYAN}]{new_model}[/bold {CYAN}]")
                 continue
 
             if lower == "/briefing":

@@ -40,52 +40,115 @@ body {
     width: 100%;
 }
 
+/* ── DARVIS ORB — Reactive holographic AI core ── */
+.orb-wrap {
+    position: relative;
+    width: 220px; height: 220px;
+    display: flex; align-items: center; justify-content: center;
+}
+
+/* Rotating ring arcs */
+.orb-ring {
+    position: absolute;
+    border-radius: 50%;
+    border: 1.5px solid transparent;
+    animation: ringRotate 8s linear infinite;
+}
+.orb-ring:nth-child(1) { width: 200px; height: 200px; border-top-color: rgba(80,180,255,0.4); border-right-color: rgba(80,180,255,0.15); animation-duration: 6s; }
+.orb-ring:nth-child(2) { width: 215px; height: 215px; border-bottom-color: rgba(80,180,255,0.3); border-left-color: rgba(80,180,255,0.1); animation-duration: 10s; animation-direction: reverse; }
+.orb-ring:nth-child(3) { width: 190px; height: 190px; border-top-color: rgba(80,180,255,0.2); animation-duration: 14s; }
+
+/* Ring colors per state */
+.orb-wrap.thinking .orb-ring { border-color: transparent; }
+.orb-wrap.thinking .orb-ring:nth-child(1) { border-top-color: rgba(255,180,80,0.5); border-right-color: rgba(255,180,80,0.2); animation-duration: 2s; }
+.orb-wrap.thinking .orb-ring:nth-child(2) { border-bottom-color: rgba(255,180,80,0.4); animation-duration: 3s; }
+.orb-wrap.speaking .orb-ring { border-color: transparent; }
+.orb-wrap.speaking .orb-ring:nth-child(1) { border-top-color: rgba(80,255,150,0.5); border-right-color: rgba(80,255,150,0.2); animation-duration: 1s; }
+.orb-wrap.speaking .orb-ring:nth-child(2) { border-bottom-color: rgba(80,255,150,0.4); animation-duration: 1.5s; }
+.orb-wrap.speaking .orb-ring:nth-child(3) { border-top-color: rgba(80,255,150,0.3); animation-duration: 2s; }
+.orb-wrap.listening .orb-ring { border-color: transparent; }
+.orb-wrap.listening .orb-ring:nth-child(1) { border-top-color: rgba(255,80,80,0.5); animation-duration: 3s; }
+.orb-wrap.listening .orb-ring:nth-child(2) { border-bottom-color: rgba(255,80,80,0.4); animation-duration: 4s; }
+
+@keyframes ringRotate { 0%{transform:rotate(0deg)} 100%{transform:rotate(360deg)} }
+
+/* Pulse rings (expand outward when speaking) */
+.orb-pulse {
+    position: absolute;
+    width: 160px; height: 160px;
+    border-radius: 50%;
+    border: 1px solid rgba(80,255,150,0.3);
+    opacity: 0;
+    pointer-events: none;
+}
+.orb-wrap.speaking .orb-pulse {
+    animation: pulseExpand 1.2s ease-out infinite;
+}
+.orb-wrap.speaking .orb-pulse:nth-child(5) { animation-delay: 0.4s; }
+.orb-wrap.speaking .orb-pulse:nth-child(6) { animation-delay: 0.8s; }
+@keyframes pulseExpand { 0%{transform:scale(1);opacity:0.6} 100%{transform:scale(1.8);opacity:0} }
+
+/* Core orb */
 .orb {
-    width: 180px; height: 180px;
+    width: 160px; height: 160px;
     border-radius: 50%;
     background: radial-gradient(circle at 35% 35%,
-        rgba(80, 180, 255, 0.9),
-        rgba(30, 90, 200, 0.6),
-        rgba(10, 20, 60, 0.8));
+        rgba(80, 180, 255, 0.95),
+        rgba(30, 90, 200, 0.7),
+        rgba(10, 20, 60, 0.9));
     box-shadow:
-        0 0 60px rgba(50, 140, 255, 0.4),
-        0 0 120px rgba(50, 140, 255, 0.2),
-        inset 0 0 40px rgba(100, 200, 255, 0.3);
-    animation: pulse 4s ease-in-out infinite, float 6s ease-in-out infinite;
+        0 0 40px rgba(50, 140, 255, 0.5),
+        0 0 80px rgba(50, 140, 255, 0.2),
+        inset 0 -20px 40px rgba(0,0,0,0.3),
+        inset 0 0 30px rgba(100, 200, 255, 0.3);
+    animation: orbFloat 6s ease-in-out infinite, orbPulse 4s ease-in-out infinite;
     cursor: pointer;
-    transition: all 0.4s ease;
+    transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
     position: relative;
+    z-index: 2;
+}
+.orb::before {
+    content: '';
+    position: absolute;
+    top: 12%; left: 18%;
+    width: 35%; height: 25%;
+    background: radial-gradient(ellipse, rgba(255,255,255,0.5), transparent);
+    border-radius: 50%;
+    filter: blur(6px);
 }
 .orb::after {
     content: '';
     position: absolute;
-    top: 15%; left: 20%;
-    width: 30%; height: 20%;
-    background: radial-gradient(ellipse, rgba(255,255,255,0.35), transparent);
+    bottom: 15%; right: 20%;
+    width: 20%; height: 15%;
+    background: radial-gradient(ellipse, rgba(255,255,255,0.15), transparent);
     border-radius: 50%;
-    filter: blur(4px);
-}
-.orb.thinking {
-    animation: thinkPulse 0.8s ease-in-out infinite, float 6s ease-in-out infinite;
-    box-shadow: 0 0 80px rgba(255,150,50,0.5), 0 0 160px rgba(255,150,50,0.2), inset 0 0 50px rgba(255,200,100,0.3);
-    background: radial-gradient(circle at 35% 35%, rgba(255,180,80,0.9), rgba(200,100,30,0.6), rgba(60,20,10,0.8));
-}
-.orb.speaking {
-    animation: speakPulse 0.35s ease-in-out infinite, float 6s ease-in-out infinite;
-    box-shadow: 0 0 80px rgba(80,255,150,0.5), 0 0 160px rgba(80,255,150,0.2), inset 0 0 50px rgba(150,255,200,0.3);
-    background: radial-gradient(circle at 35% 35%, rgba(80,255,160,0.9), rgba(30,180,80,0.6), rgba(10,40,20,0.8));
-}
-.orb.listening {
-    animation: listenPulse 1s ease-in-out infinite, float 6s ease-in-out infinite;
-    box-shadow: 0 0 80px rgba(255,80,80,0.5), 0 0 160px rgba(255,80,80,0.2), inset 0 0 50px rgba(255,150,150,0.3);
-    background: radial-gradient(circle at 35% 35%, rgba(255,100,100,0.9), rgba(200,40,40,0.6), rgba(60,10,10,0.8));
+    filter: blur(3px);
 }
 
-@keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.04)} }
-@keyframes thinkPulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.06)} }
-@keyframes speakPulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.08)} }
-@keyframes listenPulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.1)} }
-@keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
+/* State colors */
+.orb.thinking {
+    background: radial-gradient(circle at 35% 35%, rgba(255,180,80,0.95), rgba(200,100,30,0.7), rgba(60,20,10,0.9));
+    box-shadow: 0 0 60px rgba(255,150,50,0.6), 0 0 120px rgba(255,150,50,0.2), inset 0 0 40px rgba(255,200,100,0.3);
+    animation: orbFloat 6s ease-in-out infinite, orbThink 0.8s ease-in-out infinite;
+}
+.orb.speaking {
+    background: radial-gradient(circle at 35% 35%, rgba(80,255,160,0.95), rgba(30,180,80,0.7), rgba(10,40,20,0.9));
+    box-shadow: 0 0 60px rgba(80,255,150,0.6), 0 0 120px rgba(80,255,150,0.3), inset 0 0 40px rgba(150,255,200,0.3);
+    animation: orbFloat 6s ease-in-out infinite, orbSpeak 0.3s ease-in-out infinite;
+    transform: scale(var(--speak-scale, 1));
+}
+.orb.listening {
+    background: radial-gradient(circle at 35% 35%, rgba(255,100,100,0.95), rgba(200,40,40,0.7), rgba(60,10,10,0.9));
+    box-shadow: 0 0 60px rgba(255,80,80,0.6), 0 0 120px rgba(255,80,80,0.2), inset 0 0 40px rgba(255,150,150,0.3);
+    animation: orbFloat 6s ease-in-out infinite, orbListen 1.5s ease-in-out infinite;
+}
+
+@keyframes orbFloat { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
+@keyframes orbPulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.03)} }
+@keyframes orbThink { 0%,100%{transform:scale(1)} 50%{transform:scale(1.06)} }
+@keyframes orbSpeak { 0%,100%{transform:scale(1)} 50%{transform:scale(1.1)} }
+@keyframes orbListen { 0%,100%{transform:scale(1)} 50%{transform:scale(1.04)} }
 
 .response {
     position: absolute;
@@ -382,7 +445,15 @@ body {
 <div class="title">D . A . R . V . I . S .</div>
 
 <div class="orb-container">
-    <div class="orb" id="orb" onclick="toggleMic()"></div>
+    <div class="orb-wrap" id="orbWrap">
+        <div class="orb-ring"></div>
+        <div class="orb-ring"></div>
+        <div class="orb-ring"></div>
+        <div class="orb-pulse"></div>
+        <div class="orb-pulse"></div>
+        <div class="orb-pulse"></div>
+        <div class="orb" id="orb" onclick="toggleMic()"></div>
+    </div>
     <div class="response" id="response"></div>
 </div>
 
@@ -400,6 +471,15 @@ body {
 <script>
 // ── State ──
 const orb = document.getElementById('orb');
+const orbWrap = document.getElementById('orbWrap');
+
+// Sync orb state to wrapper (for ring colors)
+const _origOrbClass = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'className');
+const orbStateObserver = new MutationObserver(() => {
+    const cls = orb.className.replace('orb', '').trim();
+    orbWrap.className = 'orb-wrap' + (cls ? ' ' + cls : '');
+});
+orbStateObserver.observe(orb, { attributes: true, attributeFilter: ['class'] });
 const responseEl = document.getElementById('response');
 const inputEl = document.getElementById('input');
 const micBtn = document.getElementById('micBtn');
@@ -1588,6 +1668,30 @@ async function pollAgent() {
 
 loadSettings();
 inputEl.focus();
+
+// Audio-reactive orb — pulse with playback volume
+let orbReactiveInterval = null;
+function startOrbReactive() {
+    if (orbReactiveInterval) return;
+    let phase = 0;
+    orbReactiveInterval = setInterval(() => {
+        phase += 0.3;
+        const scale = 1 + Math.sin(phase) * 0.08 + Math.random() * 0.03;
+        orb.style.setProperty('--speak-scale', scale);
+        orb.style.transform = `scale(${scale})`;
+    }, 50);
+}
+function stopOrbReactive() {
+    if (orbReactiveInterval) { clearInterval(orbReactiveInterval); orbReactiveInterval = null; }
+    orb.style.transform = '';
+}
+// Hook into orb state changes
+orbStateObserver.observe(orb, { attributes: true, attributeFilter: ['class'] });
+const _checkOrbState = () => {
+    if (orb.classList.contains('speaking')) startOrbReactive();
+    else stopOrbReactive();
+};
+new MutationObserver(_checkOrbState).observe(orb, { attributes: true, attributeFilter: ['class'] });
 
 // ══════════════════════════════════════════════════════════════════════════════
 // SCHEDULED BRIEFINGS — 8:00 AM and 9:30 PM (runs in browser independently)

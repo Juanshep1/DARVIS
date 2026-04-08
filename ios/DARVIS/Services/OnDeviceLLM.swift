@@ -16,7 +16,7 @@ let AVAILABLE_MODELS: [LocalModel] = [
 
 // MARK: - Download Manager (stores models for future local inference)
 
-class ModelDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate {
+class ModelDownloadManager: NSObject, ObservableObject {
     static let shared = ModelDownloadManager()
 
     @Published var downloadProgress: Double = 0

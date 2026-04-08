@@ -127,7 +127,7 @@ class ChatViewModel: ObservableObject {
     }
 
     func requestPermissions() {
-        AVAudioSession.sharedInstance().requestRecordPermission { _ in }
+        AVAudioApplication.requestRecordPermission { _ in }
         SFSpeechRecognizer.requestAuthorization { _ in }
     }
 

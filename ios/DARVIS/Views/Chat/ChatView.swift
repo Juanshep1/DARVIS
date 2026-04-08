@@ -58,7 +58,7 @@ struct ChatView: View {
                             }
                             .frame(maxHeight: geo.size.height * 0.4) // Up to 40% of orb area
                             .opacity(vm.responseText.isEmpty ? 0 : 1)
-                            .onChange(of: vm.responseText) { _ in
+                            .onChange(of: vm.responseText) {
                                 proxy.scrollTo("response", anchor: .bottom)
                             }
                         }

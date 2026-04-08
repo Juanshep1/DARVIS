@@ -51,10 +51,9 @@ class ChatViewModel: ObservableObject {
 
     init() {
         setupGeminiCallbacks()
-        Task {
-            await loadSettings()
-            await loadBriefing()
-        }
+        Task { await loadSettings() }
+        // No auto-briefing. Briefings run on schedule (8 AM / 9:30 PM)
+        // or on-demand: "give me a briefing"
     }
 
     private func loadSettings() async {

@@ -1690,82 +1690,47 @@ def main():
         )
     )
 
-    # ── JARVIS-style Proactive Startup ──
-    def _startup_briefing():
-        try:
-            ctx = run_startup_actions()
+    # ── Schedule automatic briefings at 8 AM and 9:30 PM ──
+    def _schedule_daily_briefings():
+        """Set up recurring briefings. Only adds them if not already scheduled."""
+        import time as _time
+        _time.sleep(3)  # Wait for scheduler to initialize
 
-            # Show what we did
-            console.print()
-            actions_taken = []
-            if ctx.get("briefing_file"):
-                actions_taken.append(f"[green]✓[/green] Briefing saved to Desktop")
-            if ctx.get("opened_news"):
-                actions_taken.append(f"[green]✓[/green] Google News opened in Safari")
-            if ctx.get("headlines"):
-                actions_taken.append(f"[green]✓[/green] Top 5 headlines loaded")
+        from scheduler import _global_scheduler
+        if not _global_scheduler:
+            return
 
-            if actions_taken:
-                console.print(
-                    Panel(
-                        "\n".join(actions_taken),
-                        title=f"[bold {BLUE}]Startup Actions[/bold {BLUE}]",
-                        border_style=DIM,
-                        padding=(0, 2),
-                    )
-                )
+        existing = _global_scheduler.list_tasks()
+        has_morning = any("morning briefing" in t.get("task", "").lower() for t in existing)
+        has_night = any("evening briefing" in t.get("task", "").lower() for t in existing)
 
-            # Ask Brain for a natural briefing based on what we gathered
-            news_summary = ctx.get('news_summary', '')
-            briefing_prompt = f"""You just started up and took these actions:
-- Saved a daily briefing to the Desktop and opened it
-- Opened Google News in Safari
-- Enabled microphone listening
+        now = datetime.datetime.now()
+        today = now.date()
 
-Context:
-- Time: {ctx.get('time', '?')} ({ctx.get('period', '?')}) on {ctx.get('date', '?')}
-- Weather: {ctx.get('weather', 'unavailable')}
-- Battery: {ctx.get('battery', 'unknown')} {'(charging)' if ctx.get('charging') else ''}
-{f'- News overview: {news_summary}' if news_summary else ''}
-- Headlines:
-{ctx.get('headlines', '(none)')}
-{f"- Reminders: {', '.join(ctx.get('reminders', []))}" if ctx.get('reminders') else ""}
+        if not has_morning:
+            morning = datetime.datetime.combine(today, datetime.time(8, 0))
+            if morning < now:
+                morning += datetime.timedelta(days=1)
+            _global_scheduler.add_task(
+                task_desc="MORNING BRIEFING: Gather today's weather, top news headlines with summaries, battery status, and any saved reminders. Save a daily briefing file to the Desktop and open it. Open Google News in Safari. Give a full spoken JARVIS-style briefing covering weather, 2-3 top news stories in detail, reminders, and anything else noteworthy. 5-7 sentences.",
+                at_time=morning.isoformat(),
+                recurring_minutes=1440,  # Every 24 hours
+            )
+            console.print(f"  [green]✓[/green] Morning briefing scheduled for 8:00 AM daily")
 
-Give a JARVIS-style spoken briefing. This should sound like a real executive assistant briefing:
-1. Time-appropriate greeting
-2. Weather conditions in a natural way
-3. Give a 2-3 sentence summary of what's happening in the news — actual events, not just headline titles. What are the big stories today?
-4. Mention battery if below 40%
-5. Mention any reminders
-6. Say you've opened the news in Safari and saved the briefing to their Desktop, and that you're now listening
+        if not has_night:
+            night = datetime.datetime.combine(today, datetime.time(21, 30))
+            if night < now:
+                night += datetime.timedelta(days=1)
+            _global_scheduler.add_task(
+                task_desc="EVENING BRIEFING: Gather tonight's weather forecast, top evening news with summaries, battery status, and any saved reminders. Save a nightly briefing file to the Desktop and open it. Give a full spoken JARVIS-style evening wrap-up covering what happened today in the news, tomorrow's weather outlook, reminders, and wish the user a good night. 5-7 sentences.",
+                at_time=night.isoformat(),
+                recurring_minutes=1440,  # Every 24 hours
+            )
+            console.print(f"  [green]✓[/green] Evening briefing scheduled for 9:30 PM daily")
 
-5-7 sentences total. Sound like a real assistant giving a morning/evening rundown. British, witty, but informative. Do NOT include command blocks."""
-
-            greeting = brain.think(briefing_prompt)
-            greeting = re.sub(r'```command\s*\n.*?\n```', '', greeting, flags=re.DOTALL).strip()
-            if greeting:
-                console.print(
-                    Panel(
-                        Markdown(greeting),
-                        title=f"[bold {CYAN}]D.A.R.V.I.S.[/bold {CYAN}]",
-                        border_style=BLUE,
-                        padding=(1, 2),
-                    )
-                )
-                console.print()
-                tts.speak(greeting)
-                tts.wait_for_speech()
-
-            # Auto-enable listening after briefing
-            if has_mic:
-                nonlocal listening_active
-                listening_active = True
-                console.print(f"  [{BLUE}]● Mic on — listening. Say something or type.[/{BLUE}]")
-        except Exception as e:
-            console.print(f"  [dim]Briefing skipped: {e}[/dim]")
-
-    briefing_thread = threading.Thread(target=_startup_briefing, daemon=True)
-    briefing_thread.start()
+    briefing_sched_thread = threading.Thread(target=_schedule_daily_briefings, daemon=True)
+    briefing_sched_thread.start()
 
     # Background agent goal polling — picks up browse tasks from the browser app
     def _poll_agent_goals():
@@ -2043,6 +2008,33 @@ Give a JARVIS-style spoken briefing. This should sound like a real executive ass
                     console.print(f"  [green]✓[/green] Model changed to [bold]{new_model}[/bold]")
                 continue
 
+            if lower == "/briefing":
+                console.print(f"  [{BLUE}]Running briefing...[/{BLUE}]")
+                def _run_briefing():
+                    try:
+                        ctx = run_startup_actions()
+                        news_summary = ctx.get('news_summary', '')
+                        prompt = f"""Give a full JARVIS-style briefing:
+- Time: {ctx.get('time', '?')} ({ctx.get('period', '?')}) on {ctx.get('date', '?')}
+- Weather: {ctx.get('weather', 'unavailable')}
+- Battery: {ctx.get('battery', 'unknown')} {'(charging)' if ctx.get('charging') else ''}
+{f'- News summary: {news_summary}' if news_summary else ''}
+- Headlines:
+{ctx.get('headlines', '(none)')}
+{f"- Reminders: {', '.join(ctx.get('reminders', []))}" if ctx.get('reminders') else ""}
+
+Cover: greeting, weather, 2-3 news stories in detail, battery, reminders. Mention the briefing file on Desktop. 5-7 sentences. No command blocks."""
+                        resp = brain.think(prompt)
+                        resp = re.sub(r'```command\s*\n.*?\n```', '', resp, flags=re.DOTALL).strip()
+                        if resp:
+                            console.print(Panel(Markdown(resp), title=f"[bold {CYAN}]D.A.R.V.I.S. Briefing[/bold {CYAN}]", border_style=BLUE, padding=(1, 2)))
+                            tts.speak(resp)
+                            tts.wait_for_speech()
+                    except Exception as e:
+                        console.print(f"  [red]Briefing error: {e}[/red]")
+                threading.Thread(target=_run_briefing, daemon=True).start()
+                continue
+
             if lower == "/help":
                 console.print(
                     Panel(
@@ -2056,6 +2048,7 @@ Give a JARVIS-style spoken briefing. This should sound like a real executive ass
                         "[bold]/gemini[/bold]      — Gemini Live Audio (speech-to-speech + mic on)\n"
                         "[bold]/classic[/bold]     — switch back to Ollama + ElevenLabs\n"
                         "[bold]/browse GOAL[/bold] — launch browser agent (e.g. /browse find Spurs score on ESPN)\n"
+                        "[bold]/briefing[/bold]    — get a full news + weather briefing now\n"
                         "[bold]goodbye[/bold]      — exit D.A.R.V.I.S.\n\n"
                         "[dim]Settings (model + voice) are saved automatically.[/dim]",
                         title=f"[bold {CYAN}]Commands[/bold {CYAN}]",

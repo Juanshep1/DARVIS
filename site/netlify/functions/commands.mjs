@@ -8,7 +8,7 @@ export default async (req) => {
     try {
       const data = await store.get("pending_commands", { type: "json" });
       if (Array.isArray(data)) commands = data;
-      // Consume — clear after reading
+      // Clear after reading so terminal doesn't re-execute
       if (commands.length > 0) {
         await store.setJSON("pending_commands", []);
       }

@@ -1785,48 +1785,35 @@ def main():
             except Exception:
                 pass
 
-            # Also check for pending commands from browser/iOS
+            # Check for pending commands from browser/iOS
             try:
-                req = urllib.request.Request(
-                    "https://darvis1.netlify.app/api/agent/goal",  # Reuse goal endpoint for commands too
-                    method="GET",
-                )
-                # Check pending_commands in Blobs
-                cmd_req = urllib.request.Request(
-                    "https://darvis1.netlify.app/api/commands",
-                    method="GET",
-                )
+                cmd_req = urllib.request.Request("https://darvis1.netlify.app/api/commands", method="GET")
                 with urllib.request.urlopen(cmd_req, timeout=5) as resp:
                     cmd_data = json.loads(resp.read().decode())
                     commands = cmd_data.get("commands", [])
-                    if commands:
-                        for cmd in commands:
-                            action = cmd.get("action", "")
-                            console.print(f"\n  [{BLUE}]Browser command: {action}[/{BLUE}]")
-                            try:
-                                if action == "create_file" and cmd.get("path") and cmd.get("content"):
-                                    output = create_file(cmd["path"], cmd["content"])
-                                    console.print(f"  [dim]{output}[/dim]")
-                                elif action == "create_folder" and cmd.get("path"):
-                                    output = create_folder(cmd["path"])
-                                    console.print(f"  [dim]{output}[/dim]")
-                                elif action == "open_file" and cmd.get("path"):
-                                    output = open_file(cmd["path"])
-                                    console.print(f"  [dim]{output}[/dim]")
-                                elif action == "shell" and cmd.get("command"):
-                                    output = execute_shell(cmd["command"])
-                                    console.print(f"  [dim]{output[:200]}[/dim]")
-                                elif action == "safari" and cmd.get("method"):
-                                    output = safari_control(cmd)
-                                    console.print(f"  [dim]{output[:200]}[/dim]")
-                            except Exception as e:
-                                console.print(f"  [red]Command error: {e}[/red]")
-                        # Clear commands after execution
-                        urllib.request.urlopen(urllib.request.Request(
-                            "https://darvis1.netlify.app/api/commands",
-                            data=b'{}', method="DELETE",
-                            headers={"Content-Type": "application/json"},
-                        ), timeout=5)
+                    for cmd in commands:
+                        action = cmd.get("action", "")
+                        console.print(f"\n  [{BLUE}]📡 Remote command: {action}[/{BLUE}]")
+                        try:
+                            if action == "create_file" and cmd.get("path") and cmd.get("content"):
+                                console.print(f"  [dim]Creating: {cmd['path']}[/dim]")
+                                console.print(f"  [dim]{create_file(cmd['path'], cmd['content'])}[/dim]")
+                            elif action == "create_folder" and cmd.get("path"):
+                                console.print(f"  [dim]Creating folder: {cmd['path']}[/dim]")
+                                console.print(f"  [dim]{create_folder(cmd['path'])}[/dim]")
+                            elif action == "open_file" and cmd.get("path"):
+                                console.print(f"  [dim]Opening: {cmd['path']}[/dim]")
+                                console.print(f"  [dim]{open_file(cmd['path'])}[/dim]")
+                            elif action == "shell" and cmd.get("command"):
+                                console.print(f"  [dim]Shell: {cmd['command']}[/dim]")
+                                console.print(f"  [dim]{execute_shell(cmd['command'])[:200]}[/dim]")
+                            elif action == "safari" and cmd.get("method"):
+                                console.print(f"  [dim]Safari: {cmd['method']}[/dim]")
+                                console.print(f"  [dim]{safari_control(cmd)[:200]}[/dim]")
+                            else:
+                                console.print(f"  [dim]Unknown action: {action}[/dim]")
+                        except Exception as e:
+                            console.print(f"  [red]Command error: {e}[/red]")
             except Exception:
                 pass
 

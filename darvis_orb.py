@@ -34,8 +34,8 @@ if not HAS_OBJC:
     # Fallback: just run darvis.py
     os.execvp("python3", ["python3", os.path.join(os.path.dirname(__file__), "darvis.py")])
 
-ORB_RADIUS = 40
-WINDOW_SIZE = 100
+ORB_RADIUS = 80
+WINDOW_SIZE = 200
 
 class OrbView(NSView):
     """Custom NSView that draws the holographic wireframe sphere."""
@@ -51,8 +51,9 @@ class OrbView(NSView):
         return self
 
     def _generate_nodes(self):
+        import random
         golden = math.pi * (3 - math.sqrt(5))
-        count = 35
+        count = 90
         for i in range(count):
             y = 1 - (i / (count - 1)) * 2
             r = math.sqrt(1 - y * y)
@@ -61,7 +62,8 @@ class OrbView(NSView):
                 'ox': math.cos(theta) * r,
                 'oy': y,
                 'oz': math.sin(theta) * r,
-                'pulse': i * 0.3,
+                'pulse': random.random() * math.pi * 2,
+                'size': 1.2 + random.random() * 1.8,
             })
 
     def drawRect_(self, rect):
@@ -73,10 +75,17 @@ class OrbView(NSView):
         h = rect.size.height
         cx, cy = w / 2, h / 2
         radius = ORB_RADIUS
+        connection_dist = 50
 
-        self.phase += 0.03
+        self.phase += 0.015 + getattr(self, '_speak_intensity', 0) * 0.015
+        speak_intensity = getattr(self, '_speak_intensity', 0)
+        if self.state == 'speaking':
+            self._speak_intensity = min(getattr(self, '_speak_intensity', 0) + 0.1, 1.2)
+        else:
+            self._speak_intensity = speak_intensity * 0.95
+        speak_intensity = self._speak_intensity
 
-        # Colors per state
+        # Colors per state (matching browser exactly)
         colors = {
             'idle': (0.31, 0.71, 1.0),
             'thinking': (1.0, 0.67, 0.25),
@@ -85,16 +94,18 @@ class OrbView(NSView):
         }
         cr, cg, cb = colors.get(self.state, (0.31, 0.71, 1.0))
 
-        # Outer glow circle
-        for i in range(3):
-            size = radius + 8 + i * 4
-            alpha = 0.15 - i * 0.04
+        # Center glow (matching browser radial gradient)
+        glow_alpha_base = 0.06 + speak_intensity * 0.08
+        glow_radius = radius * 0.6
+        glow_steps = 12
+        for i in range(glow_steps, 0, -1):
+            frac = i / glow_steps
+            size = glow_radius * frac
+            alpha = glow_alpha_base * (1 - frac)
             NSColor.colorWithCalibratedRed_green_blue_alpha_(cr, cg, cb, alpha).set()
-            path = NSBezierPath.bezierPathWithOvalInRect_(
+            NSBezierPath.bezierPathWithOvalInRect_(
                 NSMakeRect(cx - size, cy - size, size * 2, size * 2)
-            )
-            path.setLineWidth_(1.0)
-            path.stroke()
+            ).fill()
 
         # Project nodes
         rot_y = self.phase
@@ -109,14 +120,16 @@ class OrbView(NSView):
             y = n['oy'] * cos_x - z * sin_x
             z2 = n['oy'] * sin_x + z * cos_x
 
-            dist = 1.0
-            if self.state == 'speaking':
-                dist += 0.15 * math.sin(n['pulse'] + self.phase * 3)
+            # Speak distortion — nodes push outward (matching browser)
+            dist = 1 + speak_intensity * (0.15 + math.sin(n['pulse'] + self.phase * 5) * 0.1)
 
             scale = 1 / (1 + z2 * 0.3)
             sx = cx + x * radius * scale * dist
             sy = cy + y * radius * scale * dist
-            projected.append((sx, sy, z2, n['pulse']))
+            projected.append((sx, sy, z2, n['pulse'], scale, n['size']))
+
+        # Sort by depth for proper layering (matching browser)
+        projected.sort(key=lambda p: p[2])
 
         # Draw connections
         for i in range(len(projected)):
@@ -124,9 +137,9 @@ class OrbView(NSView):
                 dx = projected[i][0] - projected[j][0]
                 dy = projected[i][1] - projected[j][1]
                 d = math.sqrt(dx * dx + dy * dy)
-                if d < 30:
+                if d < connection_dist:
                     depth = (projected[i][2] + projected[j][2] + 2) / 4
-                    alpha = (1 - d / 30) * 0.4 * max(0, depth)
+                    alpha = (1 - d / connection_dist) * 0.3 * max(0, depth)
                     NSColor.colorWithCalibratedRed_green_blue_alpha_(cr, cg, cb, alpha).set()
                     path = NSBezierPath.bezierPath()
                     path.moveToPoint_(NSPoint(projected[i][0], projected[i][1]))
@@ -134,28 +147,31 @@ class OrbView(NSView):
                     path.setLineWidth_(0.5)
                     path.stroke()
 
-        # Draw nodes
-        for sx, sy, depth, pulse in projected:
+        # Draw nodes (matching browser: glow + core + bright center)
+        t = self.phase * 2
+        for sx, sy, depth, pulse, scale, node_size in projected:
             alpha = max(0, (depth + 1.5) / 2.5)
-            p = 0.5 + math.sin(pulse + self.phase * 2) * 0.3
-            size = 1.5 * (1 + (0.3 if self.state == 'speaking' else 0))
+            pulse_alpha = 0.5 + math.sin(pulse + t) * 0.3
+            size = node_size * scale * (1 + speak_intensity * 0.5)
 
             # Glow
-            NSColor.colorWithCalibratedRed_green_blue_alpha_(cr, cg, cb, alpha * 0.15 * p).set()
+            NSColor.colorWithCalibratedRed_green_blue_alpha_(cr, cg, cb, alpha * 0.1 * pulse_alpha).set()
+            g = size * 3
             NSBezierPath.bezierPathWithOvalInRect_(
-                NSMakeRect(sx - size * 3, sy - size * 3, size * 6, size * 6)
+                NSMakeRect(sx - g, sy - g, g * 2, g * 2)
             ).fill()
 
             # Core
-            NSColor.colorWithCalibratedRed_green_blue_alpha_(cr, cg, cb, alpha * 0.7 * p).set()
+            NSColor.colorWithCalibratedRed_green_blue_alpha_(cr, cg, cb, alpha * 0.8 * pulse_alpha).set()
             NSBezierPath.bezierPathWithOvalInRect_(
                 NSMakeRect(sx - size, sy - size, size * 2, size * 2)
             ).fill()
 
-            # White center
-            NSColor.colorWithCalibratedRed_green_blue_alpha_(1, 1, 1, alpha * 0.5 * p).set()
+            # Bright center
+            c = size * 0.4
+            NSColor.colorWithCalibratedRed_green_blue_alpha_(1, 1, 1, alpha * 0.6 * pulse_alpha).set()
             NSBezierPath.bezierPathWithOvalInRect_(
-                NSMakeRect(sx - size * 0.4, sy - size * 0.4, size * 0.8, size * 0.8)
+                NSMakeRect(sx - c, sy - c, c * 2, c * 2)
             ).fill()
 
     def isOpaque(self):

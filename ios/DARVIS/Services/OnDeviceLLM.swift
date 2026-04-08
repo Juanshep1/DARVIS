@@ -12,8 +12,9 @@ struct LocalModel: Identifiable {
 }
 
 let AVAILABLE_MODELS: [LocalModel] = [
-    LocalModel(id: "gemma4-e2b", name: "Gemma 4 E2B (2B - Fast)", size: "~1.5 GB", huggingFaceId: "mlx-community/gemma-2-2b-it-4bit", params: "2B"),
-    LocalModel(id: "gemma3-4b", name: "Gemma 3 4B (Smarter)", size: "~2.5 GB", huggingFaceId: "mlx-community/gemma-3-4b-it-4bit", params: "4B"),
+    LocalModel(id: "gemma4-e4b-4bit", name: "Gemma 4 E4B (4-bit)", size: "~2.5 GB", huggingFaceId: "mlx-community/gemma-4-e4b-it-4bit", params: "4B"),
+    LocalModel(id: "gemma4-e4b-8bit", name: "Gemma 4 E4B (8-bit, Best)", size: "~5 GB", huggingFaceId: "mlx-community/gemma-4-e4b-it-8bit", params: "4B"),
+    LocalModel(id: "gemma4-e2b", name: "Gemma 4 E2B (2B - Fastest)", size: "~1.5 GB", huggingFaceId: "unsloth/gemma-4-E2B-it-UD-MLX-4bit", params: "2B"),
 ]
 
 // MARK: - On-Device LLM via Apple MLX

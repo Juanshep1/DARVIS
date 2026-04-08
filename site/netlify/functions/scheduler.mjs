@@ -7,13 +7,21 @@ export default async (req) => {
     let tasks = [];
     try {
       const data = await store.get("tasks", { type: "json" });
-      if (Array.isArray(data)) tasks = data;
+      if (Array.isArray(data)) tasks = data.filter((t) => !t.completed);
     } catch {}
     return Response.json({ tasks });
   }
 
   if (req.method === "POST") {
     const body = await req.json();
+
+    // Full replacement mode (from terminal sync)
+    if (body.replace && Array.isArray(body.tasks)) {
+      await store.setJSON("tasks", body.tasks);
+      return Response.json({ ok: true, count: body.tasks.length });
+    }
+
+    // Single task add
     if (!body.task) return Response.json({ error: "No task" }, { status: 400 });
 
     let tasks = [];
@@ -22,7 +30,6 @@ export default async (req) => {
       if (Array.isArray(data)) tasks = data;
     } catch {}
 
-    // Add or update task
     const existing = tasks.findIndex((t) => t.id === body.id);
     if (existing >= 0) {
       tasks[existing] = body;
@@ -45,7 +52,6 @@ export default async (req) => {
       tasks = tasks.filter((t) => t.id !== body.id);
       await store.setJSON("tasks", tasks);
     } else {
-      // Clear all
       await store.setJSON("tasks", []);
     }
     return Response.json({ ok: true });

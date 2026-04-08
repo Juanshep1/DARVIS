@@ -1,487 +1,3 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#0a0a0f">
-<title>D.A.R.V.I.S.</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔵</text></svg>">
-<style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body {
-    background: #0a0a0f;
-    color: #e0e0e0;
-    font-family: -apple-system, 'SF Mono', 'Fira Code', 'Consolas', monospace;
-    height: 100vh; height: 100dvh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    overflow: hidden;
-    -webkit-tap-highlight-color: transparent;
-    padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
-}
-
-.title {
-    padding: 24px 0 0;
-    font-size: 0.7rem;
-    letter-spacing: 5px;
-    color: #4a90d9;
-    text-transform: uppercase;
-}
-
-.orb-container {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-    width: 100%;
-}
-
-/* ── DARVIS ORB — Vibrant iridescent AI core ── */
-.orb-wrap {
-    position: relative;
-    width: 260px; height: 260px;
-    display: flex; align-items: center; justify-content: center;
-    filter: drop-shadow(0 0 40px rgba(100, 140, 255, 0.3));
-}
-
-/* Ambient glow behind orb */
-.orb-glow {
-    position: absolute;
-    width: 200px; height: 200px;
-    border-radius: 50%;
-    background: radial-gradient(circle, rgba(80,140,255,0.25), rgba(160,80,255,0.15), transparent 70%);
-    filter: blur(30px);
-    animation: glowRotate 8s linear infinite;
-}
-@keyframes glowRotate { 0%{transform:rotate(0deg) scale(1)} 50%{transform:rotate(180deg) scale(1.1)} 100%{transform:rotate(360deg) scale(1)} }
-
-/* Outer flowing ring */
-.orb-ring {
-    position: absolute;
-    border-radius: 50%;
-    border: 1.5px solid transparent;
-    animation: ringRotate 8s linear infinite;
-}
-.orb-ring:nth-child(2) { width: 220px; height: 220px; border-image: conic-gradient(from 0deg, rgba(80,180,255,0.5), rgba(160,80,255,0.4), rgba(255,100,200,0.3), transparent 70%) 1; border-radius: 50%; border-top-color: rgba(80,180,255,0.4); animation-duration: 7s; }
-.orb-ring:nth-child(3) { width: 235px; height: 235px; border-bottom-color: rgba(160,80,255,0.3); animation-duration: 11s; animation-direction: reverse; }
-.orb-ring:nth-child(4) { width: 205px; height: 205px; border-left-color: rgba(255,100,200,0.2); animation-duration: 15s; }
-@keyframes ringRotate { 0%{transform:rotate(0deg)} 100%{transform:rotate(360deg)} }
-
-/* Pulse rings when speaking */
-.orb-pulse { position: absolute; width: 180px; height: 180px; border-radius: 50%; border: 1px solid rgba(100,255,200,0.3); opacity: 0; pointer-events: none; }
-.orb-wrap.speaking .orb-pulse { animation: pulseOut 1.5s ease-out infinite; }
-.orb-wrap.speaking .orb-pulse:nth-child(6) { animation-delay: 0.5s; }
-.orb-wrap.speaking .orb-pulse:nth-child(7) { animation-delay: 1s; }
-@keyframes pulseOut { 0%{transform:scale(0.9);opacity:0.6} 100%{transform:scale(2);opacity:0} }
-
-/* ── Core Orb — vibrant gradient sphere ── */
-.orb {
-    width: 180px; height: 180px;
-    border-radius: 50%;
-    cursor: pointer;
-    position: relative;
-    z-index: 2;
-    transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-
-    /* Multi-layer gradient for iridescent look */
-    background:
-        radial-gradient(circle at 30% 25%, rgba(255,255,255,0.25), transparent 50%),
-        radial-gradient(circle at 70% 75%, rgba(255,255,255,0.08), transparent 40%),
-        radial-gradient(ellipse at 25% 30%, #5b8dff, transparent 55%),
-        radial-gradient(ellipse at 75% 70%, #a855f7, transparent 55%),
-        radial-gradient(ellipse at 50% 50%, #3b82f6, #6366f1, #8b5cf6, #1e1b4b);
-
-    box-shadow:
-        0 0 30px rgba(99, 102, 241, 0.5),
-        0 0 60px rgba(139, 92, 246, 0.3),
-        0 0 100px rgba(59, 130, 246, 0.15),
-        inset 0 -15px 30px rgba(0,0,0,0.4),
-        inset 0 5px 20px rgba(255,255,255,0.1);
-
-    animation: orbFloat 6s ease-in-out infinite, orbShimmer 10s ease-in-out infinite, orbPulse 4s ease-in-out infinite;
-}
-.orb::before {
-    content: ''; position: absolute;
-    top: 8%; left: 15%; width: 40%; height: 30%;
-    background: radial-gradient(ellipse, rgba(255,255,255,0.6), rgba(255,255,255,0.1) 60%, transparent);
-    border-radius: 50%; filter: blur(8px);
-    animation: highlightShift 8s ease-in-out infinite;
-}
-.orb::after {
-    content: ''; position: absolute;
-    bottom: 12%; right: 15%; width: 25%; height: 18%;
-    background: radial-gradient(ellipse, rgba(200,180,255,0.2), transparent);
-    border-radius: 50%; filter: blur(5px);
-}
-
-@keyframes orbFloat { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
-@keyframes orbPulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.02)} }
-@keyframes orbShimmer { 0%,100%{filter:hue-rotate(0deg) brightness(1)} 50%{filter:hue-rotate(15deg) brightness(1.05)} }
-@keyframes highlightShift { 0%,100%{transform:translate(0,0)} 50%{transform:translate(5px, 3px)} }
-
-/* ── THINKING — warm orange/gold shift ── */
-.orb.thinking {
-    background:
-        radial-gradient(circle at 30% 25%, rgba(255,255,255,0.3), transparent 50%),
-        radial-gradient(ellipse at 25% 30%, #ff9f43, transparent 55%),
-        radial-gradient(ellipse at 75% 70%, #ee5a24, transparent 55%),
-        radial-gradient(ellipse at 50% 50%, #f39c12, #e55039, #eb4d4b, #2d1600);
-    box-shadow: 0 0 40px rgba(255,159,67,0.6), 0 0 80px rgba(238,90,36,0.3), 0 0 120px rgba(243,156,18,0.15), inset 0 0 30px rgba(255,200,100,0.2);
-    animation: orbFloat 6s ease-in-out infinite, orbThink 0.8s ease-in-out infinite;
-}
-@keyframes orbThink { 0%,100%{transform:scale(1)} 50%{transform:scale(1.06)} }
-
-.orb-wrap.thinking .orb-glow { background: radial-gradient(circle, rgba(255,159,67,0.3), rgba(238,90,36,0.15), transparent 70%); }
-
-/* ── SPEAKING — electric green/cyan with reactive scale ── */
-.orb.speaking {
-    background:
-        radial-gradient(circle at 30% 25%, rgba(255,255,255,0.3), transparent 50%),
-        radial-gradient(ellipse at 25% 30%, #00d2ff, transparent 55%),
-        radial-gradient(ellipse at 75% 70%, #0cebeb, transparent 55%),
-        radial-gradient(ellipse at 50% 50%, #00b894, #00cec9, #0984e3, #002a1e);
-    box-shadow: 0 0 40px rgba(0,206,201,0.6), 0 0 80px rgba(0,184,148,0.3), 0 0 120px rgba(9,132,227,0.2), inset 0 0 30px rgba(100,255,200,0.2);
-    animation: orbFloat 6s ease-in-out infinite, orbSpeak 0.25s ease-in-out infinite;
-}
-@keyframes orbSpeak { 0%,100%{transform:scale(1)} 50%{transform:scale(1.12)} }
-
-.orb-wrap.speaking .orb-glow { background: radial-gradient(circle, rgba(0,206,201,0.35), rgba(0,210,255,0.2), transparent 70%); }
-
-/* ── LISTENING — deep red/magenta ── */
-.orb.listening {
-    background:
-        radial-gradient(circle at 30% 25%, rgba(255,255,255,0.25), transparent 50%),
-        radial-gradient(ellipse at 25% 30%, #ff6b6b, transparent 55%),
-        radial-gradient(ellipse at 75% 70%, #ee5a24, transparent 55%),
-        radial-gradient(ellipse at 50% 50%, #e74c3c, #c0392b, #6c3483, #1a0000);
-    box-shadow: 0 0 40px rgba(231,76,60,0.6), 0 0 80px rgba(192,57,43,0.3), 0 0 120px rgba(108,52,131,0.15), inset 0 0 30px rgba(255,150,150,0.2);
-    animation: orbFloat 6s ease-in-out infinite, orbListen 1.5s ease-in-out infinite;
-}
-@keyframes orbListen { 0%,100%{transform:scale(1)} 25%{transform:scale(1.05)} 75%{transform:scale(0.98)} }
-
-.response {
-    position: absolute;
-    bottom: 10px;
-    width: 90%;
-    max-width: 550px;
-    text-align: center;
-    font-size: 0.95rem;
-    color: #b0c4de;
-    line-height: 1.6;
-    padding: 16px;
-    max-height: 180px;
-    overflow-y: auto;
-    left: 50%;
-    transform: translateX(-50%);
-}
-
-.input-area {
-    width: 100%;
-    padding: 16px 20px 28px;
-    display: flex;
-    gap: 10px;
-    justify-content: center;
-    background: linear-gradient(transparent, rgba(0,0,0,0.6));
-}
-.input-area input {
-    width: 100%;
-    max-width: 480px;
-    padding: 14px 20px;
-    border: 1px solid rgba(80, 140, 255, 0.3);
-    border-radius: 30px;
-    background: rgba(15, 15, 25, 0.95);
-    color: #e0e0e0;
-    font-family: inherit;
-    font-size: 1rem;
-    outline: none;
-    transition: border-color 0.3s;
-}
-.input-area input:focus {
-    border-color: rgba(80, 180, 255, 0.7);
-    box-shadow: 0 0 20px rgba(50, 140, 255, 0.15);
-}
-.input-area input::placeholder { color: #444; }
-
-.mic-btn, .cam-btn {
-    width: 48px; height: 48px; min-width: 48px;
-    border-radius: 50%;
-    border: 1px solid rgba(80, 140, 255, 0.3);
-    background: rgba(15, 15, 25, 0.95);
-    color: #4a90d9;
-    font-size: 1.3rem;
-    cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-    transition: all 0.3s;
-}
-.mic-btn:hover, .cam-btn:hover { border-color: rgba(80, 180, 255, 0.7); }
-.mic-btn.recording { border-color: #ff4444; color: #ff4444; }
-.cam-btn.active { border-color: #44ff44; color: #44ff44; }
-
-/* Settings */
-.settings-toggle {
-    position: fixed;
-    top: 15px; right: 15px;
-    width: 36px; height: 36px;
-    border-radius: 50%;
-    border: 1px solid rgba(80, 140, 255, 0.3);
-    background: rgba(15, 15, 25, 0.9);
-    color: #4a90d9;
-    font-size: 1rem;
-    cursor: pointer;
-    z-index: 100;
-    transition: all 0.3s;
-}
-.settings-toggle:hover { border-color: rgba(80, 180, 255, 0.7); }
-.settings-panel {
-    position: fixed;
-    top: 60px; right: 15px;
-    background: rgba(10, 10, 20, 0.95);
-    border: 1px solid rgba(80, 140, 255, 0.2);
-    border-radius: 12px;
-    padding: 20px;
-    width: 280px;
-    z-index: 100;
-    display: none;
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    max-height: 80vh;
-    overflow-y: auto;
-}
-.settings-panel.open { display: block; }
-.settings-panel label {
-    display: block;
-    font-size: 0.75rem;
-    color: #4a90d9;
-    letter-spacing: 1px;
-    text-transform: uppercase;
-    margin: 12px 0 6px;
-}
-.settings-panel label:first-child { margin-top: 0; }
-.settings-panel select {
-    width: 100%;
-    padding: 8px 12px;
-    border: 1px solid rgba(80, 140, 255, 0.3);
-    border-radius: 8px;
-    background: rgba(15, 15, 25, 0.9);
-    color: #e0e0e0;
-    font-family: inherit;
-    font-size: 0.85rem;
-    outline: none;
-    -webkit-appearance: none;
-}
-.settings-panel select:focus { border-color: rgba(80, 180, 255, 0.7); }
-.settings-status {
-    margin-top: 12px;
-    font-size: 0.75rem;
-    color: #5a5;
-    min-height: 1.2em;
-}
-
-/* Camera preview */
-.cam-preview {
-    position: fixed;
-    bottom: 90px; right: 15px;
-    width: 260px; height: 195px;
-    border-radius: 14px;
-    border: 2px solid rgba(80, 255, 150, 0.5);
-    object-fit: cover;
-    z-index: 90;
-    display: none;
-    box-shadow: 0 0 30px rgba(80, 255, 150, 0.2), 0 4px 20px rgba(0,0,0,0.5);
-    background: #000;
-}
-.cam-preview.active { display: block; }
-
-.status {
-    position: fixed;
-    bottom: 6px;
-    font-size: 0.6rem;
-    color: #333;
-    letter-spacing: 1px;
-}
-
-/* Mobile */
-@media (max-width: 480px) {
-    .orb { width: 140px; height: 140px; }
-    .title { padding: 16px 0 0; font-size: 0.6rem; letter-spacing: 3px; }
-    .response { font-size: 0.85rem; max-height: 140px; padding: 10px; width: 95%; }
-    .input-area { padding: 12px 12px calc(env(safe-area-inset-bottom, 0px) + 16px); }
-    .input-area input { padding: 12px 16px; font-size: 0.95rem; }
-    .settings-panel { width: calc(100vw - 30px); right: 15px; }
-    .cam-preview { width: 200px; height: 150px; bottom: 80px; right: 10px; }
-    .agent-panel { width: calc(100vw - 30px); max-height: 70vh; }
-}
-@media (max-height: 600px) {
-    .orb { width: 120px; height: 120px; }
-    .response { max-height: 100px; }
-    .title { padding: 8px 0 0; }
-    .input-area { padding: 8px 12px 12px; }
-}
-
-/* Agent View — floating browser window */
-.agent-toggle {
-    position: fixed;
-    top: 15px; left: 15px;
-    width: 36px; height: 36px;
-    border-radius: 50%;
-    border: 1px solid rgba(80, 140, 255, 0.3);
-    background: rgba(15, 15, 25, 0.9);
-    color: #4a90d9;
-    font-size: 1rem;
-    cursor: pointer;
-    z-index: 100;
-    transition: all 0.3s;
-}
-.agent-toggle:hover { border-color: rgba(80, 180, 255, 0.7); }
-.agent-toggle.active { border-color: #44ff44; color: #44ff44; animation: pulse 1.5s infinite; }
-.agent-panel {
-    position: fixed;
-    top: 50%; left: 50%;
-    transform: translate(-50%, -50%);
-    background: rgba(8, 8, 16, 0.98);
-    border: 1px solid rgba(80, 140, 255, 0.3);
-    border-radius: 12px;
-    padding: 0;
-    width: 90vw;
-    max-width: 700px;
-    max-height: 85vh;
-    z-index: 200;
-    display: none;
-    backdrop-filter: blur(15px);
-    -webkit-backdrop-filter: blur(15px);
-    overflow: hidden;
-    box-shadow: 0 0 40px rgba(50, 140, 255, 0.2), 0 20px 60px rgba(0,0,0,0.5);
-}
-.agent-panel.open { display: flex; flex-direction: column; }
-.agent-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 10px 14px;
-    border-bottom: 1px solid rgba(80, 140, 255, 0.15);
-    background: rgba(15, 15, 30, 0.8);
-}
-.agent-header .agent-title {
-    font-size: 0.7rem;
-    color: #4a90d9;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-}
-.agent-header .agent-close {
-    width: 24px; height: 24px;
-    border-radius: 50%;
-    border: 1px solid rgba(255, 80, 80, 0.3);
-    background: transparent;
-    color: #f55;
-    font-size: 0.8rem;
-    cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-}
-.agent-header .agent-close:hover { background: rgba(255, 80, 80, 0.15); }
-.agent-screen-wrap {
-    flex: 1;
-    overflow: hidden;
-    position: relative;
-    background: #000;
-    min-height: 200px;
-}
-.agent-screen-wrap img {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-    display: block;
-}
-.agent-screen-wrap .agent-no-feed {
-    position: absolute;
-    top: 50%; left: 50%;
-    transform: translate(-50%, -50%);
-    color: #444;
-    font-size: 0.8rem;
-    text-align: center;
-}
-.agent-footer {
-    padding: 8px 14px;
-    border-top: 1px solid rgba(80, 140, 255, 0.15);
-    background: rgba(15, 15, 30, 0.8);
-}
-.agent-footer .agent-status {
-    font-size: 0.7rem;
-    color: #8a8;
-    margin: 0;
-}
-.agent-footer .agent-step {
-    font-size: 0.65rem;
-    color: #555;
-    margin-top: 2px;
-}
-</style>
-</head>
-<body>
-
-<button class="settings-toggle" onclick="toggleSettings()">&#9881;</button>
-<div class="settings-panel" id="settingsPanel">
-    <label>Audio Mode</label>
-    <select id="audioModeSelect" onchange="setAudioMode(this.value)">
-        <option value="classic">Classic (Ollama + ElevenLabs)</option>
-        <option value="gemini">Gemini Live Audio</option>
-        <option value="gemma">Gemma 4 (Fast, Free)</option>
-    </select>
-    <div id="classicSettings">
-        <label>Model</label>
-        <select id="modelSelect" onchange="setModel(this.value)"></select>
-        <label>Voice</label>
-        <select id="voiceSelect" onchange="setVoice(this.value)"></select>
-    </div>
-    <div class="settings-status" id="settingsStatus"></div>
-</div>
-
-<button class="agent-toggle" id="agentToggle" onclick="toggleAgentView()">&#x1F441;</button>
-<div class="agent-panel" id="agentPanel">
-    <div class="agent-header">
-        <span class="agent-title">D.A.R.V.I.S. Browser</span>
-        <button class="agent-close" onclick="toggleAgentView()">&times;</button>
-    </div>
-    <div class="agent-screen-wrap">
-        <img id="agentScreen" style="display:none" alt="Agent browser view">
-        <div class="agent-no-feed" id="agentNoFeed">No active session<br>Ask DARVIS to browse something</div>
-    </div>
-    <div class="agent-footer">
-        <div class="agent-status" id="agentStatus">Idle</div>
-        <div class="agent-step" id="agentStep"></div>
-    </div>
-</div>
-
-<div class="title">D . A . R . V . I . S .</div>
-
-<div class="orb-container">
-    <div class="orb-wrap" id="orbWrap">
-        <div class="orb-glow"></div>
-        <div class="orb-ring"></div>
-        <div class="orb-ring"></div>
-        <div class="orb-ring"></div>
-        <div class="orb-pulse"></div>
-        <div class="orb-pulse"></div>
-        <div class="orb-pulse"></div>
-        <div class="orb" id="orb" onclick="toggleMic()"></div>
-    </div>
-    <div class="response" id="response"></div>
-</div>
-
-<div class="input-area">
-    <input type="text" id="input" placeholder="Talk to DARVIS..." autocomplete="off"
-           onkeydown="if(event.key==='Enter')send()">
-    <button class="mic-btn" id="micBtn" onclick="toggleMic()">&#x1F3A4;</button>
-    <button class="cam-btn" id="camBtn" onclick="toggleCamera()">&#x1F4F7;</button>
-</div>
-
-<video class="cam-preview" id="camPreview" autoplay playsinline muted></video>
-
-<div class="status" id="statusBar">POWERED BY OLLAMA CLOUD + ELEVENLABS</div>
-
 <script>
 // ── State ──
 const orb = document.getElementById('orb');
@@ -1763,5 +1279,1287 @@ setInterval(() => {
     }
 }, 30000); // Check every 30 seconds
 </script>
+<script>
+// ── State ──
+const orb = document.getElementById('orb');
+const orbWrap = document.getElementById('orbWrap');
+
+// Sync orb state to wrapper (for ring colors)
+const _origOrbClass = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'className');
+const orbStateObserver = new MutationObserver(() => {
+    const cls = orb.className.replace('orb', '').trim();
+    orbWrap.className = 'orb-wrap' + (cls ? ' ' + cls : '');
+});
+orbStateObserver.observe(orb, { attributes: true, attributeFilter: ['class'] });
+const responseEl = document.getElementById('response');
+const inputEl = document.getElementById('input');
+const micBtn = document.getElementById('micBtn');
+const camBtn = document.getElementById('camBtn');
+const camPreview = document.getElementById('camPreview');
+const statusBar = document.getElementById('statusBar');
+
+let audioMode = 'classic'; // 'classic' or 'gemini'
+let recognition = null;
+let isRecording = false;
+let currentAudio = null;
+let silenceTimer = null;
+const SILENCE_DELAY = 3000;
+
+// Camera state
+let cameraStream = null;
+let cameraCanvas = null;
+let cameraActive = false;
+
+// Gemini Live state
+let geminiWs = null;
+let geminiAudioCtx = null;
+let geminiMicStream = null;
+let geminiMicProcessor = null;
+let geminiAudioQueue = [];
+let geminiPlaying = false;
+let geminiSessionActive = false;
+
+// ── Audio unlock (classic mode) ──
+let persistentAudio = new Audio();
+persistentAudio.setAttribute('playsinline', '');
+function unlockAudio() {
+    if (!geminiAudioCtx) {
+        geminiAudioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
+    }
+    geminiAudioCtx.resume();
+    persistentAudio.src = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAABhkVuHQgAAAAAAAAAAAAAAAAAAP/7UGQAAAALS0gBQRAAANIKCAoYgAABAAH+AAAJAAADSAAAABAAAAAAACqf/LAAAAAARFRJJF//sqRA';
+    persistentAudio.play().then(() => persistentAudio.pause()).catch(() => {});
+}
+document.addEventListener('click', unlockAudio, { once: false });
+document.addEventListener('touchstart', unlockAudio, { once: false });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// GEMINI LIVE AUDIO SESSION
+// ══════════════════════════════════════════════════════════════════════════════
+
+async function geminiConnect() {
+    // Clean up any stale connection
+    if (geminiWs) {
+        if (geminiWs.readyState === WebSocket.OPEN && geminiSessionActive) return true;
+        try { geminiWs.close(); } catch {}
+        geminiWs = null;
+        geminiSessionActive = false;
+    }
+
+    try {
+        // Get token from server
+        const tokenRes = await fetch('/api/gemini-token');
+        const tokenData = await tokenRes.json();
+        if (!tokenData.token) throw new Error('No Gemini token');
+
+        const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${tokenData.token}`;
+
+        // Fetch memories for system instruction
+        let memoryCtx = '';
+        try {
+            const memRes = await fetch('/api/memory');
+            const memData = await memRes.json();
+            if (memData.memories?.length) {
+                memoryCtx = '\n\nUser memories:\n' + memData.memories.map(m => `- [${m.category}] ${m.content}`).join('\n');
+            }
+        } catch {}
+
+        return new Promise((resolve, reject) => {
+            let settled = false;
+            const ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                console.log('Gemini WS open, sending setup...');
+                ws.send(JSON.stringify({
+                    setup: {
+                        model: `models/${tokenData.model}`,
+                        generation_config: {
+                            response_modalities: ['AUDIO'],
+                            speech_config: {
+                                voice_config: {
+                                    prebuilt_voice_config: { voice_name: 'Kore' }
+                                }
+                            }
+                        },
+                        system_instruction: {
+                            parts: [{
+                                text: `You are D.A.R.V.I.S., a Digital Assistant, Rather Very Intelligent System.
+You are dry-witted, efficient, and occasionally sardonic — but always helpful and loyal.
+British-accented speech patterns. Concise and direct, but with personality.
+Addresses the user as "sir" or "ma'am" naturally. Shows quiet competence.
+Keep responses concise (1-3 sentences unless more detail is needed).
+
+You are running on the Gemini 2.5 Flash Native Audio model in Gemini Live mode via the browser at darvis1.netlify.app. When asked what model you are, say Gemini 2.5 Flash Native Audio. You run across iPhone, browser, terminal, and Android — all share memory and history.
+
+You may receive camera images from the user's device. When you see images, describe what you see accurately.
+
+When the user asks you to remember something, confirm naturally ("Noted, sir" or "I'll remember that"). The memory system saves it automatically.
+When asked what you remember, refer to the user memories listed below.${memoryCtx}`
+                            }]
+                        }
+                    }
+                }));
+            };
+
+            ws.onmessage = async (event) => {
+                try {
+                    // Gemini sends binary frames containing JSON text
+                    let raw = event.data;
+                    if (raw instanceof Blob) {
+                        raw = await raw.text();
+                    } else if (raw instanceof ArrayBuffer) {
+                        raw = new TextDecoder().decode(raw);
+                    }
+                    const msg = JSON.parse(raw);
+
+                    // Setup complete — session is ready
+                    if (msg.setupComplete !== undefined) {
+                        console.log('Gemini setup complete');
+                        geminiWs = ws;
+                        geminiSessionActive = true;
+                        statusBar.textContent = 'GEMINI LIVE — SPEAK NATURALLY';
+                        if (!settled) { settled = true; resolve(true); }
+                        return;
+                    }
+
+                    // Server content (audio + text)
+                    if (msg.serverContent) {
+                        // Interruption — user spoke over Gemini
+                        if (msg.serverContent.interrupted) {
+                            stopGeminiPlayback();
+                            orb.className = isRecording ? 'orb listening' : 'orb';
+                            return;
+                        }
+
+                        const parts = msg.serverContent.modelTurn?.parts || [];
+                        for (const part of parts) {
+                            if (part.inlineData?.mimeType?.includes('audio')) {
+                                playGeminiAudio(part.inlineData.data);
+                            }
+                            if (part.text) {
+                                // Filter out thinking blocks (text between ** **)
+                                const clean = part.text.replace(/\*\*[^*]+\*\*\n?/g, '').trim();
+                                if (clean) responseEl.textContent = clean;
+                            }
+                        }
+
+                        // Turn complete
+                        if (msg.serverContent.turnComplete) {
+                            const text = responseEl.textContent;
+                            if (text) {
+                                fetch('/api/history', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ messages: [
+                                        { role: 'assistant', content: responseEl.textContent }
+                                    ]}),
+                                }).catch(() => {});
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Gemini parse error:', e);
+                }
+            };
+
+            ws.onerror = (ev) => {
+                console.warn('Gemini WS error:', ev);
+                if (!settled) { settled = true; reject(new Error('WebSocket error')); }
+            };
+
+            ws.onclose = (ev) => {
+                console.warn('Gemini WS closed:', ev.code, ev.reason);
+                geminiSessionActive = false;
+                geminiWs = null;
+                if (!settled) {
+                    settled = true;
+                    reject(new Error(`Closed: ${ev.code} ${ev.reason}`));
+                } else if (audioMode === 'gemini' && isRecording) {
+                    // Session dropped while active — auto-reconnect
+                    stopGeminiMic();
+                    stopGeminiPlayback();
+                    statusBar.textContent = 'GEMINI RECONNECTING...';
+                    orb.className = 'orb thinking';
+                    setTimeout(async () => {
+                        try {
+                            const ok = await geminiConnect();
+                            if (ok) {
+                                statusBar.textContent = 'GEMINI LIVE — SPEAK NATURALLY';
+                                orb.className = 'orb listening';
+                                await startGeminiMic();
+                            } else {
+                                statusBar.textContent = 'GEMINI FAILED — TAP MIC TO RETRY';
+                                isRecording = false;
+                                micBtn.classList.remove('recording');
+                                orb.className = 'orb';
+                            }
+                        } catch {
+                            isRecording = false;
+                            micBtn.classList.remove('recording');
+                            orb.className = 'orb';
+                        }
+                    }, 1000);
+                }
+            };
+
+            // Timeout — only if setup hasn't completed
+            setTimeout(() => {
+                if (!settled) {
+                    settled = true;
+                    try { ws.close(); } catch {}
+                    reject(new Error('Connection timeout (10s)'));
+                }
+            }, 10000);
+        });
+    } catch (err) {
+        console.warn('Gemini connect failed:', err);
+        return false;
+    }
+}
+
+function fallbackToClassic() {
+    stopGeminiPlayback();
+    stopGeminiMic();
+    if (geminiWs) { try { geminiWs.close(); } catch {} geminiWs = null; }
+    geminiSessionActive = false;
+    isRecording = false;
+    micBtn.classList.remove('recording');
+    audioMode = 'classic';
+    document.getElementById('audioModeSelect').value = 'classic';
+    updateModeUI();
+    orb.className = 'orb';
+    responseEl.textContent = 'Gemini unavailable — switched to Classic mode.';
+}
+
+// ── Gemini audio playback (PCM 24kHz → AudioContext) ──
+// Queue-based: audio chunks are scheduled sequentially so they don't overlap.
+// Interruption: stopGeminiPlayback() cancels all queued audio instantly.
+
+let geminiPlaybackSources = []; // active AudioBufferSourceNodes
+let geminiNextPlayTime = 0;     // when to schedule the next chunk
+
+function playGeminiAudio(base64Data) {
+    if (!geminiAudioCtx) {
+        geminiAudioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
+    }
+    geminiAudioCtx.resume();
+
+    const raw = atob(base64Data);
+    const bytes = new Uint8Array(raw.length);
+    for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+
+    const int16 = new Int16Array(bytes.buffer);
+    const float32 = new Float32Array(int16.length);
+    for (let i = 0; i < int16.length; i++) {
+        float32[i] = int16[i] / 32768;
+    }
+
+    const buffer = geminiAudioCtx.createBuffer(1, float32.length, 24000);
+    buffer.copyToChannel(float32, 0);
+
+    const source = geminiAudioCtx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(geminiAudioCtx.destination);
+
+    // Schedule sequentially
+    const now = geminiAudioCtx.currentTime;
+    const startTime = Math.max(now, geminiNextPlayTime);
+    source.start(startTime);
+    geminiNextPlayTime = startTime + buffer.duration;
+
+    source.onended = () => {
+        geminiPlaybackSources = geminiPlaybackSources.filter(s => s !== source);
+        if (geminiPlaybackSources.length === 0) {
+            geminiPlaying = false;
+            if (orb.classList.contains('speaking')) {
+                orb.className = isRecording ? 'orb listening' : 'orb';
+            }
+        }
+    };
+
+    geminiPlaybackSources.push(source);
+    geminiPlaying = true;
+    orb.className = 'orb speaking';
+}
+
+function stopGeminiPlayback() {
+    // Immediately stop all queued audio (for interruption)
+    for (const source of geminiPlaybackSources) {
+        try { source.stop(); } catch {}
+    }
+    geminiPlaybackSources = [];
+    geminiNextPlayTime = 0;
+    geminiPlaying = false;
+}
+
+// ── Gemini mic streaming (capture → 16kHz PCM → WebSocket) ──
+
+async function startGeminiMic() {
+    if (!geminiWs || geminiWs.readyState !== WebSocket.OPEN) return;
+
+    try {
+        geminiMicStream = await navigator.mediaDevices.getUserMedia({
+            audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+        });
+
+        // Create AudioContext at device's native rate, we'll resample to 16kHz
+        const micCtx = new AudioContext();
+        const nativeRate = micCtx.sampleRate;
+        const targetRate = 16000;
+        const source = micCtx.createMediaStreamSource(geminiMicStream);
+
+        const processor = micCtx.createScriptProcessor(4096, 1, 1);
+        let frameCounter = 0;
+
+        processor.onaudioprocess = (e) => {
+            if (!geminiWs || geminiWs.readyState !== WebSocket.OPEN) return;
+
+            const inputData = e.inputBuffer.getChannelData(0);
+
+            // Resample from native rate to 16kHz
+            const ratio = nativeRate / targetRate;
+            const outputLen = Math.floor(inputData.length / ratio);
+            const int16 = new Int16Array(outputLen);
+            for (let i = 0; i < outputLen; i++) {
+                const srcIdx = Math.floor(i * ratio);
+                const sample = inputData[srcIdx] || 0;
+                int16[i] = Math.max(-32768, Math.min(32767, Math.floor(sample * 32768)));
+            }
+
+            // Base64 encode
+            const bytes = new Uint8Array(int16.buffer);
+            let binary = '';
+            for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+            const b64 = btoa(binary);
+
+            // Build message
+            const msg = {
+                realtimeInput: {
+                    mediaChunks: [{
+                        data: b64,
+                        mimeType: 'audio/pcm;rate=16000'
+                    }]
+                }
+            };
+
+            // Note: native audio model doesn't accept images in the WebSocket stream.
+            // Camera vision is handled separately via REST API when user asks about it.
+
+            geminiWs.send(JSON.stringify(msg));
+        };
+
+        source.connect(processor);
+        processor.connect(micCtx.destination);
+        geminiMicProcessor = { processor, source, context: micCtx };
+
+    } catch (err) {
+        console.warn('Mic access error:', err);
+        responseEl.textContent = 'Microphone access denied.';
+    }
+}
+
+// ── Camera vision via Gemini REST API ──
+// The native audio model can't see images, so we use the regular
+// Gemini API to describe what the camera sees, then feed the
+// description into the live audio session for speech output.
+
+// ── Memory: detect from USER input, not LLM output ──
+// This is reliable — we don't depend on the LLM to format markers correctly.
+
+function detectMemoryIntent(userText) {
+    const lower = userText.toLowerCase().trim();
+
+    // REMEMBER patterns
+    const rememberPatterns = [
+        /^remember\s+(?:that\s+)?(.+)/i,
+        /^don'?t forget\s+(?:that\s+)?(.+)/i,
+        /^save\s+(?:that\s+)?(.+)/i,
+        /^keep in mind\s+(?:that\s+)?(.+)/i,
+        /^note\s+(?:that\s+)?(.+)/i,
+        /^memorize\s+(?:that\s+)?(.+)/i,
+        /remember\s+(?:that\s+)?(?:my\s+|i\s+|the\s+)(.+)/i,
+    ];
+    for (const pat of rememberPatterns) {
+        const match = userText.match(pat);
+        if (match) return { action: 'save', content: match[1].trim() };
+    }
+
+    // FORGET patterns
+    const forgetPatterns = [
+        /^forget\s+(?:that\s+|about\s+)?(.+)/i,
+        /^delete\s+(?:the\s+)?memory\s+(?:about\s+)?(.+)/i,
+        /^remove\s+(?:the\s+)?memory\s+(?:about\s+)?(.+)/i,
+        /^erase\s+(?:the\s+)?memory\s+(?:about\s+)?(.+)/i,
+    ];
+    for (const pat of forgetPatterns) {
+        const match = userText.match(pat);
+        if (match) return { action: 'forget', content: match[1].trim() };
+    }
+
+    return null;
+}
+
+async function handleMemoryFromUserInput(userText) {
+    const intent = detectMemoryIntent(userText);
+    if (!intent) return false;
+
+    if (intent.action === 'save') {
+        await fetch('/api/memory', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: intent.content, category: 'general' }),
+        });
+        return true;
+    }
+
+    if (intent.action === 'forget') {
+        try {
+            const res = await fetch('/api/memory');
+            const data = await res.json();
+            const lower = intent.content.toLowerCase();
+            for (const mem of (data.memories || [])) {
+                if (mem.content.toLowerCase().includes(lower) || lower.includes(mem.content.toLowerCase())) {
+                    await fetch('/api/memory', {
+                        method: 'DELETE',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id: mem.id }),
+                    });
+                    return true;
+                }
+            }
+        } catch {}
+        return true;
+    }
+    return false;
+}
+
+let cameraAnalyzing = false;
+
+async function analyzeCamera(userPrompt) {
+    if (!cameraActive || !cameraCanvas || cameraAnalyzing) return;
+    cameraAnalyzing = true;
+    orb.className = 'orb thinking';
+    responseEl.textContent = 'Analyzing camera...';
+
+    try {
+        const frame = captureFrame();
+        if (!frame) {
+            responseEl.textContent = 'Camera not ready yet. Try again.';
+            cameraAnalyzing = false;
+            orb.className = isRecording ? 'orb listening' : 'orb';
+            return;
+        }
+
+        let description = '';
+
+        if (audioMode === 'gemini') {
+            // Gemini mode: use Gemini REST API directly
+            const tokenRes = await fetch('/api/gemini-token');
+            const tokenData = await tokenRes.json();
+
+            const prompt = `You are DARVIS, a dry-witted British AI assistant. The user is showing you a live camera image and asked: "${userPrompt || 'What do you see?'}"
+
+Describe EXACTLY what is in this image — the actual objects, text, colors, people, scene, etc. Be specific. Do NOT make things up. If unclear, say so. 1-3 sentences.`;
+
+            const res = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${tokenData.token}`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [
+                            { inlineData: { mimeType: 'image/jpeg', data: frame } },
+                            { text: prompt }
+                        ]}],
+                        generationConfig: { maxOutputTokens: 300, temperature: 0.3 }
+                    })
+                }
+            );
+            const data = await res.json();
+            description = data.candidates?.[0]?.content?.parts?.[0]?.text || 'I couldn\'t make that out, sir.';
+        } else {
+            // Classic mode: use Ollama vision model via /api/vision
+            const res = await fetch('/api/vision', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    image: frame,
+                    prompt: userPrompt || 'What do you see in this image?'
+                }),
+            });
+            const data = await res.json();
+            description = data.description || 'I couldn\'t make that out, sir.';
+        }
+
+        responseEl.textContent = description;
+
+        // Speak the description
+        if (audioMode === 'gemini' && geminiWs && geminiWs.readyState === WebSocket.OPEN && geminiSessionActive) {
+            // Feed to Gemini Live for audio output
+            geminiWs.send(JSON.stringify({
+                clientContent: {
+                    turns: [{
+                        role: 'user',
+                        parts: [{ text: `[Camera description: "${description}"] Say this to the user naturally as DARVIS. Keep it brief.` }]
+                    }],
+                    turnComplete: true
+                }
+            }));
+        } else {
+            // Classic mode: use ElevenLabs TTS
+            try {
+                const ttsRes = await fetch('/api/tts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: description }),
+                });
+                const contentType = ttsRes.headers.get('content-type') || '';
+                if (ttsRes.ok && contentType.includes('audio')) {
+                    const audioBlob = await ttsRes.blob();
+                    if (audioBlob.size > 100) {
+                        const audioUrl = URL.createObjectURL(audioBlob);
+                        persistentAudio.pause();
+                        persistentAudio.currentTime = 0;
+                        persistentAudio.src = audioUrl;
+                        persistentAudio.onended = () => {
+                            orb.className = 'orb';
+                            URL.revokeObjectURL(audioUrl);
+                        };
+                        orb.className = 'orb speaking';
+                        await persistentAudio.play();
+                        cameraAnalyzing = false;
+                        return;
+                    }
+                }
+            } catch {}
+        }
+
+        orb.className = isRecording ? 'orb listening' : 'orb';
+    } catch (err) {
+        console.warn('Camera analysis error:', err);
+        responseEl.textContent = 'Camera analysis failed: ' + err.message;
+        orb.className = isRecording ? 'orb listening' : 'orb';
+    }
+    cameraAnalyzing = false;
+}
+
+function stopGeminiMic() {
+    if (geminiMicProcessor) {
+        geminiMicProcessor.processor.disconnect();
+        geminiMicProcessor.source.disconnect();
+        geminiMicProcessor.context.close();
+        geminiMicProcessor = null;
+    }
+    if (geminiMicStream) {
+        geminiMicStream.getTracks().forEach(t => t.stop());
+        geminiMicStream = null;
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// CAMERA
+// ══════════════════════════════════════════════════════════════════════════════
+
+async function toggleCamera() {
+    if (cameraActive) {
+        stopCamera();
+    } else {
+        try {
+            // Try rear camera first, fall back to any camera
+            let stream;
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
+                });
+            } catch {
+                stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            }
+            cameraStream = stream;
+            camPreview.srcObject = stream;
+            camPreview.classList.add('active');
+            camBtn.classList.add('active');
+
+            // Wait for video to be ready and playing
+            await new Promise((resolve) => {
+                const check = () => {
+                    if (camPreview.videoWidth > 0) {
+                        resolve();
+                    } else {
+                        camPreview.addEventListener('loadeddata', resolve, { once: true });
+                        camPreview.play().catch(() => {});
+                    }
+                };
+                if (camPreview.readyState >= 2) resolve();
+                else check();
+            });
+
+            cameraActive = true;
+            cameraCanvas = document.createElement('canvas');
+            cameraCanvas.width = camPreview.videoWidth || 1280;
+            cameraCanvas.height = camPreview.videoHeight || 720;
+            responseEl.textContent = 'Camera on — ask "what do you see?"';
+        } catch (err) {
+            console.warn('Camera error:', err);
+            responseEl.textContent = 'Camera access denied: ' + err.message;
+        }
+    }
+}
+
+function stopCamera() {
+    if (cameraStream) {
+        cameraStream.getTracks().forEach(t => t.stop());
+        cameraStream = null;
+    }
+    camPreview.srcObject = null;
+    camPreview.classList.remove('active');
+    camBtn.classList.remove('active');
+    cameraActive = false;
+    cameraCanvas = null;
+}
+
+function captureFrame() {
+    if (!cameraCanvas || !camPreview.videoWidth || !cameraActive) return null;
+    const w = camPreview.videoWidth;
+    const h = camPreview.videoHeight;
+    cameraCanvas.width = w;
+    cameraCanvas.height = h;
+    const ctx = cameraCanvas.getContext('2d');
+    ctx.drawImage(camPreview, 0, 0, w, h);
+    // Higher quality JPEG for better vision recognition
+    return cameraCanvas.toDataURL('image/jpeg', 0.85).split(',')[1];
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// CLASSIC MODE — Web Speech API + Ollama + ElevenLabs
+// ══════════════════════════════════════════════════════════════════════════════
+
+if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    recognition = new SR();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    recognition.onresult = (e) => {
+        let finalText = '';
+        let interimText = '';
+        for (let i = 0; i < e.results.length; i++) {
+            const transcript = e.results[i][0].transcript;
+            if (e.results[i].isFinal) finalText += transcript;
+            else interimText += transcript;
+        }
+        inputEl.value = (finalText + interimText).trim();
+        clearTimeout(silenceTimer);
+        silenceTimer = setTimeout(() => {
+            if (isRecording) recognition.stop();
+        }, SILENCE_DELAY);
+    };
+    recognition.onend = () => {
+        clearTimeout(silenceTimer);
+        const hadText = inputEl.value.trim().length > 0;
+        if (audioMode === 'gemini' && cameraActive) {
+            // In Gemini+camera mode, don't stop recording — restart recognition
+            // and route the transcribed text through send()
+            if (hadText) {
+                send(); // send() will detect camera requests and route accordingly
+                // Restart recognition for continuous listening
+                setTimeout(() => {
+                    if (isRecording && audioMode === 'gemini' && cameraActive) {
+                        try { recognition.start(); } catch {}
+                    }
+                }, 500);
+            } else {
+                // No text — restart recognition silently
+                if (isRecording) {
+                    try { recognition.start(); } catch {}
+                }
+            }
+            return;
+        }
+        // Classic mode
+        isRecording = false;
+        micBtn.classList.remove('recording');
+        if (hadText) send();
+        else if (!orb.classList.contains('thinking') && !orb.classList.contains('speaking')) orb.className = 'orb';
+    };
+    recognition.onerror = (e) => {
+        clearTimeout(silenceTimer);
+        if (e.error === 'no-speech') return;
+        isRecording = false;
+        micBtn.classList.remove('recording');
+        orb.className = 'orb';
+    };
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MIC TOGGLE (routes to correct mode)
+// ══════════════════════════════════════════════════════════════════════════════
+
+async function toggleMic() {
+    if (audioMode === 'gemini') {
+        if (isRecording) {
+            // Stop Gemini session
+            stopGeminiPlayback();
+            stopGeminiMic();
+            if (geminiWs) { geminiWs.close(); geminiWs = null; }
+            geminiSessionActive = false;
+            isRecording = false;
+            micBtn.classList.remove('recording');
+            orb.className = 'orb';
+            statusBar.textContent = 'GEMINI PAUSED — TAP MIC TO RESUME';
+            // Also stop Web Speech if it was running for camera mode
+            if (recognition) try { recognition.stop(); } catch {}
+        } else {
+            orb.className = 'orb thinking';
+            responseEl.textContent = 'Connecting to Gemini...';
+            try {
+                const ok = await geminiConnect();
+                if (ok) {
+                    isRecording = true;
+                    micBtn.classList.add('recording');
+                    orb.className = 'orb listening';
+                    responseEl.textContent = '';
+
+                    if (cameraActive && recognition) {
+                        // Camera + Gemini mode: use Web Speech API for transcription
+                        // so we can detect camera requests and route to vision API.
+                        // Non-camera questions get sent to Gemini WebSocket as text.
+                        recognition.start();
+                        statusBar.textContent = 'GEMINI LIVE + CAMERA — SPEAK NATURALLY';
+                    } else {
+                        // No camera: stream raw audio to Gemini (speech-to-speech)
+                        await startGeminiMic();
+                    }
+                } else {
+                    orb.className = 'orb';
+                    responseEl.textContent = 'Could not connect to Gemini. Try again.';
+                }
+            } catch (err) {
+                console.warn('Gemini mic start error:', err);
+                orb.className = 'orb';
+                responseEl.textContent = 'Gemini connection failed: ' + err.message;
+            }
+        }
+        return;
+    }
+
+    // Classic mode
+    if (!recognition) {
+        responseEl.textContent = 'Speech recognition not available. Use Chrome.';
+        return;
+    }
+    if (isRecording) {
+        clearTimeout(silenceTimer);
+        recognition.stop();
+    } else {
+        isRecording = true;
+        micBtn.classList.add('recording');
+        orb.className = 'orb listening';
+        inputEl.value = '';
+        recognition.start();
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// SEND (classic mode text input + Gemini text input)
+// ══════════════════════════════════════════════════════════════════════════════
+
+function looksLikeOpenRequest(text) {
+    const lower = text.toLowerCase();
+    const triggers = ['open ', 'go to ', 'pull up ', 'navigate to ', 'take me to ', 'show me ', 'launch ', 'bring up ', 'load ', 'google '];
+    return triggers.some(t => lower.startsWith(t) || lower.includes('open '));
+}
+
+function looksLikeCameraRequest(text) {
+    const lower = text.toLowerCase();
+    const triggers = [
+        'what do you see', 'what can you see', "what's in front",
+        'what is in front', 'what am i looking at', 'what is this',
+        "what's this", 'what are these', 'what is that', "what's that",
+        'describe what', 'look at this', 'can you see', 'do you see',
+        'read this', 'read that', 'what does this say', 'what does it say',
+        'identify', 'recognize', 'what color', 'what brand',
+        'how many', 'tell me about this', 'what kind of',
+        'camera', 'looking at', 'in front of me', 'show you',
+        'see this', 'see that', 'point', 'scan',
+    ];
+    return triggers.some(t => lower.includes(t));
+}
+
+async function send() {
+    const text = inputEl.value.trim();
+    if (!text) return;
+    inputEl.value = '';
+
+    // Handle memory saves/forgets directly from user input
+    handleMemoryFromUserInput(text);
+
+    // On-demand briefing
+    if (text.toLowerCase().includes('briefing') || text.toLowerCase().includes('brief me') || text.toLowerCase().includes('news update')) {
+        runBriefing();
+        return;
+    }
+
+    // Gemini text mode — send via WebSocket
+    if (audioMode === 'gemini') {
+        // If camera is active and user is asking about what they see, use camera vision
+        if (cameraActive && looksLikeCameraRequest(text)) {
+            await analyzeCamera(text);
+            return;
+        }
+
+        orb.className = 'orb thinking';
+        responseEl.textContent = '';
+        try {
+            const ok = await geminiConnect();
+            if (ok && geminiWs && geminiWs.readyState === WebSocket.OPEN) {
+                // Send the user's text turn
+                geminiWs.send(JSON.stringify({
+                    clientContent: {
+                        turns: [{ role: 'user', parts: [{ text: text }] }],
+                        turnComplete: true
+                    }
+                }));
+                // Save user message to history
+                fetch('/api/history', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ messages: [{ role: 'user', content: text }] }),
+                }).catch(() => {});
+            } else {
+                fallbackToClassic();
+                inputEl.value = text;
+                send();
+            }
+        } catch (err) {
+            console.warn('Gemini send error:', err);
+            fallbackToClassic();
+            inputEl.value = text;
+            send();
+        }
+        return;
+    }
+
+    // Gemma mode — direct to Gemini 2.5 Flash API (fast, free, no Ollama)
+    if (audioMode === 'gemma') {
+        if (cameraActive && looksLikeCameraRequest(text)) { await analyzeCamera(text); return; }
+
+        orb.className = 'orb thinking';
+        responseEl.textContent = '';
+        try {
+            const tokenRes = await fetch('/api/gemini-token');
+            const tokenData = await tokenRes.json();
+
+            // Fetch memories for context
+            let memCtx = '';
+            try {
+                const memRes = await fetch('/api/memory');
+                const memData = await memRes.json();
+                if (memData.memories?.length) memCtx = '\nUser memories: ' + memData.memories.map(m => m.content).join('; ');
+            } catch {}
+
+            const gemmaRes = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${tokenData.token}`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text }] }],
+                        systemInstruction: { parts: [{ text: `You are D.A.R.V.I.S., a dry-witted British AI assistant. Concise, witty, helpful. You are running on the Gemma 4 / Gemini 2.5 Flash model. When asked what model, say Gemma 4 (Gemini 2.5 Flash). You run across iPhone, browser, terminal, and Android.${memCtx}` }] },
+                        generationConfig: { maxOutputTokens: 500, temperature: 0.7 }
+                    })
+                }
+            );
+            const gemmaData = await gemmaRes.json();
+            const reply = gemmaData.candidates?.[0]?.content?.parts?.[0]?.text || 'No response, sir.';
+            responseEl.textContent = reply;
+
+            // Save to history
+            fetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ messages: [{ role: 'user', content: text }, { role: 'assistant', content: reply }] })
+            }).catch(() => {});
+
+            // TTS
+            try {
+                const ttsRes = await fetch('/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: reply }) });
+                const ct = ttsRes.headers.get('content-type') || '';
+                if (ttsRes.ok && ct.includes('audio')) {
+                    const blob = await ttsRes.blob();
+                    if (blob.size > 100) {
+                        const url = URL.createObjectURL(blob);
+                        persistentAudio.pause(); persistentAudio.currentTime = 0;
+                        persistentAudio.src = url;
+                        persistentAudio.onended = () => { orb.className = 'orb'; URL.revokeObjectURL(url); };
+                        orb.className = 'orb speaking';
+                        await persistentAudio.play();
+                        return;
+                    }
+                }
+            } catch {}
+            orb.className = 'orb';
+        } catch (err) {
+            responseEl.textContent = 'Gemma error: ' + err.message;
+            orb.className = 'orb';
+        }
+        return;
+    }
+
+    // Classic mode — camera vision works here too
+    if (cameraActive && looksLikeCameraRequest(text)) {
+        await analyzeCamera(text);
+        return;
+    }
+
+    if (currentAudio) { persistentAudio.pause(); persistentAudio.currentTime = 0; currentAudio = null; }
+
+    let pendingTab = null;
+    if (looksLikeOpenRequest(text)) {
+        pendingTab = window.open('about:blank', '_blank');
+    }
+
+    orb.className = 'orb thinking';
+    responseEl.textContent = '';
+
+    try {
+        const res = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: text }),
+        });
+        const data = await res.json();
+        responseEl.textContent = data.reply;
+
+        if (data.actions) {
+            let usedPending = false;
+            data.actions.forEach(act => {
+                if (act.action === 'open_url' && act.url) {
+                    if (pendingTab && !usedPending) {
+                        pendingTab.location.href = act.url;
+                        usedPending = true;
+                    } else {
+                        window.open(act.url, '_blank');
+                    }
+                } else if (act.action === 'agent_started') {
+                    // Open agent view automatically
+                    document.getElementById('agentPanel').classList.add('open');
+                    startAgentPolling();
+                }
+            });
+            if (pendingTab && !usedPending) pendingTab.close();
+            pendingTab = null;
+        } else if (pendingTab) {
+            pendingTab.close();
+            pendingTab = null;
+        }
+
+        // Classic TTS
+        try {
+            const ttsRes = await fetch('/api/tts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: data.reply }),
+            });
+            const contentType = ttsRes.headers.get('content-type') || '';
+            if (ttsRes.ok && contentType.includes('audio')) {
+                const audioBlob = await ttsRes.blob();
+                if (audioBlob.size > 100) {
+                    if (currentAudio && currentAudio._blobUrl) URL.revokeObjectURL(currentAudio._blobUrl);
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    persistentAudio.pause();
+                    persistentAudio.currentTime = 0;
+                    persistentAudio._blobUrl = audioUrl;
+                    persistentAudio.src = audioUrl;
+                    persistentAudio.onended = () => { orb.className = 'orb'; URL.revokeObjectURL(audioUrl); currentAudio = null; };
+                    persistentAudio.onerror = () => { orb.className = 'orb'; };
+                    currentAudio = persistentAudio;
+                    orb.className = 'orb speaking';
+                    await persistentAudio.play();
+                    return;
+                }
+            }
+        } catch (ttsErr) { console.warn('TTS error:', ttsErr); }
+        orb.className = 'orb';
+    } catch (err) {
+        responseEl.textContent = 'Connection error: ' + err.message;
+        orb.className = 'orb';
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// SETTINGS
+// ══════════════════════════════════════════════════════════════════════════════
+
+function toggleSettings() {
+    document.getElementById('settingsPanel').classList.toggle('open');
+}
+
+function updateModeUI() {
+    const classic = document.getElementById('classicSettings');
+    if (audioMode === 'gemini') {
+        classic.style.display = 'none';
+        statusBar.textContent = 'GEMINI LIVE AUDIO';
+    } else if (audioMode === 'gemma') {
+        classic.style.display = 'none';
+        statusBar.textContent = 'GEMMA 4 — FAST & FREE';
+    } else {
+        classic.style.display = 'block';
+        statusBar.textContent = 'POWERED BY OLLAMA CLOUD + ELEVENLABS';
+    }
+}
+
+async function setAudioMode(mode) {
+    audioMode = mode;
+    updateModeUI();
+    // Stop any active Gemini session
+    if (mode === 'classic' && geminiWs) {
+        stopGeminiMic();
+        geminiWs.close();
+        geminiWs = null;
+        geminiSessionActive = false;
+    }
+    const status = document.getElementById('settingsStatus');
+    status.textContent = 'Switching audio mode...';
+    try {
+        await fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ audio_mode: mode }),
+        });
+        status.textContent = mode === 'gemini' ? 'Gemini Live Audio' : 'Classic mode';
+    } catch { status.textContent = 'Error switching mode'; }
+}
+
+async function loadSettings() {
+    const status = document.getElementById('settingsStatus');
+
+    // Load audio mode
+    try {
+        const res = await fetch('/api/settings');
+        const data = await res.json();
+        if (data.audio_mode) {
+            audioMode = data.audio_mode;
+            document.getElementById('audioModeSelect').value = audioMode;
+            updateModeUI();
+        }
+    } catch {}
+
+    // Load models
+    try {
+        const res = await fetch('/api/models');
+        const data = await res.json();
+        const sel = document.getElementById('modelSelect');
+        sel.innerHTML = '';
+        data.models.forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m; opt.textContent = m;
+            if (m === data.current) opt.selected = true;
+            sel.appendChild(opt);
+        });
+    } catch(e) { console.warn('Failed to load models', e); }
+
+    // Load voices
+    try {
+        const res = await fetch('/api/voices');
+        const data = await res.json();
+        const sel = document.getElementById('voiceSelect');
+        sel.innerHTML = '';
+        data.voices.forEach(v => {
+            const opt = document.createElement('option');
+            opt.value = v.id;
+            opt.textContent = v.name + (v.category ? ' (' + v.category + ')' : '');
+            if (v.id === data.current) opt.selected = true;
+            sel.appendChild(opt);
+        });
+    } catch(e) { console.warn('Failed to load voices', e); }
+
+    status.textContent = 'Settings loaded';
+    setTimeout(() => { status.textContent = ''; }, 2000);
+}
+
+async function setModel(model) {
+    const status = document.getElementById('settingsStatus');
+    status.textContent = 'Switching model...';
+    try {
+        await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model }) });
+        status.textContent = 'Model: ' + model;
+    } catch { status.textContent = 'Error switching model'; }
+}
+
+async function setVoice(voice_id) {
+    const status = document.getElementById('settingsStatus');
+    status.textContent = 'Switching voice...';
+    try {
+        await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ voice_id }) });
+        status.textContent = 'Voice updated';
+    } catch { status.textContent = 'Error switching voice'; }
+}
+
+// Close settings when clicking outside
+document.addEventListener('click', (e) => {
+    const panel = document.getElementById('settingsPanel');
+    const toggle = document.querySelector('.settings-toggle');
+    if (panel.classList.contains('open') && !panel.contains(e.target) && !toggle.contains(e.target)) {
+        panel.classList.remove('open');
+    }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// AGENT VIEW — live browser feed from Computer Use
+// ══════════════════════════════════════════════════════════════════════════════
+
+let agentPollTimer = null;
+let lastScreenshotUrl = null;
+
+function toggleAgentView() {
+    const panel = document.getElementById('agentPanel');
+    panel.classList.toggle('open');
+    if (panel.classList.contains('open')) {
+        startAgentPolling();
+    } else {
+        stopAgentPolling();
+    }
+}
+
+function startAgentPolling() {
+    if (agentPollTimer) return;
+    pollAgent();
+    agentPollTimer = setInterval(pollAgent, 500); // Fast polling for smooth updates
+}
+
+function stopAgentPolling() {
+    if (agentPollTimer) {
+        clearInterval(agentPollTimer);
+        agentPollTimer = null;
+    }
+}
+
+async function pollAgent() {
+    try {
+        const res = await fetch('/api/agent/status');
+        const status = await res.json();
+        const statusEl = document.getElementById('agentStatus');
+        const stepEl = document.getElementById('agentStep');
+        const screenEl = document.getElementById('agentScreen');
+        const noFeed = document.getElementById('agentNoFeed');
+        const toggleBtn = document.getElementById('agentToggle');
+
+        if (status.active) {
+            toggleBtn.classList.add('active');
+            statusEl.textContent = status.goal;
+            stepEl.textContent = `Step ${status.step} — ${status.thinking || 'Working...'}`;
+            noFeed.style.display = 'none';
+
+            // Fetch screenshot
+            try {
+                const imgRes = await fetch('/api/agent/screenshot');
+                if (imgRes.ok && imgRes.headers.get('content-type')?.includes('image')) {
+                    const blob = await imgRes.blob();
+                    if (lastScreenshotUrl) URL.revokeObjectURL(lastScreenshotUrl);
+                    lastScreenshotUrl = URL.createObjectURL(blob);
+                    screenEl.src = lastScreenshotUrl;
+                    screenEl.style.display = 'block';
+                }
+            } catch {}
+        } else if (status.done && status.thinking) {
+            toggleBtn.classList.remove('active');
+            statusEl.textContent = 'Complete';
+            stepEl.textContent = status.thinking;
+            // Keep last screenshot visible
+        } else {
+            toggleBtn.classList.remove('active');
+            statusEl.textContent = 'Idle';
+            stepEl.textContent = '';
+            if (!screenEl.src || screenEl.src === window.location.href) {
+                noFeed.style.display = 'block';
+                screenEl.style.display = 'none';
+            }
+        }
+    } catch {}
+}
+
+loadSettings();
+inputEl.focus();
+
+// Audio-reactive orb — pulse with playback volume
+let orbReactiveInterval = null;
+function startOrbReactive() {
+    if (orbReactiveInterval) return;
+    let phase = 0;
+    orbReactiveInterval = setInterval(() => {
+        phase += 0.3;
+        const scale = 1 + Math.sin(phase) * 0.08 + Math.random() * 0.03;
+        orb.style.setProperty('--speak-scale', scale);
+        orb.style.transform = `scale(${scale})`;
+    }, 50);
+}
+function stopOrbReactive() {
+    if (orbReactiveInterval) { clearInterval(orbReactiveInterval); orbReactiveInterval = null; }
+    orb.style.transform = '';
+}
+// Hook into orb state changes
+orbStateObserver.observe(orb, { attributes: true, attributeFilter: ['class'] });
+const _checkOrbState = () => {
+    if (orb.classList.contains('speaking')) startOrbReactive();
+    else stopOrbReactive();
+};
+new MutationObserver(_checkOrbState).observe(orb, { attributes: true, attributeFilter: ['class'] });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// SCHEDULED BRIEFINGS — 8:00 AM and 9:30 PM (runs in browser independently)
+// ══════════════════════════════════════════════════════════════════════════════
+
+async function runBriefing() {
+    orb.className = 'orb thinking';
+    responseEl.textContent = 'Preparing briefing...';
+    try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 55000); // 55s timeout
+        const res = await fetch('/api/briefing', { signal: controller.signal });
+        clearTimeout(timeout);
+
+        if (!res.ok) throw new Error('Briefing failed');
+        const data = await res.json();
+        if (data.briefing) {
+            responseEl.textContent = data.briefing;
+            try {
+                const ttsRes = await fetch('/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: data.briefing }) });
+                if (ttsRes.ok) {
+                    const blob = await ttsRes.blob();
+                    if (blob.size > 100) {
+                        const url = URL.createObjectURL(blob);
+                        persistentAudio.pause(); persistentAudio.currentTime = 0;
+                        persistentAudio.src = url;
+                        persistentAudio.onended = () => { orb.className = 'orb'; URL.revokeObjectURL(url); };
+                        orb.className = 'orb speaking';
+                        persistentAudio.play().catch(() => {});
+                        return;
+                    }
+                }
+            } catch {}
+        } else {
+            responseEl.textContent = 'Briefing unavailable — try again later.';
+        }
+    } catch (err) {
+        responseEl.textContent = err.name === 'AbortError' ? 'Briefing timed out — try again.' : 'Briefing error: ' + err.message;
+    }
+    orb.className = 'orb';
+}
+
+// Check every minute if it's briefing time
+let lastBriefingCheck = '';
+setInterval(() => {
+    const now = new Date();
+    const timeKey = `${now.getHours()}:${now.getMinutes()}`;
+    if (timeKey === lastBriefingCheck) return; // Already checked this minute
+    lastBriefingCheck = timeKey;
+
+    const h = now.getHours();
+    const m = now.getMinutes();
+    if ((h === 8 && m === 0) || (h === 21 && m === 30)) {
+        runBriefing();
+    }
+}, 30000); // Check every 30 seconds
+</script>
+
 </body>
 </html>

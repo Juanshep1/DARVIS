@@ -23,7 +23,6 @@
 		680FADB1B66AFDD1024B059E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F263F0DB28CC9CF7BEC34C4B /* Assets.xcassets */; };
 		7A5ED8E621DC81CD14901875 /* MemoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FEFD354307DB1E6E4635287 /* MemoryView.swift */; };
 		7B9A438F30C939C6278F8C4C /* OrbView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89B3A8E19F62DDFF548B0A0A /* OrbView.swift */; };
-		8710F8EF125FD82B6B1AD742 /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = C67A6E5F90D2C179D7D8F33D /* MLXLLM */; };
 		8CCD4E9D58FBEBDFF9C8623E /* AudioService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28C520675AED1176CD5623DA /* AudioService.swift */; };
 		AE5E8DF86C65DA34907025F2 /* DARVISApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A56A3B062FFB5E699C752225 /* DARVISApp.swift */; };
 		B5F3C6A75B80A7F454B7B7C1 /* iPhoneControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3709E3FFAF91749586B95D7C /* iPhoneControl.swift */; };
@@ -57,17 +56,6 @@
 		F165F40D77684EA2C4518B5E /* DARVIS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = DARVIS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F263F0DB28CC9CF7BEC34C4B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
-
-/* Begin PBXFrameworksBuildPhase section */
-		4BF425AC28BE2F6A2A116A82 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				8710F8EF125FD82B6B1AD742 /* MLXLLM in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		08B143EC7A931B1E99EBDC9D /* Services */ = {
@@ -172,7 +160,6 @@
 			buildPhases = (
 				83DE7F31CA0D984656299FA3 /* Sources */,
 				85F40677CA0D96250619A654 /* Resources */,
-				4BF425AC28BE2F6A2A116A82 /* Frameworks */,
 			);
 			buildRules = (
 			);
@@ -180,7 +167,6 @@
 			);
 			name = DARVIS;
 			packageProductDependencies = (
-				C67A6E5F90D2C179D7D8F33D /* MLXLLM */,
 			);
 			productName = DARVIS;
 			productReference = F165F40D77684EA2C4518B5E /* DARVIS.app */;
@@ -211,9 +197,6 @@
 			);
 			mainGroup = B6A70156C1B55396E447CCAF;
 			minimizedProjectReferenceProxies = 1;
-			packageReferences = (
-				FA30968D79084CCBAB3496DE /* XCRemoteSwiftPackageReference "mlx-swift-lm" */,
-			);
 			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
 			projectRoot = "";
@@ -461,25 +444,6 @@
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
-
-/* Begin XCRemoteSwiftPackageReference section */
-		FA30968D79084CCBAB3496DE /* XCRemoteSwiftPackageReference "mlx-swift-lm" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/ml-explore/mlx-swift-lm";
-			requirement = {
-				branch = main;
-				kind = branch;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
-
-/* Begin XCSwiftPackageProductDependency section */
-		C67A6E5F90D2C179D7D8F33D /* MLXLLM */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = FA30968D79084CCBAB3496DE /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
-			productName = MLXLLM;
-		};
-/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = B438B705BACA5F46A3778DE8 /* Project object */;
 }

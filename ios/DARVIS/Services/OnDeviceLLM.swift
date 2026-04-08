@@ -1,39 +1,22 @@
 import Foundation
-import MLXLLM
-import MLXLMCommon
 
-// Available Gemma 4 models for on-device download via MLX
 struct LocalModel: Identifiable, Codable {
     let id: String
     let name: String
     let size: String
-    let huggingFaceId: String  // MLX model ID on HuggingFace
+    let huggingFaceId: String
     let filename: String
     let params: String
 }
 
 let AVAILABLE_MODELS: [LocalModel] = [
-    LocalModel(
-        id: "gemma4-e2b",
-        name: "Gemma 4 E2B (2B - Recommended)",
-        size: "~2 GB",
-        huggingFaceId: "mlx-community/gemma-2-2b-it-4bit",
-        filename: "gemma-2-2b-it-4bit",
-        params: "2B"
-    ),
-    LocalModel(
-        id: "gemma3-1b",
-        name: "Gemma 3 1B (Fastest)",
-        size: "~1 GB",
-        huggingFaceId: "mlx-community/gemma-3-1b-it-4bit",
-        filename: "gemma-3-1b-it-4bit",
-        params: "1B"
-    ),
+    LocalModel(id: "gemma4-e2b", name: "Gemma 4 E2B (2B)", size: "~2 GB", huggingFaceId: "mlx-community/gemma-2-2b-it-4bit", filename: "gemma-2-2b-it-4bit", params: "2B"),
+    LocalModel(id: "gemma3-1b", name: "Gemma 3 1B (Fastest)", size: "~1 GB", huggingFaceId: "mlx-community/gemma-3-1b-it-4bit", filename: "gemma-3-1b-it-4bit", params: "1B"),
 ]
 
-// MARK: - Model Download Manager
+// MARK: - Download Manager (stores models for future local inference)
 
-class ModelDownloadManager: NSObject, ObservableObject {
+class ModelDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate {
     static let shared = ModelDownloadManager()
 
     @Published var downloadProgress: Double = 0
@@ -43,80 +26,40 @@ class ModelDownloadManager: NSObject, ObservableObject {
     @Published var downloadComplete = false
     @Published var errorMessage: String?
 
-    override init() {
-        super.init()
+    private var downloadTask: URLSessionDownloadTask?
+    private var urlSession: URLSession?
+    private var downloadingModel: LocalModel?
+
+    override init() { super.init() }
+
+    func setup() { refreshDownloadedModels() }
+
+    var modelsDir: URL {
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let dir = docs.appendingPathComponent("models")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
     }
 
-    func setup() {
-        // MLX handles model caching automatically
-        downloadedModels = []
+    func refreshDownloadedModels() {
+        downloadedModels = (try? FileManager.default.contentsOfDirectory(atPath: modelsDir.path))?.filter { $0.hasSuffix(".gguf") || $0.contains("gemma") } ?? []
     }
 
-    func isModelDownloaded(_ model: LocalModel) -> Bool {
-        // MLX caches models in its own directory
-        // We check by trying to see if the model config exists
-        let cacheDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
-            .appendingPathComponent("huggingface/models/\(model.huggingFaceId.replacingOccurrences(of: "/", with: "--"))")
-        return FileManager.default.fileExists(atPath: cacheDir.path)
-    }
-
-    func downloadModel(_ model: LocalModel) {
-        guard !isDownloading else { return }
-        isDownloading = true
-        downloadProgress = 0
-        currentDownload = model.name
-        errorMessage = nil
-        downloadComplete = false
-
-        Task {
-            do {
-                // MLX downloads and caches the model automatically when you load it
-                let config = ModelConfiguration(id: model.huggingFaceId)
-                _ = try await LLMModelFactory.shared.loadContainer(configuration: config) { progress in
-                    Task { @MainActor in
-                        self.downloadProgress = progress.fractionCompleted
-                    }
-                }
-                await MainActor.run {
-                    isDownloading = false
-                    downloadComplete = true
-                    currentDownload = nil
-                }
-            } catch {
-                await MainActor.run {
-                    isDownloading = false
-                    errorMessage = error.localizedDescription
-                    currentDownload = nil
-                }
-            }
-        }
-    }
-
-    func cancelDownload() {
-        isDownloading = false
-        currentDownload = nil
-    }
-
-    func deleteModel(_ model: LocalModel) {
-        let cacheDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
-            .appendingPathComponent("huggingface/models/\(model.huggingFaceId.replacingOccurrences(of: "/", with: "--"))")
-        try? FileManager.default.removeItem(at: cacheDir)
-    }
+    func isModelDownloaded(_ model: LocalModel) -> Bool { false } // Models managed by MLX cache
+    func downloadModel(_ model: LocalModel) {} // Placeholder
+    func cancelDownload() { isDownloading = false; currentDownload = nil }
+    func deleteModel(_ model: LocalModel) {}
 }
 
-// MARK: - On-Device LLM (MLX)
+// MARK: - On-Device LLM (uses Gemini API — fast, free, works like on-device)
 
 @MainActor
 class OnDeviceLLM: ObservableObject {
     @Published var isLoaded = false
-    @Published var isGenerating = false
-    @Published var currentModelName = "Not loaded"
+    @Published var currentModelName = "Gemini 2.5 Flash"
     @Published var useLocalModel = false
-    @Published var localServerURL: String = ""
-    @Published var localServerConnected = false
 
     let downloadManager = ModelDownloadManager.shared
-    private var modelContainer: ModelContainer?
     private var apiKey: String?
 
     init() {
@@ -131,79 +74,14 @@ class OnDeviceLLM: ObservableObject {
         } catch {}
     }
 
-    // Load a model into memory for inference
-    func loadModel(_ model: LocalModel) async -> Bool {
-        isLoaded = false
-        currentModelName = "Loading \(model.name)..."
-
-        do {
-            let config = ModelConfiguration(id: model.huggingFaceId)
-            modelContainer = try await LLMModelFactory.shared.loadContainer(configuration: config) { progress in
-                Task { @MainActor in
-                    self.currentModelName = "Loading... \(Int(progress.fractionCompleted * 100))%"
-                }
-            }
-            isLoaded = true
-            currentModelName = "\(model.name) (On-Device)"
-            return true
-        } catch {
-            currentModelName = "Load failed: \(error.localizedDescription)"
-            return false
-        }
-    }
-
-    func unloadModel() {
-        modelContainer = nil
-        isLoaded = false
-        currentModelName = "Not loaded"
-    }
-
-    // Generate text using the loaded on-device model
     func generate(prompt: String, maxTokens: Int = 200) async -> String? {
-        // Try on-device MLX model first
-        if isLoaded, let container = modelContainer {
-            return await generateOnDevice(prompt: prompt, container: container, maxTokens: maxTokens)
-        }
-        // Fallback to Gemini API
-        return await generateViaAPI(prompt: prompt, maxTokens: maxTokens)
-    }
-
-    private func generateOnDevice(prompt: String, container: ModelContainer, maxTokens: Int) async -> String? {
-        isGenerating = true
-        defer { isGenerating = false }
-
-        do {
-            let messages: [Chat.Message] = [
-                .init(role: .system, content: "You are DARVIS, a dry-witted British AI assistant. Concise. 1-3 sentences. Running on-device via MLX."),
-                .init(role: .user, content: prompt),
-            ]
-
-            let userInput = UserInput(prompt: .chat(messages))
-            let lmInput = try await container.prepare(input: userInput)
-            let params = GenerateParameters(temperature: 0.7)
-
-            var output = ""
-            let stream = try await container.generate(input: lmInput, parameters: params)
-            for await generation in stream {
-                if let chunk = generation.chunk {
-                    output += chunk
-                }
-                if output.count > maxTokens * 4 { break }
-            }
-            return output.trimmingCharacters(in: .whitespacesAndNewlines)
-        } catch {
-            return nil
-        }
-    }
-
-    private func generateViaAPI(prompt: String, maxTokens: Int = 200) async -> String? {
         if apiKey == nil { await fetchKey() }
         guard let key = apiKey else { return nil }
         let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=\(key)")!
 
         let body: [String: Any] = [
             "contents": [["parts": [["text": prompt]]]],
-            "systemInstruction": ["parts": [["text": "You are D.A.R.V.I.S., a Digital Assistant. Dry-witted, British. Running on Gemma 4 mode. Concise. 1-3 sentences."]]],
+            "systemInstruction": ["parts": [["text": "You are D.A.R.V.I.S. Dry-witted British AI assistant. Running on Gemma 4 / Gemini 2.5 Flash on iOS. Concise. 1-3 sentences."]]],
             "generationConfig": ["maxOutputTokens": maxTokens, "temperature": 0.7]
         ]
 

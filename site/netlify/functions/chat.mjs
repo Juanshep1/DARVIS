@@ -124,12 +124,13 @@ export default async (req) => {
     }
   }
 
+  // Force Central Time (user's timezone) — Netlify servers run in UTC
   const d = new Date();
-  const hour = d.getHours();
-  const period = hour < 6 ? "LATE NIGHT" : hour < 12 ? "MORNING" : hour < 17 ? "AFTERNOON" : hour < 21 ? "EVENING" : "NIGHT";
-  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const now = d.toLocaleString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "numeric", minute: "numeric", hour12: true });
-  const timeBlock = `CURRENT DATE/TIME (accurate, trust this):\n  Date: ${now}\n  Period: ${period}\n  Timezone: ${tz}`;
+  const userTZ = "America/Chicago";
+  const localTime = d.toLocaleString("en-US", { timeZone: userTZ, weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "numeric", minute: "numeric", hour12: true });
+  const localHour = parseInt(d.toLocaleString("en-US", { timeZone: userTZ, hour: "numeric", hour12: false }));
+  const period = localHour < 6 ? "LATE NIGHT" : localHour < 12 ? "MORNING" : localHour < 17 ? "AFTERNOON" : localHour < 21 ? "EVENING" : "NIGHT";
+  const timeBlock = `CURRENT DATE/TIME (accurate, trust this):\n  Date: ${localTime}\n  Period: ${period}\n  Timezone: CDT (Central)`;
 
   const systemPrompt = `You are D.A.R.V.I.S., a Digital Assistant, Rather Very Intelligent System.
 You are dry-witted, efficient, and occasionally sardonic — but always helpful and loyal.

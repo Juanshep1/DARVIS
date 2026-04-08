@@ -108,13 +108,31 @@ class DARVISScheduler:
             try:
                 console.print(f"\n  [bright_blue]⏰ Scheduled task:[/bright_blue] {task.task}")
 
-                response = brain.think(task.task)
-                cmd_results = extract_fn(response)
-                if cmd_results:
-                    context = "\n".join(cmd_results)
+                # Multi-step execution — keep going until no more commands
+                all_results = []
+                for step in range(5):  # Max 5 rounds
+                    if step == 0:
+                        response = brain.think(
+                            f"EXECUTE THIS TASK NOW using command blocks. You MUST include ALL necessary command blocks:\n\n{task.task}\n\nInclude ALL steps as command blocks. Do NOT just describe what you'd do — actually do it with command blocks."
+                        )
+                    else:
+                        response = brain.think(
+                            f"Continue the task. Previous results:\n{chr(10).join(all_results[-3:])}\n\nAre there more steps needed? If so, include command blocks. If done, just give the final summary without command blocks."
+                        )
+
+                    cmd_results = extract_fn(response)
+                    if cmd_results:
+                        all_results.extend(cmd_results)
+                        for r in cmd_results:
+                            console.print(f"  [dim]{r[:100]}[/dim]")
+                    else:
+                        break  # No more commands — done
+
+                # Final summary
+                if all_results:
+                    context = "\n".join(all_results)
                     response = brain.think(
-                        "(Report the results naturally. Be concise.)",
-                        context=context,
+                        f"(You just completed a scheduled task. Here are the results. Summarize what you did in 2-3 sentences. Be natural.)\n\nResults:\n{context}"
                     )
 
                 display = re.sub(r'```command\s*\n.*?\n```', '', response, flags=re.DOTALL).strip()

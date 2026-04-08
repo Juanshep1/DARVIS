@@ -1712,9 +1712,15 @@ def main():
             if morning < now:
                 morning += datetime.timedelta(days=1)
             _global_scheduler.add_task(
-                task_desc="MORNING BRIEFING: Gather today's weather, top news headlines with summaries, battery status, and any saved reminders. Save a daily briefing file to the Desktop and open it. Open Google News in Safari. Give a full spoken JARVIS-style briefing covering weather, 2-3 top news stories in detail, reminders, and anything else noteworthy. 5-7 sentences.",
+                task_desc="""MORNING BRIEFING — Do ALL of these steps with command blocks:
+1. Use fetch_url to get weather: fetch_url https://wttr.in/?format=%C+%t+%h+%w
+2. Use search_web to find today's top news
+3. Create a file on the Desktop called DARVIS_Morning_Briefing.txt with the date, weather, and top 5 news stories with summaries
+4. Open that file with open_file
+5. Navigate Safari to https://news.google.com using safari navigate
+6. After all commands execute, give a spoken briefing: greeting, weather, 2-3 news stories summarized, reminders, and say you've opened the news and saved the briefing.""",
                 at_time=morning.isoformat(),
-                recurring_minutes=1440,  # Every 24 hours
+                recurring_minutes=1440,
             )
             console.print(f"  [green]✓[/green] Morning briefing scheduled for 8:00 AM daily")
 
@@ -1723,9 +1729,15 @@ def main():
             if night < now:
                 night += datetime.timedelta(days=1)
             _global_scheduler.add_task(
-                task_desc="EVENING BRIEFING: Gather tonight's weather forecast, top evening news with summaries, battery status, and any saved reminders. Save a nightly briefing file to the Desktop and open it. Give a full spoken JARVIS-style evening wrap-up covering what happened today in the news, tomorrow's weather outlook, reminders, and wish the user a good night. 5-7 sentences.",
+                task_desc="""EVENING BRIEFING — Do ALL of these steps with command blocks:
+1. Use fetch_url to get weather: fetch_url https://wttr.in/?format=%C+%t+%h+%w
+2. Use search_web to find tonight's top news
+3. Create a file on the Desktop called DARVIS_Evening_Briefing.txt with the date, weather, and top 5 news stories with summaries
+4. Open that file with open_file
+5. Navigate Safari to https://news.google.com using safari navigate
+6. After all commands execute, give a spoken evening wrap-up: what happened today in the news, tomorrow's weather, reminders, wish good night.""",
                 at_time=night.isoformat(),
-                recurring_minutes=1440,  # Every 24 hours
+                recurring_minutes=1440,
             )
             console.print(f"  [green]✓[/green] Evening briefing scheduled for 9:30 PM daily")
 
@@ -2012,23 +2024,24 @@ def main():
                 console.print(f"  [{BLUE}]Running briefing...[/{BLUE}]")
                 def _run_briefing():
                     try:
-                        ctx = run_startup_actions()
-                        news_summary = ctx.get('news_summary', '')
-                        prompt = f"""Give a full JARVIS-style briefing:
-- Time: {ctx.get('time', '?')} ({ctx.get('period', '?')}) on {ctx.get('date', '?')}
-- Weather: {ctx.get('weather', 'unavailable')}
-- Battery: {ctx.get('battery', 'unknown')} {'(charging)' if ctx.get('charging') else ''}
-{f'- News summary: {news_summary}' if news_summary else ''}
-- Headlines:
-{ctx.get('headlines', '(none)')}
-{f"- Reminders: {', '.join(ctx.get('reminders', []))}" if ctx.get('reminders') else ""}
+                        # Step 1: Gather data + create file + open Safari
+                        resp = brain.think("""Do ALL of these NOW with command blocks:
+1. fetch_url https://wttr.in/?format=%C+%t+%h+%w to get weather
+2. search_web for today's top news
+3. Create a briefing file on Desktop called DARVIS_Briefing.txt with date, time, weather, and top 5 news stories with summaries
+4. Open that file with open_file
+5. Navigate Safari to https://news.google.com""")
+                        results = extract_and_run_commands(resp)
 
-Cover: greeting, weather, 2-3 news stories in detail, battery, reminders. Mention the briefing file on Desktop. 5-7 sentences. No command blocks."""
-                        resp = brain.think(prompt)
-                        resp = re.sub(r'```command\s*\n.*?\n```', '', resp, flags=re.DOTALL).strip()
-                        if resp:
-                            console.print(Panel(Markdown(resp), title=f"[bold {CYAN}]D.A.R.V.I.S. Briefing[/bold {CYAN}]", border_style=BLUE, padding=(1, 2)))
-                            tts.speak(resp)
+                        # Step 2: Spoken summary
+                        context = "\n".join(results) if results else ""
+                        summary = brain.think(
+                            f"You just ran a briefing. Results:\n{context}\n\nGive a full JARVIS-style spoken briefing: greeting, weather, 2-3 news stories summarized, reminders, say you opened the news and saved the briefing. 5-7 sentences. No command blocks."
+                        )
+                        summary = re.sub(r'```command\s*\n.*?\n```', '', summary, flags=re.DOTALL).strip()
+                        if summary:
+                            console.print(Panel(Markdown(summary), title=f"[bold {CYAN}]D.A.R.V.I.S. Briefing[/bold {CYAN}]", border_style=BLUE, padding=(1, 2)))
+                            tts.speak(summary)
                             tts.wait_for_speech()
                     except Exception as e:
                         console.print(f"  [red]Briefing error: {e}[/red]")

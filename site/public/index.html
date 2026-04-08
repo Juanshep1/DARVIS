@@ -65,7 +65,7 @@ body::after{content:'';position:fixed;top:-50%;left:-50%;width:200%;height:200%;
 <div class="header"><div class="header-brand">D.A.R.V.I.S.</div><div class="header-actions"><button class="header-btn" id="agentToggle" onclick="toggleAgentView()">&#x1F441;</button><button class="header-btn" onclick="toggleSettings()">&#9881;</button></div></div>
 <div class="settings-panel" id="settingsPanel"><label>Audio Mode</label><select id="audioModeSelect" onchange="setAudioMode(this.value)"><option value="classic">Classic (Ollama + ElevenLabs)</option><option value="gemini">Gemini Live Audio</option><option value="gemma">Gemma 4 (Fast, Free)</option></select><div id="classicSettings"><label>Model</label><select id="modelSelect" onchange="setModel(this.value)"></select><label>Voice</label><select id="voiceSelect" onchange="setVoice(this.value)"></select></div><div class="settings-status" id="settingsStatus"></div></div>
 <div class="agent-panel" id="agentPanel"><div class="agent-header"><span class="agent-title">Agent Browser</span><button class="agent-close" onclick="toggleAgentView()">&times;</button></div><div class="agent-screen-wrap"><img id="agentScreen" style="display:none" alt="Agent browser view"><div class="agent-no-feed" id="agentNoFeed">No active session<br>Ask DARVIS to browse something</div></div><div class="agent-footer"><div class="agent-status" id="agentStatus">Idle</div><div class="agent-step" id="agentStep"></div></div></div>
-<div class="orb-area"><div class="orb-wrap" id="orbWrap"><canvas id="orbCanvas" width="600" height="600" onclick="toggleMic()"></canvas><div class="orb" id="orb"></div></div><div class="response-area"><div id="response"></div></div></div>
+<div class="orb-area"><div class="orb-wrap" id="orbWrap"><canvas id="orbCanvas" width="600" height="600" onclick="if(!orb.classList.contains('speaking'))toggleMic()"></canvas><div class="orb" id="orb"></div></div><div class="response-area"><div id="response"></div></div></div>
 <div class="input-area"><input type="text" id="input" placeholder="Ask DARVIS anything..." autocomplete="off" onkeydown="if(event.key==='Enter')send()"><button class="mic-btn" id="micBtn" onclick="toggleMic()">&#x1F3A4;</button><button class="cam-btn" id="camBtn" onclick="toggleCamera()">&#x1F4F7;</button></div>
 <video class="cam-preview" id="camPreview" autoplay playsinline muted></video>
 <div id="statusBar">Ollama Cloud + ElevenLabs</div>
@@ -279,16 +279,22 @@ let geminiSessionActive = false;
 // ── Audio unlock (classic mode) ──
 let persistentAudio = new Audio();
 persistentAudio.setAttribute('playsinline', '');
+let audioUnlocked = false;
 function unlockAudio() {
+    if (audioUnlocked) return; // Only unlock once
     if (!geminiAudioCtx) {
         geminiAudioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
     }
     geminiAudioCtx.resume();
-    persistentAudio.src = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAABhkVuHQgAAAAAAAAAAAAAAAAAAP/7UGQAAAALS0gBQRAAANIKCAoYgAABAAH+AAAJAAADSAAAABAAAAAAACqf/LAAAAAARFRJJF//sqRA';
-    persistentAudio.play().then(() => persistentAudio.pause()).catch(() => {});
+    // Only prime if nothing is currently playing
+    if (persistentAudio.paused && !persistentAudio.src.includes('blob:')) {
+        persistentAudio.src = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAABhkVuHQgAAAAAAAAAAAAAAAAAAP/7UGQAAAALS0gBQRAAANIKCAoYgAABAAH+AAAJAAADSAAAABAAAAAAACqf/LAAAAAARFRJJF//sqRA';
+        persistentAudio.play().then(() => { persistentAudio.pause(); audioUnlocked = true; }).catch(() => {});
+    }
+    audioUnlocked = true;
 }
-document.addEventListener('click', unlockAudio, { once: false });
-document.addEventListener('touchstart', unlockAudio, { once: false });
+document.addEventListener('click', unlockAudio, { once: true });
+document.addEventListener('touchstart', unlockAudio, { once: true });
 
 // ══════════════════════════════════════════════════════════════════════════════
 // GEMINI LIVE AUDIO SESSION

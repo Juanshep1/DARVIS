@@ -124,21 +124,20 @@ export default async (req) => {
     }
   }
 
-  const now = new Date().toLocaleString("en-US", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    hour: "numeric",
-    minute: "numeric",
-    hour12: true,
-  });
+  const d = new Date();
+  const hour = d.getHours();
+  const period = hour < 6 ? "LATE NIGHT" : hour < 12 ? "MORNING" : hour < 17 ? "AFTERNOON" : hour < 21 ? "EVENING" : "NIGHT";
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const now = d.toLocaleString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "numeric", minute: "numeric", hour12: true });
+  const timeBlock = `CURRENT DATE/TIME (accurate, trust this):\n  Date: ${now}\n  Period: ${period}\n  Timezone: ${tz}`;
 
   const systemPrompt = `You are D.A.R.V.I.S., a Digital Assistant, Rather Very Intelligent System.
 You are dry-witted, efficient, and occasionally sardonic — but always helpful and loyal.
 British-accented speech patterns. Concise and direct, but with personality.
 Addresses the user as "sir" or "ma'am" naturally. Shows quiet competence.
 Keep responses concise for voice output (1-3 sentences unless more detail is needed).
+
+IMPORTANT: Each message includes a CURRENT DATE/TIME block. This is ALWAYS accurate — trust it. Use it for time of day. Do NOT guess a different time.
 
 You are currently running on the ${MODEL} model via Ollama Cloud (Classic mode). When asked what model you're using, say "${MODEL}". You run across multiple platforms: iPhone app, web browser (darvis1.netlify.app), macOS terminal, and Android (Termux). All share the same memory and conversation history.
 
@@ -182,9 +181,19 @@ When the user asks you to do something in a browser that requires visual interac
 {"action": "computer_use", "goal": "describe the task here"}
 \`\`\`
 CRITICAL: When the user says "go to...", "go on...", "find me... on [website]", "buy...", "book...", "search [website] for...", "look up flights", "check Amazon for...", "open [site] and..." — you MUST include a computer_use command block. Do NOT just say you'll do it — actually include the command block.
-Do NOT use computer_use for simple web searches or general knowledge questions — use web search for those.${memoryContext}${searchContext}`;
+Do NOT use computer_use for simple web searches or general knowledge questions — use web search for those.
 
-  const userMsg = { role: "user", content: `[${now}]\n${message}` };
+When the user asks to do something later or at a specific time, schedule it:
+\`\`\`command
+{"action": "schedule", "delay_minutes": 3, "task": "description of what to do"}
+\`\`\`
+Or at a specific time:
+\`\`\`command
+{"action": "schedule", "at": "2026-04-07T08:00:00", "task": "remind me to call mom"}
+\`\`\`
+Use when the user says "in X minutes", "at X o'clock", "later do", "remind me in", "schedule", etc.${memoryContext}${searchContext}`;
+
+  const userMsg = { role: "user", content: `${timeBlock}\n${message}` };
   const messages = [
     { role: "system", content: systemPrompt },
     ...history,
@@ -254,11 +263,21 @@ Do NOT use computer_use for simple web searches or general knowledge questions �
             url: `https://www.google.com/search?q=${encodeURIComponent(cmd.query)}`,
           });
         } else if (cmd.action === "computer_use" && cmd.goal) {
-          // Store goal in Blobs for terminal to pick up
           const agentStore = getStore("darvis-agent");
           await agentStore.setJSON("pending_goal", { goal: cmd.goal, ts: Date.now() });
           await agentStore.setJSON("status", { active: true, goal: cmd.goal, step: 0, thinking: "Waiting for terminal agent...", actions: [], done: false });
           clientActions.push({ action: "agent_started", goal: cmd.goal });
+        } else if (cmd.action === "schedule" && cmd.task) {
+          // Store scheduled task in Blobs for terminal to pick up
+          const schedStore = getStore("darvis-scheduler");
+          let tasks = [];
+          try { const d = await schedStore.get("tasks", { type: "json" }); if (Array.isArray(d)) tasks = d; } catch {}
+          const executeAt = cmd.delay_minutes
+            ? new Date(Date.now() + cmd.delay_minutes * 60000).toISOString()
+            : cmd.at || new Date(Date.now() + 60000).toISOString();
+          tasks.push({ id: Math.random().toString(36).slice(2, 10), task: cmd.task, execute_at: executeAt, recurring: cmd.recurring_minutes || null, created: new Date().toISOString() });
+          await schedStore.setJSON("tasks", tasks);
+          clientActions.push({ action: "scheduled", task: cmd.task, at: executeAt });
         }
       } catch {}
     }

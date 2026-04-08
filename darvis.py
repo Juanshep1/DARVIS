@@ -110,6 +110,8 @@ SETTINGS_PATH = BASE_DIR / "settings.json"
 SYSTEM_PROMPT = """You are D.A.R.V.I.S., a Digital Assistant, Rather Very Intelligent System.
 You are dry-witted, efficient, and occasionally sardonic — but always helpful and loyal.
 
+IMPORTANT: Each message includes a CURRENT DATE/TIME block. This is ALWAYS accurate — trust it completely. Use it to determine time of day (morning/afternoon/evening/night). Do NOT guess or assume a different time.
+
 Personality traits:
 - British-accented speech patterns (use British English spellings and idioms)
 - Concise and direct, but with personality
@@ -240,6 +242,22 @@ When the user asks you to go to a website, interact with a site, find something 
 CRITICAL: When the user says "go to...", "go on...", "find me... on [website]", "buy...", "book...", "search [website] for...", "look up flights", "check Amazon for...", "open [website] and..." — you MUST use computer_use, NOT open_file and NOT safari. computer_use opens its own browser window that the user can see and interact with.
 
 Only use search_web for general knowledge questions. Only use safari for reading the user's CURRENT open tab. For everything else involving websites, use computer_use.
+
+## 12. Schedule Tasks — Do Things Later Automatically
+Schedule a task to run after a delay or at a specific time. The task will execute automatically without user approval.
+```command
+{"action": "schedule", "delay_minutes": 3, "task": "search ESPN for latest sports news and save 10 facts to a file on the Desktop"}
+```
+For a specific time:
+```command
+{"action": "schedule", "at": "2026-04-07T08:00:00", "task": "remind me to call mom"}
+```
+For recurring tasks (runs every N minutes):
+```command
+{"action": "schedule", "recurring_minutes": 60, "task": "check the news and give me a summary"}
+```
+Use this when the user says "in X minutes...", "at X o'clock...", "every hour...", "later do...", "remind me in...", "schedule...", etc.
+You can combine complex tasks in the description — they will be executed as a full conversation with you when the time comes.
 
 PLATFORM_BROWSER_SECTION
 
@@ -1282,6 +1300,24 @@ def extract_and_run_commands(response_text: str) -> list[str]:
                 results.append(output)
                 console.print(f"  [dim]{output}[/dim]")
 
+            elif action == "schedule" and "task" in data:
+                from scheduler import _global_scheduler
+                if _global_scheduler:
+                    task = _global_scheduler.add_task(
+                        task_desc=data["task"],
+                        delay_minutes=data.get("delay_minutes"),
+                        at_time=data.get("at"),
+                        recurring_minutes=data.get("recurring_minutes"),
+                    )
+                    time_str = task.execute_at.strftime("%I:%M %p")
+                    output = f"✓ Scheduled: '{data['task']}' at {time_str}"
+                    if task.recurring:
+                        output += f" (repeating every {task.recurring} min)"
+                    results.append(output)
+                    console.print(f"  [green]{output}[/green]")
+                else:
+                    results.append("Scheduler not initialized")
+
         except json.JSONDecodeError:
             pass
     return results
@@ -1352,7 +1388,13 @@ class Brain:
 
     def think(self, user_input: str, context: str = "") -> str:
         now = datetime.datetime.now()
-        time_ctx = f"[Current time: {now.strftime('%A, %B %d, %Y at %I:%M %p')}]"
+        tz = now.astimezone().strftime("%Z")
+        hour = now.hour
+        period = "LATE NIGHT" if hour < 6 else "MORNING" if hour < 12 else "AFTERNOON" if hour < 17 else "EVENING" if hour < 21 else "NIGHT"
+        time_ctx = f"""CURRENT DATE/TIME (accurate, trust this):
+  Date: {now.strftime('%A, %B %d, %Y')}
+  Time: {now.strftime('%I:%M %p')} {tz}
+  Period: {period}"""
 
         content = f"{time_ctx}\n{user_input}"
         if context:
@@ -1758,6 +1800,28 @@ Give a JARVIS-style spoken briefing. This should sound like a real executive ass
 
     agent_poll_thread = threading.Thread(target=_poll_agent_goals, daemon=True)
     agent_poll_thread.start()
+
+    # ── Task Scheduler — background cron-like execution ──
+    from scheduler import DARVISScheduler, _global_scheduler
+    import scheduler as _sched_module
+    darvis_scheduler = DARVISScheduler()
+    _sched_module._global_scheduler = darvis_scheduler
+    darvis_scheduler.sync_from_cloud()
+    if darvis_scheduler.tasks:
+        console.print(f"  [green]✓[/green] {len(darvis_scheduler.tasks)} scheduled task(s) loaded")
+
+    def _scheduler_loop():
+        import time as _time
+        while True:
+            _time.sleep(10)
+            try:
+                darvis_scheduler.check_and_run(brain, extract_and_run_commands, console, tts)
+                darvis_scheduler.sync_from_cloud()  # Pick up tasks from other devices
+            except Exception:
+                pass
+
+    sched_thread = threading.Thread(target=_scheduler_loop, daemon=True)
+    sched_thread.start()
 
     # Input system — uses select() on stdin + background mic thread
     import queue

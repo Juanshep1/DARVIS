@@ -98,7 +98,6 @@ struct SettingsView: View {
                     // On-Device Models
                     settingSection("ON-DEVICE MODELS") {
                         OnDeviceModelSection()
-                            .environmentObject(OnDeviceLLM())
                     }
 
                     // Info

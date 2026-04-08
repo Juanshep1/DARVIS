@@ -1,0 +1,18 @@
+[
+  {
+    "id": "abe353bd",
+    "task": "MORNING BRIEFING \u2014 Do ALL of these steps with command blocks:\n1. Use fetch_url to get weather: fetch_url https://wttr.in/?format=%C+%t+%h+%w\n2. Use search_web to find today's top news\n3. Create a file on the Desktop called DARVIS_Morning_Briefing.txt with the date, weather, and top 5 news stories with summaries\n4. Open that file with open_file\n5. Navigate Safari to https://news.google.com using safari navigate\n6. After all commands execute, give a spoken briefing: greeting, weather, 2-3 news stories summarized, reminders, and say you've opened the news and saved the briefing.",
+    "execute_at": "2026-04-08T08:00:00",
+    "recurring": 1440,
+    "created": "2026-04-07T21:35:02.578019",
+    "completed": false
+  },
+  {
+    "id": "bffb9ace",
+    "task": "EVENING BRIEFING \u2014 Do ALL of these steps with command blocks:\n1. Use fetch_url to get weather: fetch_url https://wttr.in/?format=%C+%t+%h+%w\n2. Use search_web to find tonight's top news\n3. Create a file on the Desktop called DARVIS_Evening_Briefing.txt with the date, weather, and top 5 news stories with summaries\n4. Open that file with open_file\n5. Navigate Safari to https://news.google.com using safari navigate\n6. After all commands execute, give a spoken evening wrap-up: what happened today in the news, tomorrow's weather, reminders, wish good night.",
+    "execute_at": "2026-04-08T21:30:00",
+    "recurring": 1440,
+    "created": "2026-04-07T21:35:02.872104",
+    "completed": false
+  }
+]

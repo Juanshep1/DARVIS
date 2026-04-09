@@ -2309,19 +2309,38 @@ def main():
                 console.print(f"  [{BLUE}]Running briefing...[/{BLUE}]")
                 def _run_briefing():
                     try:
-                        # Step 1: Gather data + create file + open Safari
-                        resp = brain.think("""Do ALL of these NOW with command blocks:
-1. fetch_url https://wttr.in/?format=%C+%t+%h+%w to get weather
-2. search_web for today's top news
-3. Create a briefing file on Desktop called DARVIS_Briefing.txt with date, time, weather, and top 5 news stories with summaries
-4. Open that file with open_file
-5. Navigate Safari to https://news.google.com""")
+                        import datetime
+                        now = datetime.datetime.now()
+                        console.print(f"  [{BLUE}]Gathering weather, global news, local news...[/{BLUE}]")
+
+                        resp = brain.think(f"""Do ALL of these NOW with command blocks. Today is {now.strftime('%A, %B %d, %Y at %I:%M %p')}.
+
+1. fetch_url https://wttr.in/Springfield?format=%C+%t+%h+%w+feels+like+%f to get Springfield weather
+2. search_web for "top breaking news today world headlines"
+3. search_web for "Springfield Illinois local news today"
+4. search_web for "technology science news today"
+5. Create a DETAILED briefing file on the Desktop called DARVIS_Briefing_{now.strftime('%Y-%m-%d')}.txt with:
+   - Date and time at the top
+   - Full weather report for Springfield
+   - GLOBAL NEWS section with at least 8 stories with 2-3 sentence summaries each
+   - LOCAL SPRINGFIELD NEWS section with at least 5 stories with summaries
+   - TECH & SCIENCE section with at least 3 stories with summaries
+   Format it nicely with headers and dividers.
+6. Open that briefing file with open_file
+7. Use safari navigate to open https://www.google.com/search?q=Springfield+Illinois+local+news+today in Safari
+8. Use safari navigate to open https://wttr.in/Springfield in a new Safari tab""")
                         results = extract_and_run_commands(resp)
 
-                        # Step 2: Spoken summary
                         context = "\n".join(results) if results else ""
                         summary = brain.think(
-                            f"You just ran a briefing. Results:\n{context}\n\nGive a full JARVIS-style spoken briefing: greeting, weather, 2-3 news stories summarized, reminders, say you opened the news and saved the briefing. 5-7 sentences. No command blocks."
+                            f"You just ran a comprehensive briefing. Results:\n{context}\n\n"
+                            "Give a FULL JARVIS-style spoken briefing:\n"
+                            "1. Greeting with date\n2. Springfield weather\n"
+                            "3. AT LEAST 5 global stories with summaries\n"
+                            "4. AT LEAST 3 local Springfield stories\n"
+                            "5. 2 tech stories\n6. Reminders/tasks\n"
+                            "7. Mention briefing file + Safari tabs opened\n"
+                            "8. Witty sign-off\nBe thorough. No command blocks."
                         )
                         summary = re.sub(r'```command\s*\n.*?\n```', '', summary, flags=re.DOTALL).strip()
                         if summary:

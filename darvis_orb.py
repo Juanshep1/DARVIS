@@ -23,7 +23,6 @@ try:
         NSTextAlignmentCenter, NSTextField, NSButton, NSBezelStyleRounded,
     )
     from Foundation import NSRect, NSPoint, NSSize, NSMakeRect, NSDate
-    from Quartz import CGFloat
     HAS_OBJC = True
 except ImportError:
     HAS_OBJC = False

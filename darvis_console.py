@@ -28,9 +28,8 @@ try:
         NSButton, NSBezelStyleRounded,
     )
     from Foundation import NSRect, NSPoint, NSSize, NSMakeRect, NSDate, NSAttributedString, NSMutableAttributedString
-    from Quartz import CGFloat
-except ImportError:
-    print("PyObjC required. Install: pip3 install pyobjc-framework-Cocoa pyobjc-framework-Quartz")
+except ImportError as e:
+    print(f"PyObjC required ({e}). Install: pip3 install pyobjc-framework-Cocoa pyobjc-framework-Quartz")
     sys.exit(1)
 
 # ── Theme (matching browser) ──────────────────────────────────────────────────

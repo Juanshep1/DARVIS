@@ -1,6 +1,7 @@
 import SwiftUI
 import AVFoundation
 import Speech
+import UserNotifications
 
 @MainActor
 class ChatViewModel: ObservableObject {
@@ -60,6 +61,9 @@ class ChatViewModel: ObservableObject {
 
     // Poll for triggered alerts every 60s
     private func startAlertPolling() {
+        // Request notification permission
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
+
         Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self = self else { return }
@@ -71,6 +75,19 @@ class ChatViewModel: ObservableObject {
                     for alert in result.triggered {
                         self.statusMessage = "⚡ " + alert.message
                         self.responseText = "ALERT: " + alert.message
+
+                        // Push notification (works even when app is in background)
+                        let content = UNMutableNotificationContent()
+                        content.title = "D.A.R.V.I.S. Alert"
+                        content.body = alert.message
+                        content.sound = .default
+                        let request = UNNotificationRequest(
+                            identifier: "darvis-alert-\(alert.id)",
+                            content: content,
+                            trigger: nil  // Deliver immediately
+                        )
+                        try? await UNUserNotificationCenter.current().add(request)
+
                         await self.playTTS(alert.message)
                     }
                 } catch {}

@@ -242,6 +242,41 @@ class ClickableOrbView(NSView):
 
 # ── Console App ───────────────────────────────────────────────────────────────
 
+class AppController(NSView):
+    """NSObject subclass so NSTimer/actions target an ObjC-compatible object."""
+
+    def initWithApp_(self, darvis_app):
+        self = objc.super(AppController, self).initWithFrame_(NSMakeRect(0, 0, 0, 0))
+        if self is None:
+            return None
+        self.d = darvis_app
+        return self
+
+    def tick_(self, timer):
+        self.d.tick_(timer)
+
+    def drain_(self, timer):
+        self.d.drain_(timer)
+
+    def checkScheduler_(self, timer):
+        self.d.checkScheduler_(timer)
+
+    def sendMessage_(self, sender):
+        self.d.sendMessage_(sender)
+
+    def toggleMic_(self, sender):
+        self.d.toggleMic_(sender)
+
+    def fixSelf_(self, sender):
+        self.d.fixSelf_(sender)
+
+    def collapseWindow_(self, sender):
+        self.d.collapseWindow_(sender)
+
+    def showHelp_(self, sender):
+        self.d.showHelp_(sender)
+
+
 class DarvisConsoleApp:
     def __init__(self):
         self.app = NSApplication.sharedApplication()
@@ -252,16 +287,18 @@ class DarvisConsoleApp:
         self.listening = False
         self.chat_history = []
 
+        # ObjC-compatible controller for timer/action targets
+        self.ctrl = AppController.alloc().initWithApp_(self)
+
         threading.Thread(target=self._init_backend, daemon=True).start()
         self._build_compact()
 
         NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
-            1.0/30.0, self, 'tick:', None, True)
+            1.0/30.0, self.ctrl, 'tick:', None, True)
         NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
-            0.1, self, 'drain:', None, True)
-        # Scheduler check every 30s
+            0.1, self.ctrl, 'drain:', None, True)
         NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
-            30.0, self, 'checkScheduler:', None, True)
+            30.0, self.ctrl, 'checkScheduler:', None, True)
 
     def _init_backend(self):
         init_backend()
@@ -388,7 +425,7 @@ class DarvisConsoleApp:
         self.input_field.setFont_(NSFont.fontWithName_size_(FONT, 12))
         self.input_field.setFocusRingType_(1)
         self.input_field.setBordered_(True)
-        self.input_field.setTarget_(self)
+        self.input_field.setTarget_(self.ctrl)
         self.input_field.setAction_(b"sendMessage:")
         c.addSubview_(self.input_field)
 
@@ -499,7 +536,7 @@ class DarvisConsoleApp:
         b.setTitle_(title)
         b.setBezelStyle_(NSBezelStyleRounded)
         b.setFont_(NSFont.fontWithName_size_(FONT, 10))
-        b.setTarget_(self)
+        b.setTarget_(self.ctrl)
         b.setAction_(action)
         return b
 

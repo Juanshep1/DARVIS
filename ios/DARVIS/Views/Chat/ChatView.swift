@@ -73,9 +73,11 @@ struct ChatView: View {
                     text: $vm.inputText,
                     isRecording: vm.isRecording,
                     cameraActive: vm.cameraActive,
+                    isFixing: vm.isFixing,
                     onSend: { vm.send() },
                     onMicToggle: { vm.toggleMic() },
-                    onCameraToggle: { vm.toggleCamera() }
+                    onCameraToggle: { vm.toggleCamera() },
+                    onFixYourself: { vm.fixYourself() }
                 )
             }
 

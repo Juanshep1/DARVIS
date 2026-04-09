@@ -390,6 +390,104 @@ class ChatViewModel: ObservableObject {
         if orbState == .speaking { orbState = .idle }
     }
 
+    // MARK: - Fix Yourself
+
+    @Published var isFixing = false
+
+    func fixYourself() {
+        phoneControl.haptic(.medium)
+        isFixing = true
+        orbState = .thinking
+        responseText = "Running diagnostics..."
+
+        Task {
+            var results: [String] = []
+            var fixed: [String] = []
+
+            // 1. Backend
+            do {
+                _ = try await APIClient.shared.getSettings()
+                results.append("Backend: ✓ OK")
+            } catch {
+                results.append("Backend: ✗ Unreachable")
+            }
+
+            // 2. Ollama Cloud (models)
+            responseText = "🔧 Checking Ollama Cloud..."
+            do {
+                _ = try await APIClient.shared.getModels()
+                results.append("Ollama Cloud: ✓ OK")
+            } catch {
+                results.append("Ollama Cloud: ✗ Unreachable")
+            }
+
+            // 3. ElevenLabs (voices)
+            responseText = "🔧 Checking ElevenLabs..."
+            do {
+                _ = try await APIClient.shared.getVoices()
+                results.append("ElevenLabs: ✓ OK")
+            } catch {
+                results.append("ElevenLabs: ✗ Unreachable")
+            }
+
+            // 4. Gemini API key
+            responseText = "🔧 Checking Gemini..."
+            do {
+                let token = try await APIClient.shared.getGeminiToken()
+                results.append(token.token.isEmpty ? "Gemini API: ✗ No key" : "Gemini API: ✓ OK")
+            } catch {
+                results.append("Gemini API: ✗ Unreachable")
+            }
+
+            // 5. Mic permission
+            let micStatus = AVAudioApplication.shared.recordPermission
+            switch micStatus {
+            case .granted: results.append("Mic: ✓ granted")
+            case .denied: results.append("Mic: ✗ denied")
+            default: results.append("Mic: ⚠ not determined")
+            }
+
+            // 6. Camera permission
+            let camStatus = AVCaptureDevice.authorizationStatus(for: .video)
+            switch camStatus {
+            case .authorized: results.append("Camera: ✓ granted")
+            case .denied, .restricted: results.append("Camera: ✗ denied")
+            default: results.append("Camera: ⚠ not determined")
+            }
+
+            // 7. Reset stuck states
+            responseText = "🔧 Resetting stuck states..."
+            if isRecording && speechEngine == nil && !geminiLive.isConnected {
+                isRecording = false
+                fixed.append("reset stuck recording")
+            }
+            if geminiLive.isConnected {
+                // Test if actually alive by checking state
+                results.append("Gemini Live: ✓ connected")
+            } else if audioMode == "gemini" {
+                results.append("Gemini Live: ⚠ not connected")
+                audioMode = "classic"
+                fixed.append("switched to Classic mode")
+            }
+            silenceTimer?.invalidate()
+            silenceTimer = nil
+
+            // 8. Audio session reset
+            do {
+                let session = AVAudioSession.sharedInstance()
+                try session.setCategory(.playback, mode: .default)
+                try session.setActive(true)
+                fixed.append("reset audio session")
+            } catch {}
+
+            // Summary
+            let fixedStr = fixed.isEmpty ? "✓ No issues found." : "🔧 Fixed: " + fixed.joined(separator: ", ")
+            responseText = "DIAGNOSTICS COMPLETE\n\n" + results.joined(separator: "\n") + "\n\n" + fixedStr
+            orbState = .idle
+            isFixing = false
+        }
+    }
+
     // MARK: - iPhone Control Detection
 
     private func isPhoneControlRequest(_ text: String) -> Bool {

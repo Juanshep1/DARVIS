@@ -22,6 +22,8 @@ body::after{content:'';position:fixed;top:-50%;left:-50%;width:200%;height:200%;
 .header-btn{width:32px;height:32px;border-radius:10px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-dim);font-size:0.85rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.2s;backdrop-filter:blur(10px)}
 .header-btn:hover{border-color:rgba(255,255,255,0.12);color:var(--text)}
 .header-btn.active{border-color:var(--green);color:var(--green)}
+.header-btn.fixing{border-color:var(--orange);color:var(--orange);animation:pulse-fix 1s infinite}
+@keyframes pulse-fix{0%,100%{opacity:1}50%{opacity:0.5}}
 .orb-area{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;min-height:0}
 .orb-wrap{position:relative;width:300px;height:300px;display:flex;align-items:center;justify-content:center}
 #orbCanvas{width:300px;height:300px;cursor:pointer;position:relative;z-index:2}
@@ -62,7 +64,7 @@ body::after{content:'';position:fixed;top:-50%;left:-50%;width:200%;height:200%;
 </style>
 </head>
 <body>
-<div class="header"><div class="header-brand">D.A.R.V.I.S.</div><div class="header-actions"><button class="header-btn" id="agentToggle" onclick="toggleAgentView()">&#x1F441;</button><button class="header-btn" onclick="toggleSettings()">&#9881;</button></div></div>
+<div class="header"><div class="header-brand">D.A.R.V.I.S.</div><div class="header-actions"><button class="header-btn" id="fixBtn" onclick="fixYourself()" title="Fix Yourself">&#x1F527;</button><button class="header-btn" id="agentToggle" onclick="toggleAgentView()">&#x1F441;</button><button class="header-btn" onclick="toggleSettings()">&#9881;</button></div></div>
 <div class="settings-panel" id="settingsPanel"><label>Audio Mode</label><select id="audioModeSelect" onchange="setAudioMode(this.value)"><option value="classic">Classic (Ollama + ElevenLabs)</option><option value="gemini">Gemini Live Audio</option><option value="gemma">Gemma 4 (Fast, Free)</option></select><div id="classicSettings"><label>Model</label><select id="modelSelect" onchange="setModel(this.value)"></select><label>Voice</label><select id="voiceSelect" onchange="setVoice(this.value)"></select></div><div class="settings-status" id="settingsStatus"></div></div>
 <div class="agent-panel" id="agentPanel"><div class="agent-header"><span class="agent-title">Agent Browser</span><button class="agent-close" onclick="toggleAgentView()">&times;</button></div><div class="agent-screen-wrap"><img id="agentScreen" style="display:none" alt="Agent browser view"><div class="agent-no-feed" id="agentNoFeed">No active session<br>Ask DARVIS to browse something</div></div><div class="agent-footer"><div class="agent-status" id="agentStatus">Idle</div><div class="agent-step" id="agentStep"></div></div></div>
 <div class="orb-area"><div class="orb-wrap" id="orbWrap"><canvas id="orbCanvas" width="600" height="600" onclick="if(!orb.classList.contains('speaking'))toggleMic()"></canvas><div class="orb" id="orb"></div></div><div class="response-area"><div id="response"></div></div></div>
@@ -266,6 +268,7 @@ const SILENCE_DELAY = 3000;
 let cameraStream = null;
 let cameraCanvas = null;
 let cameraActive = false;
+let lastFailedRequest = null;
 
 // Gemini Live state
 let geminiWs = null;
@@ -1162,6 +1165,7 @@ async function send() {
             orb.className = 'orb';
         } catch (err) {
             responseEl.textContent = 'Gemma error: ' + err.message;
+            lastFailedRequest = text;
             orb.className = 'orb';
         }
         return;
@@ -1247,6 +1251,7 @@ async function send() {
         orb.className = 'orb';
     } catch (err) {
         responseEl.textContent = 'Connection error: ' + err.message;
+        lastFailedRequest = text;
         orb.className = 'orb';
     }
 }
@@ -1509,6 +1514,145 @@ async function runBriefing() {
         responseEl.textContent = err.name === 'AbortError' ? 'Briefing timed out — try again.' : 'Briefing error: ' + err.message;
     }
     orb.className = 'orb';
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// FIX YOURSELF — Self-diagnostics
+// ══════════════════════════════════════════════════════════════════════════════
+
+async function fixYourself() {
+    const fixBtn = document.getElementById('fixBtn');
+    fixBtn.classList.add('fixing');
+    orb.className = 'orb thinking';
+    const results = [];
+    let fixed = [];
+
+    function status(msg) { responseEl.textContent = '🔧 ' + msg; }
+
+    // 1. Backend connectivity
+    status('Checking backend...');
+    try {
+        const r = await fetch('/api/settings', { signal: AbortSignal.timeout(5000) });
+        if (r.ok) results.push('Backend: ✓ OK');
+        else results.push('Backend: ✗ HTTP ' + r.status);
+    } catch { results.push('Backend: ✗ Unreachable'); }
+
+    // 2. Ollama Cloud (models)
+    status('Checking Ollama Cloud...');
+    try {
+        const r = await fetch('/api/models', { signal: AbortSignal.timeout(5000) });
+        if (r.ok) {
+            const data = await r.json();
+            const models = data.models || data;
+            const modelSelect = document.getElementById('modelSelect');
+            const cur = modelSelect?.value || '';
+            if (cur && Array.isArray(models) && !models.find(m => (m.id || m.name || m) === cur)) {
+                results.push('Ollama Cloud: ✓ Online (⚠ model "' + cur + '" not found)');
+                fixed.push('check your model selection');
+            } else {
+                results.push('Ollama Cloud: ✓ OK');
+            }
+        } else results.push('Ollama Cloud: ✗ HTTP ' + r.status);
+    } catch { results.push('Ollama Cloud: ✗ Unreachable'); }
+
+    // 3. ElevenLabs TTS (voices)
+    status('Checking ElevenLabs...');
+    try {
+        const r = await fetch('/api/voices', { signal: AbortSignal.timeout(5000) });
+        if (r.ok) results.push('ElevenLabs: ✓ OK');
+        else results.push('ElevenLabs: ✗ HTTP ' + r.status);
+    } catch { results.push('ElevenLabs: ✗ Unreachable'); }
+
+    // 4. Gemini API key
+    status('Checking Gemini...');
+    try {
+        const r = await fetch('/api/gemini-token', { signal: AbortSignal.timeout(5000) });
+        if (r.ok) {
+            const data = await r.json();
+            results.push(data.token ? 'Gemini API: ✓ OK' : 'Gemini API: ✗ No key configured');
+        } else results.push('Gemini API: ✗ HTTP ' + r.status);
+    } catch { results.push('Gemini API: ✗ Unreachable'); }
+
+    // 5. WebSocket (Gemini Live — only if in gemini mode)
+    if (audioMode === 'gemini') {
+        status('Testing Gemini WebSocket...');
+        try {
+            const tokenRes = await fetch('/api/gemini-token', { signal: AbortSignal.timeout(3000) });
+            const tokenData = await tokenRes.json();
+            const wsUrl = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=' + tokenData.token;
+            await new Promise((resolve, reject) => {
+                const ws = new WebSocket(wsUrl);
+                const timer = setTimeout(() => { ws.close(); reject(new Error('timeout')); }, 5000);
+                ws.onopen = () => { clearTimeout(timer); ws.close(); resolve(); };
+                ws.onerror = () => { clearTimeout(timer); reject(new Error('failed')); };
+            });
+            results.push('Gemini WebSocket: ✓ OK');
+        } catch (err) {
+            results.push('Gemini WebSocket: ✗ ' + err.message);
+            fallbackToClassic();
+            fixed.push('switched to Classic mode');
+        }
+    }
+
+    // 6. Mic/Camera permissions
+    status('Checking permissions...');
+    try {
+        const mic = await navigator.permissions.query({ name: 'microphone' });
+        results.push('Mic permission: ' + (mic.state === 'granted' ? '✓' : '⚠ ' + mic.state));
+    } catch { results.push('Mic permission: ⚠ unknown'); }
+    try {
+        const cam = await navigator.permissions.query({ name: 'camera' });
+        results.push('Camera permission: ' + (cam.state === 'granted' ? '✓' : '⚠ ' + cam.state));
+    } catch { results.push('Camera permission: ⚠ unknown'); }
+
+    // 7. Reset stuck states
+    status('Resetting stuck states...');
+    if (orb.className.includes('thinking')) {
+        // We set it to thinking for diagnostics, so this is expected — skip
+    }
+    if (isRecording && !recognition) {
+        isRecording = false;
+        micBtn.classList.remove('recording');
+        fixed.push('reset stuck recording state');
+    }
+    if (geminiSessionActive && (!geminiWs || geminiWs.readyState > 1)) {
+        geminiSessionActive = false;
+        geminiWs = null;
+        fixed.push('cleared dead Gemini session');
+    }
+    if (silenceTimer) {
+        clearTimeout(silenceTimer);
+        silenceTimer = null;
+    }
+
+    // 8. Audio context fix
+    if (geminiAudioCtx && geminiAudioCtx.state === 'suspended') {
+        try {
+            await geminiAudioCtx.resume();
+            fixed.push('resumed suspended audio context');
+        } catch {}
+    }
+    if (!audioUnlocked) {
+        unlockAudio();
+        if (audioUnlocked) fixed.push('unlocked audio playback');
+    }
+
+    // 9. Retry last failed request
+    if (lastFailedRequest) {
+        const retryText = lastFailedRequest;
+        lastFailedRequest = null;
+        fixed.push('retrying: "' + retryText.slice(0, 40) + (retryText.length > 40 ? '...' : '') + '"');
+        fixBtn.classList.remove('fixing');
+        orb.className = 'orb';
+        responseEl.textContent = results.join('\n') + '\n\n' + (fixed.length ? 'Fixed: ' + fixed.join(', ') : 'No issues found.') + '\n\nRetrying last request...';
+        setTimeout(() => { inputEl.value = retryText; send(); }, 1500);
+        return;
+    }
+
+    // Summary
+    fixBtn.classList.remove('fixing');
+    orb.className = 'orb';
+    responseEl.textContent = 'DIAGNOSTICS COMPLETE\n\n' + results.join('\n') + '\n\n' + (fixed.length ? '🔧 Fixed: ' + fixed.join(', ') : '✓ No issues found.');
 }
 
 // Check every minute if it's briefing time

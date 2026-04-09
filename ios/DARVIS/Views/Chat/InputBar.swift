@@ -4,9 +4,11 @@ struct InputBar: View {
     @Binding var text: String
     let isRecording: Bool
     let cameraActive: Bool
+    let isFixing: Bool
     let onSend: () -> Void
     let onMicToggle: () -> Void
     let onCameraToggle: () -> Void
+    let onFixYourself: () -> Void
 
     var body: some View {
         HStack(spacing: 10) {
@@ -45,6 +47,20 @@ struct InputBar: View {
                     .clipShape(Circle())
                     .overlay(Circle().stroke(cameraActive ? Color.darvisGreen.opacity(0.5) : Color.darvisCyan.opacity(0.3), lineWidth: 1))
             }
+
+            // Fix Yourself button
+            Button(action: onFixYourself) {
+                Image(systemName: "wrench.and.screwdriver")
+                    .font(.system(size: 14))
+                    .foregroundColor(.darvisOrange)
+                    .frame(width: 44, height: 44)
+                    .background(Color(red: 0.06, green: 0.06, blue: 0.10))
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(Color.darvisOrange.opacity(isFixing ? 0.8 : 0.3), lineWidth: 1))
+                    .opacity(isFixing ? 0.6 : 1.0)
+                    .animation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true), value: isFixing)
+            }
+            .disabled(isFixing)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)

@@ -1430,6 +1430,92 @@ class Brain:
 
 # ── Ollama Cloud Helpers ──────────────────────────────────────────────────────
 
+def fix_yourself(brain, tts, ear, ollama_key, elevenlabs_key, gemini_key, audio_mode):
+    """Run self-diagnostics and fix what we can."""
+    results = []
+    fixed = []
+
+    console.print(Panel("[bold]Running diagnostics...[/bold]", title=f"[bold {ORANGE}]🔧 Fix Yourself[/bold {ORANGE}]", border_style=ORANGE))
+
+    # 1. Ollama Cloud
+    with console.status(f"[{BLUE}]Checking Ollama Cloud...", spinner="arc"):
+        if check_ollama_cloud(ollama_key):
+            models = list_cloud_models(ollama_key)
+            if brain.model in models:
+                results.append(f"[green]✓[/green] Ollama Cloud: OK (model: {brain.model})")
+            elif models:
+                results.append(f"[yellow]⚠[/yellow] Ollama Cloud: online, but model '{brain.model}' not found")
+                results.append(f"  [dim]Available: {', '.join(models[:5])}[/dim]")
+            else:
+                results.append(f"[green]✓[/green] Ollama Cloud: OK")
+        else:
+            results.append(f"[red]✗[/red] Ollama Cloud: unreachable")
+
+    # 2. ElevenLabs
+    with console.status(f"[{BLUE}]Checking ElevenLabs...", spinner="arc"):
+        voices = tts.fetch_voices()
+        if voices:
+            voice_ids = [v.get("voice_id", "") for v in voices]
+            if tts.voice_id in voice_ids:
+                results.append(f"[green]✓[/green] ElevenLabs: OK (voice: {tts.voice_name})")
+            else:
+                results.append(f"[yellow]⚠[/yellow] ElevenLabs: online, but voice ID not found")
+        else:
+            results.append(f"[red]✗[/red] ElevenLabs: unreachable or no voices")
+
+    # 3. Gemini
+    if gemini_key:
+        results.append(f"[green]✓[/green] Gemini API key: present")
+    else:
+        results.append(f"[dim]—[/dim] Gemini API key: not configured")
+
+    # 4. Mic
+    if ear._mic_available:
+        results.append(f"[green]✓[/green] Microphone: available")
+    else:
+        with console.status(f"[{BLUE}]Reinitializing mic...", spinner="arc"):
+            if ear.init_mic():
+                results.append(f"[green]✓[/green] Microphone: reinitialized")
+                fixed.append("reinitialized microphone")
+            else:
+                results.append(f"[red]✗[/red] Microphone: not available")
+
+    # 5. Reset stuck states
+    if ear.suppressed:
+        ear.suppressed = False
+        fixed.append("unblocked mic (was suppressed)")
+    # Drain speech queue
+    try:
+        while not ear._speech_queue_ref.empty():
+            ear._speech_queue_ref.get_nowait()
+    except (AttributeError, Exception):
+        pass
+
+    # 6. Audio mode
+    results.append(f"[dim]—[/dim] Audio mode: {audio_mode}")
+
+    # Summary
+    fixed_str = ", ".join(fixed) if fixed else "No issues found"
+    console.print(
+        Panel(
+            "\n".join(results) + f"\n\n[bold]Fixed:[/bold] {fixed_str}",
+            title=f"[bold {CYAN}]Diagnostics Complete[/bold {CYAN}]",
+            border_style=CYAN,
+        )
+    )
+
+    # Speak summary
+    ok_count = sum(1 for r in results if "✓" in r)
+    warn_count = sum(1 for r in results if "⚠" in r)
+    fail_count = sum(1 for r in results if "✗" in r)
+    if fail_count:
+        tts.speak(f"Diagnostics complete. {fail_count} issue{'s' if fail_count > 1 else ''} found. {', '.join(fixed) if fixed else 'Manual attention needed'}.")
+    elif warn_count:
+        tts.speak(f"Diagnostics complete. {warn_count} warning{'s' if warn_count > 1 else ''}, but everything is operational.")
+    else:
+        tts.speak("All systems nominal, sir. Everything checks out.")
+
+
 def check_ollama_cloud(api_key: str) -> bool:
     try:
         req = urllib.request.Request(
@@ -2100,12 +2186,17 @@ def main():
                         "[bold]/classic[/bold]     — switch back to Ollama + ElevenLabs\n"
                         "[bold]/browse GOAL[/bold] — launch browser agent (e.g. /browse find Spurs score on ESPN)\n"
                         "[bold]/briefing[/bold]    — get a full news + weather briefing now\n"
+                        "[bold]/fix[/bold]         — run self-diagnostics and fix issues\n"
                         "[bold]goodbye[/bold]      — exit D.A.R.V.I.S.\n\n"
                         "[dim]Settings (model + voice) are saved automatically.[/dim]",
                         title=f"[bold {CYAN}]Commands[/bold {CYAN}]",
                         border_style=BLUE,
                     )
                 )
+                continue
+
+            if lower == "/fix":
+                fix_yourself(brain, tts, ear, ollama_key, elevenlabs_key, gemini_key, audio_mode)
                 continue
 
             # ── Gemini Mode: Use Ollama Brain for commands, Gemini for voice ──

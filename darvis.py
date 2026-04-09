@@ -742,29 +742,25 @@ class Ear:
             console.print("  [dim]Falling back to text input mode[/dim]")
             return False
 
-    def listen(self) -> str | None:
+    def listen(self, return_audio=False):
+        """Listen for speech. If return_audio=True, returns (text, wav_bytes) tuple."""
         if not self._mic_available or self.suppressed:
-            return None
+            return (None, None) if return_audio else None
 
         if self._use_termux:
             with self._lock:
                 try:
-                    # termux-speech-to-text blocks until user speaks, then returns text
                     result = subprocess.run(
                         ["termux-speech-to-text"], capture_output=True, text=True, timeout=30
                     )
                     text = result.stdout.strip()
-                    # Validate: ignore empty, too short, or garbage results
                     if not text or len(text) < 2:
-                        return None
-                    # Filter out common garbage characters from failed recognition
+                        return (None, None) if return_audio else None
                     if all(c in '[]{}().,;:!?"\'-_/\\|@#$%^&*~`' for c in text):
-                        return None
-                    return text
-                except subprocess.TimeoutExpired:
-                    return None
-                except Exception:
-                    return None
+                        return (None, None) if return_audio else None
+                    return (text, None) if return_audio else text
+                except (subprocess.TimeoutExpired, Exception):
+                    return (None, None) if return_audio else None
 
         with self._lock:
             try:
@@ -779,14 +775,17 @@ class Ear:
                     os.dup2(old_stderr, 2)
                     os.close(devnull)
                     os.close(old_stderr)
-                return self.recognizer.recognize_google(audio)
+                text = self.recognizer.recognize_google(audio)
+                if return_audio:
+                    return (text, audio.get_wav_data())
+                return text
             except (sr.WaitTimeoutError, sr.UnknownValueError):
-                return None
+                return (None, None) if return_audio else None
             except sr.RequestError as e:
                 console.print(f"  [red]Speech API error: {e}[/red]")
-                return None
+                return (None, None) if return_audio else None
             except OSError:
-                return None
+                return (None, None) if return_audio else None
 
 
 # ── Command Execution ─────────────────────────────────────────────────────────
@@ -941,6 +940,39 @@ def fetch_url(url: str) -> str:
             return text[:4000] if text else "(empty response)"
     except Exception as e:
         return f"Fetch error: {e}"
+
+
+def analyze_screen(prompt: str = "Describe what's on my screen in detail.") -> str:
+    """Take a screenshot and analyze it with Gemini vision."""
+    try:
+        import base64
+        import subprocess
+        tmp = "/tmp/darvis_screen.png"
+        subprocess.run(["screencapture", "-x", tmp], timeout=5, check=True)
+        with open(tmp, "rb") as f:
+            img_b64 = base64.b64encode(f.read()).decode()
+
+        env = load_env()
+        gkey = env.get("GEMINI_API_KEY", os.environ.get("GEMINI_API_KEY", ""))
+        if not gkey:
+            return "No Gemini API key — can't analyze screen"
+
+        payload = json.dumps({
+            "contents": [{"parts": [
+                {"inlineData": {"mimeType": "image/png", "data": img_b64}},
+                {"text": prompt}
+            ]}],
+            "generationConfig": {"temperature": 0.2, "maxOutputTokens": 1024}
+        }).encode()
+
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={gkey}"
+        req = urllib.request.Request(url, data=payload, method="POST",
+                                     headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read().decode())
+        return data["candidates"][0]["content"]["parts"][0]["text"]
+    except Exception as e:
+        return f"Screen analysis error: {e}"
 
 
 def open_file(path: str) -> str:
@@ -1317,6 +1349,17 @@ def extract_and_run_commands(response_text: str) -> list[str]:
                     console.print(f"  [green]{output}[/green]")
                 else:
                     results.append("Scheduler not initialized")
+
+            elif action == "analyze_screen":
+                result = analyze_screen(data.get("prompt", "Describe what's on the screen."))
+                results.append(result)
+                console.print(f"  [green]✓ Screen analyzed[/green]")
+
+            elif action == "alert_add" and "type" in data:
+                from alerts import AlertMonitor
+                # Use global if available
+                msg = f"Alert type '{data['type']}' — use /alert add in terminal"
+                results.append(msg)
 
         except json.JSONDecodeError:
             pass
@@ -1928,6 +1971,47 @@ def main():
     sched_thread = threading.Thread(target=_scheduler_loop, daemon=True)
     sched_thread.start()
 
+    # ── Voice Macros ──
+    from macros import MacroManager
+    macro_manager = MacroManager()
+    macro_manager.sync_from_cloud()
+    if macro_manager.macros:
+        console.print(f"  [green]✓[/green] {len(macro_manager.macros)} macro(s) loaded")
+
+    # ── Proactive Alerts ──
+    from alerts import AlertMonitor
+    alert_monitor = AlertMonitor()
+    alert_monitor.sync_from_cloud()
+    if alert_monitor.alerts:
+        console.print(f"  [green]✓[/green] {len(alert_monitor.alerts)} alert(s) active")
+
+    def _alert_loop():
+        import time as _t
+        _t.sleep(60)  # Initial delay
+        while True:
+            try:
+                triggered = alert_monitor.check_all()
+                for a in triggered:
+                    console.print(f"\n  [bold red]⚡ ALERT:[/bold red] {a['message']}")
+                    tts.speak(f"Alert, sir. {a['message']}")
+                    tts.wait_for_speech()
+            except Exception:
+                pass
+            _t.sleep(300)  # Check every 5 minutes
+
+    alert_thread = threading.Thread(target=_alert_loop, daemon=True)
+    alert_thread.start()
+
+    # ── Voice Biometric Lock ──
+    from voicelock import VoiceLock
+    voice_lock = VoiceLock()
+    is_locked = False
+    if voice_lock.is_enrolled():
+        console.print(f"  [green]✓[/green] Voice biometric enrolled (/lock to enable)")
+
+    # ── Ambient Mode ──
+    ambient_mode = False
+
     # Input system — uses select() on stdin + background mic thread
     import queue
     import select as _select
@@ -1940,9 +2024,22 @@ def main():
             if not listening_active:
                 _listen_stop.wait(timeout=0.5)
                 continue
-            result = ear.listen()
+            result = ear.listen(return_audio=is_locked)
+            if is_locked and isinstance(result, tuple):
+                text, wav_data = result
+                if text and wav_data:
+                    verified, score = voice_lock.verify(wav_data)
+                    if not verified:
+                        console.print(f"  [red]Voice not recognized (score: {score:.2f}). Access denied.[/red]")
+                        continue
+                result = text if isinstance(result, tuple) else result
             if result and listening_active:
-                speech_queue.put(result)
+                if ambient_mode:
+                    if result and "darvis" in result.lower():
+                        cleaned = re.sub(r'(?i)\b(hey\s+)?darvis\b', '', result).strip()
+                        speech_queue.put(cleaned if cleaned else "__WAKE__")
+                else:
+                    speech_queue.put(result)
             # Cooldown to prevent rapid-fire on Termux
             if IS_TERMUX:
                 import time
@@ -2187,6 +2284,14 @@ def main():
                         "[bold]/browse GOAL[/bold] — launch browser agent (e.g. /browse find Spurs score on ESPN)\n"
                         "[bold]/briefing[/bold]    — get a full news + weather briefing now\n"
                         "[bold]/fix[/bold]         — run self-diagnostics and fix issues\n"
+                        "[bold]/macro[/bold]       — add/remove/list voice macros\n"
+                        "[bold]/alert[/bold]       — add/remove/list proactive alerts\n"
+                        "[bold]/screen[/bold]      — analyze what's on your screen\n"
+                        "[bold]/ambient[/bold]     — ambient mode (wake word only)\n"
+                        "[bold]/active[/bold]      — exit ambient mode\n"
+                        "[bold]/lock enroll[/bold] — enroll voice biometric\n"
+                        "[bold]/lock[/bold]        — enable voice lock\n"
+                        "[bold]/unlock[/bold]      — disable voice lock\n"
                         "[bold]goodbye[/bold]      — exit D.A.R.V.I.S.\n\n"
                         "[dim]Settings (model + voice) are saved automatically.[/dim]",
                         title=f"[bold {CYAN}]Commands[/bold {CYAN}]",
@@ -2197,6 +2302,142 @@ def main():
 
             if lower == "/fix":
                 fix_yourself(brain, tts, ear, ollama_key, elevenlabs_key, gemini_key, audio_mode)
+                continue
+
+            # ── Macros ──
+            if lower.startswith("/macro "):
+                parts = user_input.strip().split(None, 3)
+                if len(parts) >= 3 and parts[1].lower() == "add":
+                    name = parts[2]
+                    cmd = parts[3] if len(parts) > 3 else ""
+                    console.print(f"  [green]{macro_manager.add(name, cmd)}[/green]")
+                elif len(parts) >= 3 and parts[1].lower() == "remove":
+                    console.print(f"  {macro_manager.remove(parts[2])}")
+                elif parts[1].lower() == "list":
+                    macros = macro_manager.list_all()
+                    if macros:
+                        for n, c in macros.items():
+                            console.print(f"  [bold {CYAN}]{n}[/bold {CYAN}] → {c}")
+                    else:
+                        console.print("  [dim]No macros defined[/dim]")
+                else:
+                    console.print("  [dim]Usage: /macro add NAME COMMAND | /macro remove NAME | /macro list[/dim]")
+                continue
+
+            # ── Alerts ──
+            if lower.startswith("/alert "):
+                parts = user_input.strip().split(None, 3)
+                if len(parts) >= 3 and parts[1].lower() == "add":
+                    alert_type = parts[2]
+                    config_str = parts[3] if len(parts) > 3 else "{}"
+                    try:
+                        config = json.loads(config_str)
+                    except json.JSONDecodeError:
+                        # Simple: treat as keyword/value
+                        config = {"keyword": config_str} if alert_type == "news_keyword" else {"url": config_str}
+                    console.print(f"  [green]{alert_monitor.add(alert_type, config)}[/green]")
+                elif len(parts) >= 3 and parts[1].lower() == "remove":
+                    console.print(f"  {alert_monitor.remove(parts[2])}")
+                elif parts[1].lower() == "list":
+                    alerts = alert_monitor.list_all()
+                    if alerts:
+                        for a in alerts:
+                            console.print(f"  [{CYAN}][{a['id']}][/{CYAN}] {a['type']} — {json.dumps(a['config'])}")
+                    else:
+                        console.print("  [dim]No active alerts[/dim]")
+                else:
+                    console.print("  [dim]Usage: /alert add TYPE CONFIG | /alert remove ID | /alert list[/dim]")
+                    console.print("  [dim]Types: weather_change, price_threshold, news_keyword, url_change[/dim]")
+                continue
+
+            # ── Screen Analysis ──
+            if lower in ("/screen", "/screenshot"):
+                console.print(f"  [{BLUE}]Analyzing screen...[/{BLUE}]")
+                result = analyze_screen()
+                console.print(Panel(result, title=f"[bold {CYAN}]Screen Analysis[/bold {CYAN}]", border_style=BLUE))
+                tts.speak(result[:300])
+                tts.wait_for_speech()
+                continue
+
+            # ── Ambient Mode ──
+            if lower == "/ambient":
+                ambient_mode = True
+                if has_mic:
+                    listening_active = True
+                console.print(f"  [green]✓[/green] Ambient mode — say [bold]'DARVIS'[/bold] to wake. /active to exit.")
+                continue
+
+            if lower == "/active":
+                ambient_mode = False
+                console.print(f"  [green]✓[/green] Active mode — processing all input.")
+                continue
+
+            # ── Voice Lock ──
+            if lower == "/lock enroll":
+                console.print(f"  [{BLUE}]Speak for 5 seconds to enroll your voice...[/{BLUE}]")
+                import speech_recognition as sr
+                r = sr.Recognizer()
+                with sr.Microphone() as source:
+                    audio = r.listen(source, timeout=6, phrase_time_limit=5)
+                wav_data = audio.get_wav_data()
+                if voice_lock.enroll(wav_data):
+                    console.print(f"  [green]✓ Voice enrolled successfully[/green]")
+                    tts.speak("Voice enrolled. I'll recognize you now, sir.")
+                else:
+                    console.print(f"  [red]Enrollment failed — try again[/red]")
+                continue
+
+            if lower == "/lock":
+                if voice_lock.is_enrolled():
+                    is_locked = True
+                    console.print(f"  [green]✓[/green] Voice lock [bold]enabled[/bold] — voice verification required")
+                else:
+                    console.print(f"  [red]No voiceprint — run /lock enroll first[/red]")
+                continue
+
+            if lower == "/unlock":
+                is_locked = False
+                console.print(f"  [green]✓[/green] Voice lock [bold]disabled[/bold]")
+                continue
+
+            # ── Wake word handling (ambient mode) ──
+            if user_input == "__WAKE__":
+                tts.speak("Yes, sir?")
+                tts.wait_for_speech()
+                continue
+
+            # ── Check macros before Brain ──
+            macro_cmd = macro_manager.get(lower)
+            if macro_cmd:
+                console.print(f"  [green]✓ Running macro:[/green] {macro_cmd}")
+                # Simple shell command
+                if not any(kw in macro_cmd.lower() for kw in ("briefing", "search", "open", "navigate", "create")):
+                    result = execute_shell(macro_cmd)
+                    console.print(f"  {result}")
+                    tts.speak(f"Macro {lower} executed.")
+                else:
+                    # Complex: let Brain generate command blocks
+                    response = brain.think(f"Execute this task: {macro_cmd}")
+                    cmd_results = extract_and_run_commands(response)
+                    display = re.sub(r'```command\s*\n.*?\n```', '', response, flags=re.DOTALL).strip()
+                    if display:
+                        console.print(Panel(Markdown(display), title=f"[bold {CYAN}]Macro: {lower}[/bold {CYAN}]", border_style=BLUE))
+                        tts.speak(display[:300])
+                        tts.wait_for_speech()
+                continue
+
+            # ── Screen analysis keywords ──
+            screen_triggers = ["what's on my screen", "read my screen", "what error", "look at my screen", "screen analysis", "what am i looking at"]
+            if any(t in lower for t in screen_triggers):
+                console.print(f"  [{BLUE}]Analyzing screen...[/{BLUE}]")
+                screen_result = analyze_screen(user_input)
+                context = f"Screen analysis result: {screen_result}"
+                response = brain.think(user_input, context=context)
+                display = re.sub(r'```command\s*\n.*?\n```', '', response, flags=re.DOTALL).strip()
+                if display:
+                    console.print(Panel(Markdown(display), title=f"[bold {CYAN}]D.A.R.V.I.S.[/bold {CYAN}]", border_style=BLUE))
+                    tts.speak(display[:300])
+                    tts.wait_for_speech()
                 continue
 
             # ── Gemini Mode: Use Ollama Brain for commands, Gemini for voice ──

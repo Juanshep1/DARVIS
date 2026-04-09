@@ -242,167 +242,40 @@ class ClickableOrbView(NSView):
         return False
 
 
-# ── Custom Styled Views ───────────────────────────────────────────────────────
+# ── Layer-styled helpers ──────────────────────────────────────────────────────
 
-class GlowBackgroundView(NSView):
-    """Dark background with visible radial glows."""
-
-    def drawRect_(self, rect):
-        w, h = rect.size.width, rect.size.height
-        # Base
-        NSColor.colorWithCalibratedRed_green_blue_alpha_(0.02, 0.02, 0.03, 1).set()
-        NSBezierPath.fillRect_(rect)
-        # Cyan glow from top center (visible!)
-        for i in range(25, 0, -1):
-            frac = i / 25.0
-            radius = max(w, h) * 0.45 * frac
-            alpha = 0.025 * (1 - frac)
-            cx, cy = w / 2, h * 0.82
-            NSColor.colorWithCalibratedRed_green_blue_alpha_(0.05, 0.35, 0.65, alpha).set()
-            NSBezierPath.bezierPathWithOvalInRect_(
-                NSMakeRect(cx - radius, cy - radius, radius * 2, radius * 2)
-            ).fill()
-        # Purple glow from bottom left
-        for i in range(20, 0, -1):
-            frac = i / 20.0
-            radius = w * 0.35 * frac
-            alpha = 0.018 * (1 - frac)
-            NSColor.colorWithCalibratedRed_green_blue_alpha_(0.42, 0.25, 1.0, alpha).set()
-            NSBezierPath.bezierPathWithOvalInRect_(
-                NSMakeRect(w * 0.2 - radius, -radius * 0.3, radius * 2, radius * 2)
-            ).fill()
-
-    def isOpaque(self):
-        return True
+def _make_card(frame, border_color=None):
+    """Create a layer-backed view with rounded corners and optional border."""
+    v = NSView.alloc().initWithFrame_(frame)
+    v.setWantsLayer_(True)
+    v.layer().setCornerRadius_(10)
+    v.layer().setBackgroundColor_(
+        NSColor.colorWithCalibratedRed_green_blue_alpha_(0.06, 0.06, 0.09, 0.95).CGColor())
+    if border_color:
+        v.layer().setBorderColor_(
+            NSColor.colorWithCalibratedRed_green_blue_alpha_(*border_color, 0.3).CGColor())
+        v.layer().setBorderWidth_(1)
+    return v
 
 
-class GlowLineView(NSView):
-    """Horizontal line with center glow effect."""
-
-    def drawRect_(self, rect):
-        w = rect.size.width
-        cy = rect.size.height / 2
-        # Gradient line: transparent -> cyan -> transparent
-        steps = 40
-        for i in range(steps):
-            frac = i / (steps - 1)
-            # Bell curve alpha
-            alpha = math.exp(-((frac - 0.5) ** 2) / 0.05) * 0.45
-            x = frac * w
-            seg_w = w / steps + 1
-            NSColor.colorWithCalibratedRed_green_blue_alpha_(0.0, 0.7, 0.9, alpha).set()
-            NSBezierPath.fillRect_(NSMakeRect(x, cy - 0.5, seg_w, 1))
-        # Base dim line across full width
-        NSColor.colorWithCalibratedRed_green_blue_alpha_(1, 1, 1, 0.08).set()
-        NSBezierPath.fillRect_(NSMakeRect(0, cy - 0.5, w, 1))
-
-    def isOpaque(self):
-        return False
-
-
-class RoundedCardView(NSView):
-    """Dark card with rounded corners, subtle border, and inner shadow."""
-
-    def drawRect_(self, rect):
-        w, h = rect.size.width, rect.size.height
-        r = 10  # corner radius
-        inset = NSMakeRect(0.5, 0.5, w - 1, h - 1)
-        path = NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(inset, r, r)
-        # Fill
-        NSColor.colorWithCalibratedRed_green_blue_alpha_(0.035, 0.035, 0.055, 0.95).set()
-        path.fill()
-        # Border glow — visible cyan
-        NSColor.colorWithCalibratedRed_green_blue_alpha_(0.0, 0.5, 0.7, 0.25).set()
-        path.setLineWidth_(1)
-        path.stroke()
-        # Inner top highlight
-        NSColor.colorWithCalibratedRed_green_blue_alpha_(1, 1, 1, 0.02).set()
-        NSBezierPath.fillRect_(NSMakeRect(r, h - 2, w - r * 2, 1))
-
-    def isOpaque(self):
-        return False
-
-
-class StyledButtonView(NSView):
-    """Custom drawn button using NSView (NSButton drawRect_ doesn't work)."""
-
-    def initWithFrame_label_color_ctrl_action_(self, frame, label, color, ctrl, action):
-        self = objc.super(StyledButtonView, self).initWithFrame_(frame)
-        if self is None:
-            return None
-        self._color = color
-        self._label = label
-        self._ctrl = ctrl
-        self._action = action
-        self._pressed = False
-        return self
-
-    def setTarget_(self, target):
-        self._ctrl = target
-
-    def setAction_(self, action):
-        self._action = action
-
-    def mouseDown_(self, event):
-        self._pressed = True
-        self.setNeedsDisplay_(True)
-
-    def mouseUp_(self, event):
-        self._pressed = False
-        self.setNeedsDisplay_(True)
-        # Check if mouse is still inside
-        loc = self.convertPoint_fromView_(event.locationInWindow(), None)
-        if 0 <= loc.x <= self.bounds().size.width and 0 <= loc.y <= self.bounds().size.height:
-            if self._ctrl and self._action:
-                self._ctrl.performSelector_withObject_(self._action, self)
-
-    def acceptsFirstMouse_(self, event):
-        return True
-
-    def acceptsFirstResponder(self):
-        return True
-
-    def drawRect_(self, rect):
-        w, h = rect.size.width, rect.size.height
-        cr, cg, cb = self._color
-        pressed = self._pressed
-
-        r = 8
-        inset = NSMakeRect(1, 1, w - 2, h - 2)
-        path = NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(inset, r, r)
-
-        # Background — brighter when pressed
-        bg_alpha = 0.2 if pressed else 0.08
-        NSColor.colorWithCalibratedRed_green_blue_alpha_(cr * 0.2, cg * 0.2, cb * 0.2, bg_alpha).set()
-        path.fill()
-
-        # Outer glow when pressed
-        if pressed:
-            glow = NSMakeRect(-1, -1, w + 2, h + 2)
-            gp = NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(glow, r + 1, r + 1)
-            NSColor.colorWithCalibratedRed_green_blue_alpha_(cr, cg, cb, 0.15).set()
-            gp.setLineWidth_(2)
-            gp.stroke()
-
-        # Border
-        border_alpha = 0.5 if pressed else 0.35
-        NSColor.colorWithCalibratedRed_green_blue_alpha_(cr, cg, cb, border_alpha).set()
-        path.setLineWidth_(1)
-        path.stroke()
-
-        # Label
-        font = NSFont.fontWithName_size_(FONT, 9.5)
-        attrs = {
-            NSFontAttributeName: font,
-            NSForegroundColorAttributeName: NSColor.colorWithCalibratedRed_green_blue_alpha_(
-                cr, cg, cb, 1.0 if pressed else 0.85),
-        }
-        text = NSAttributedString.alloc().initWithString_attributes_(self._label, attrs)
-        tw, th = text.size().width, text.size().height
-        text.drawAtPoint_(NSPoint((w - tw) / 2, (h - th) / 2))
-
-    def isOpaque(self):
-        return False
+def _make_styled_btn(frame, title, color, ctrl, action):
+    """Standard NSButton with layer-based coloring."""
+    btn = NSButton.alloc().initWithFrame_(frame)
+    btn.setTitle_(title)
+    btn.setBezelStyle_(NSBezelStyleRounded)
+    btn.setWantsLayer_(True)
+    btn.setFont_(NSFont.fontWithName_size_(FONT, 10))
+    btn.setTarget_(ctrl)
+    btn.setAction_(action)
+    # Style via layer
+    btn.layer().setCornerRadius_(8)
+    btn.layer().setBorderColor_(
+        NSColor.colorWithCalibratedRed_green_blue_alpha_(*color, 0.5).CGColor())
+    btn.layer().setBorderWidth_(1)
+    btn.layer().setBackgroundColor_(
+        NSColor.colorWithCalibratedRed_green_blue_alpha_(
+            color[0] * 0.1, color[1] * 0.1, color[2] * 0.1, 0.5).CGColor())
+    return btn
 
 
 # ── Console App ───────────────────────────────────────────────────────────────
@@ -517,107 +390,89 @@ class DarvisConsoleApp:
     def _expand(self):
         self.expanded = True
         screen = NSScreen.mainScreen().frame()
-        ew, eh = 800, 600
+        ew, eh = 750, 580
         self.window.setStyleMask_(
             NSWindowStyleMaskTitled | NSWindowStyleMaskClosable |
             NSWindowStyleMaskMiniaturizable | NSWindowStyleMaskResizable)
-        self.window.setTitle_("D.A.R.V.I.S.")
+        self.window.setTitle_("D.A.R.V.I.S. Console")
         self.window.setLevel_(NSNormalWindowLevel)
-        self.window.setOpaque_(False)
-        self.window.setBackgroundColor_(NSColor.colorWithCalibratedRed_green_blue_alpha_(0.03, 0.03, 0.05, 0.97))
+        self.window.setOpaque_(True)
+        self.window.setBackgroundColor_(NSColor.colorWithCalibratedRed_green_blue_alpha_(0.04, 0.04, 0.06, 1))
         self.window.setHasShadow_(True)
-        self.window.setMinSize_(NSSize(600, 450))
-        self.window.setTitlebarAppearsTransparent_(True)
+        self.window.setMinSize_(NSSize(550, 400))
         self.window.setFrame_display_animate_(
             NSMakeRect((screen.size.width-ew)/2, (screen.size.height-eh)/2, ew, eh), True, True)
         self._build_expanded(ew, eh)
 
     def _build_expanded(self, w, h):
+        p = 16  # padding
         c = NSView.alloc().initWithFrame_(NSMakeRect(0, 0, w, h))
-        pad = 16  # side padding
+        c.setWantsLayer_(True)
 
-        # ── Background ──
-        bg = GlowBackgroundView.alloc().initWithFrame_(NSMakeRect(0, 0, w, h))
-        c.addSubview_(bg)
-
-        # ── Title area (inside transparent titlebar) ──
-        ty = h - 50
-        c.addSubview_(self._lbl(NSMakeRect(75, ty + 12, 300, 22),
-                                 "D.A.R.V.I.S.", 14, CYAN, 0))
-        info = f"{brain.model}  ·  {tts.voice_name}" if backend_ready else "Connecting..."
-        self.header_info = self._lbl(NSMakeRect(w - 350, ty + 14, 330, 18), info, 10, DIM)
-        self.header_info.setAlignment_(2)
+        # ── Header: model + voice info ──
+        info = f"Model: {brain.model}   Voice: {tts.voice_name}   Mode: {audio_mode.upper()}" if backend_ready else "Connecting..."
+        self.header_info = self._lbl(NSMakeRect(p, h - 28, w - p * 2, 18), info, 10, BLUE, 1)
         c.addSubview_(self.header_info)
 
-        # ── Orb + status — left side panel ──
-        orb_sz = 140
-        orb_x = pad + 10
-        orb_y = ty - orb_sz - 10
+        # ── Orb — centered at top ──
+        orb_sz = 120
+        oy = h - orb_sz - 40
         self.orb_view = ClickableOrbView.alloc().initWithFrame_(
-            NSMakeRect(orb_x, orb_y, orb_sz, orb_sz))
+            NSMakeRect((w - orb_sz) / 2, oy, orb_sz, orb_sz))
         self.orb_view.state = self.orb_state
         c.addSubview_(self.orb_view)
 
+        # Status text under orb
         self.status_label = self._lbl(
-            NSMakeRect(orb_x, orb_y - 20, orb_sz, 16), self._state_txt(), 10, DIM, 1)
+            NSMakeRect(0, oy - 18, w, 16), self._state_txt(), 10, DIM, 1)
         c.addSubview_(self.status_label)
 
-        # Mode indicator below status
-        mode_color = GREEN if audio_mode == "gemini" else BLUE
-        mode_txt = audio_mode.upper()
-        c.addSubview_(self._lbl(
-            NSMakeRect(orb_x, orb_y - 36, orb_sz, 14), mode_txt, 8, mode_color, 1))
+        # ── Chat area — card with rounded border ──
+        chat_top = oy - 30
+        chat_bottom = 58
+        chat_h = max(chat_top - chat_bottom, 80)
 
-        # ── Chat area — right side, full height ──
-        chat_x = orb_x + orb_sz + 20
-        chat_w = w - chat_x - pad
-        chat_bottom = 70
-        chat_h = ty - chat_bottom - 8
-
-        card = RoundedCardView.alloc().initWithFrame_(
-            NSMakeRect(chat_x - 2, chat_bottom - 2, chat_w + 4, chat_h + 4))
-        c.addSubview_(card)
+        chat_card = _make_card(NSMakeRect(p, chat_bottom, w - p * 2, chat_h),
+                               border_color=CYAN[:3])
+        c.addSubview_(chat_card)
 
         scroll = NSScrollView.alloc().initWithFrame_(
-            NSMakeRect(chat_x, chat_bottom, chat_w, chat_h))
+            NSMakeRect(p + 1, chat_bottom + 1, w - p * 2 - 2, chat_h - 2))
         scroll.setHasVerticalScroller_(True)
         scroll.setBorderType_(0)
         scroll.setDrawsBackground_(False)
-        scroll.setScrollerStyle_(1)
 
         self.chat_view = NSTextView.alloc().initWithFrame_(
-            NSMakeRect(0, 0, chat_w - 15, chat_h))
+            NSMakeRect(0, 0, w - p * 2 - 20, chat_h))
         self.chat_view.setEditable_(False)
         self.chat_view.setSelectable_(True)
         self.chat_view.setRichText_(True)
         self.chat_view.setDrawsBackground_(True)
         self.chat_view.setBackgroundColor_(
-            NSColor.colorWithCalibratedRed_green_blue_alpha_(0.03, 0.03, 0.05, 1))
+            NSColor.colorWithCalibratedRed_green_blue_alpha_(0.05, 0.05, 0.08, 1))
+        self.chat_view.setTextColor_(NSColor.colorWithCalibratedRed_green_blue_alpha_(0.85, 0.87, 0.9, 1))
         self.chat_view.setFont_(NSFont.fontWithName_size_(FONT, 13))
-        self.chat_view.setTextContainerInset_(NSSize(12, 10))
+        self.chat_view.setTextContainerInset_(NSSize(10, 8))
         scroll.setDocumentView_(self.chat_view)
         c.addSubview_(scroll)
 
         for s, t, col in self.chat_history:
             self._chat_raw(s, t, col)
 
-        # ── Input bar — full width at bottom ──
-        iy = 28
-        inp_right = w - pad
-        btn_total_w = 240
-        inp_w = w - pad * 2 - btn_total_w - 8
+        # ── Input + Buttons row ──
+        iy = 18
+        btn_w_total = 260
+        inp_w = w - p * 2 - btn_w_total - 10
 
-        # Input card
-        inp_card = RoundedCardView.alloc().initWithFrame_(
-            NSMakeRect(pad - 1, iy - 1, inp_w + 2, 34))
+        # Input field with card background
+        inp_card = _make_card(NSMakeRect(p, iy, inp_w, 32), border_color=CYAN[:3])
         c.addSubview_(inp_card)
 
         self.input_field = NSTextField.alloc().initWithFrame_(
-            NSMakeRect(pad + 4, iy + 2, inp_w - 8, 28))
-        self.input_field.setPlaceholderString_("Talk to DARVIS... (Enter to send)")
+            NSMakeRect(p + 6, iy + 3, inp_w - 12, 26))
+        self.input_field.setPlaceholderString_("Talk to DARVIS...")
         self.input_field.setTextColor_(NSColor.whiteColor())
-        self.input_field.setBackgroundColor_(
-            NSColor.colorWithCalibratedRed_green_blue_alpha_(0.03, 0.03, 0.05, 0.01))
+        self.input_field.setBackgroundColor_(NSColor.clearColor())
         self.input_field.setFont_(NSFont.fontWithName_size_(FONT, 13))
         self.input_field.setFocusRingType_(1)
         self.input_field.setBordered_(False)
@@ -625,28 +480,26 @@ class DarvisConsoleApp:
         self.input_field.setAction_(b"sendMessage:")
         c.addSubview_(self.input_field)
 
-        # Buttons row
-        bx = pad + inp_w + 8
+        # Buttons — standard NSButton with layer styling
+        bx = p + inp_w + 10
         btn_specs = [
-            (52, "SEND",   b"sendMessage:",    CYAN),
-            (42, "MIC",    b"toggleMic:",      GREEN if self.listening else BLUE),
-            (38, "FIX",    b"fixSelf:",        ORANGE),
-            (46, "MINI",   b"collapseWindow:", DIM),
-            (30, "?",      b"showHelp:",       DIM),
+            (52, "Send",   b"sendMessage:",    CYAN),
+            (42, "Mic",    b"toggleMic:",      GREEN if self.listening else BLUE),
+            (38, "Fix",    b"fixSelf:",        ORANGE),
+            (48, "Mini",   b"collapseWindow:", DIM),
+            (32, "?",      b"showHelp:",       DIM),
         ]
         for bw, label, action, color in btn_specs:
-            btn_view = StyledButtonView.alloc().initWithFrame_label_color_ctrl_action_(
-                NSMakeRect(bx, iy, bw, 32), label, color, self.ctrl, action)
-            c.addSubview_(btn_view)
+            btn = _make_styled_btn(NSMakeRect(bx, iy, bw, 32), label, color, self.ctrl, action)
+            c.addSubview_(btn)
             bx += bw + 5
 
-        # ── Bottom status ──
+        # ── Bottom text ──
         bar = f"{audio_mode.upper()}"
         if gemini_available:
             bar += " · GEMINI"
-        bar += f" · MIC {'ON' if self.listening else 'OFF'}"
-        bar += " · /help"
-        self.bottom_label = self._lbl(NSMakeRect(pad, 4, w - pad * 2, 14), bar, 7, DIM, 1)
+        bar += f" · MIC {'ON' if self.listening else 'OFF'} · /help"
+        self.bottom_label = self._lbl(NSMakeRect(p, 2, w - p * 2, 12), bar, 7, DIM, 1)
         c.addSubview_(self.bottom_label)
 
         self.window.setContentView_(c)

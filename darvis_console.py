@@ -805,12 +805,17 @@ class DarvisConsoleApp:
             try:
                 text = ear.listen()
                 if text and self.listening:
-                    self.listening = False
+                    # Suppress mic while processing + speaking
+                    if ear:
+                        ear.suppressed = True
                     self.mq.put(('user', text))
                     self.mq.put(('state', 'thinking'))
-                    self._update_header()
-                    self._think_thread(text)
-                    return
+                    self._think_thread(text)  # Blocks until response + TTS done
+                    # Re-enable mic and keep listening
+                    if ear:
+                        ear.suppressed = False
+                    if self.listening:
+                        self.mq.put(('state', 'listening'))
             except Exception:
                 time.sleep(0.5)
 

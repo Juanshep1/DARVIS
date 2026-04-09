@@ -259,6 +259,37 @@ For recurring tasks (runs every N minutes):
 Use this when the user says "in X minutes...", "at X o'clock...", "every hour...", "later do...", "remind me in...", "schedule...", etc.
 You can combine complex tasks in the description — they will be executed as a full conversation with you when the time comes.
 
+## 13. Screen Analysis
+When the user asks about their screen, what they're looking at, or asks you to read/describe their display:
+```command
+{"action": "analyze_screen", "prompt": "What error is showing on screen?"}
+```
+
+## 14. Proactive Alerts
+Set up background monitors. Use when the user wants to be notified about something:
+```command
+{"action": "alert_add", "type": "news_keyword", "config": {"keyword": "SpaceX"}}
+```
+```command
+{"action": "alert_add", "type": "price_threshold", "config": {"symbol": "AAPL", "threshold": 200, "direction": "above"}}
+```
+```command
+{"action": "alert_add", "type": "weather_change", "config": {}}
+```
+```command
+{"action": "alert_add", "type": "url_change", "config": {"url": "https://example.com/status"}}
+```
+Use when user says "alert me when...", "notify me if...", "watch for...", "let me know when...", "monitor...", etc.
+
+## 15. Voice Macros
+Save shortcuts. Use when user says "create a shortcut for...", "save a macro...", "when I say X do Y":
+```command
+{"action": "macro_add", "name": "deploy", "command": "cd site && netlify deploy --prod"}
+```
+```command
+{"action": "macro_remove", "name": "deploy"}
+```
+
 PLATFORM_BROWSER_SECTION
 
 IMPORTANT RULES:
@@ -1356,10 +1387,43 @@ def extract_and_run_commands(response_text: str) -> list[str]:
                 console.print(f"  [green]✓ Screen analyzed[/green]")
 
             elif action == "alert_add" and "type" in data:
-                from alerts import AlertMonitor
-                # Use global if available
-                msg = f"Alert type '{data['type']}' — use /alert add in terminal"
-                results.append(msg)
+                try:
+                    from alerts import AlertMonitor
+                    # Try to use the running monitor
+                    import __main__
+                    monitor = getattr(__main__, 'alert_monitor', None)
+                    if monitor is None:
+                        monitor = AlertMonitor()
+                    msg = monitor.add(data["type"], data.get("config", {}))
+                    results.append(msg)
+                    console.print(f"  [green]{msg}[/green]")
+                except Exception as e:
+                    results.append(f"Alert error: {e}")
+
+            elif action == "macro_add" and "name" in data:
+                try:
+                    from macros import MacroManager
+                    import __main__
+                    mgr = getattr(__main__, 'macro_manager', None)
+                    if mgr is None:
+                        mgr = MacroManager()
+                    msg = mgr.add(data["name"], data.get("command", ""))
+                    results.append(msg)
+                    console.print(f"  [green]{msg}[/green]")
+                except Exception as e:
+                    results.append(f"Macro error: {e}")
+
+            elif action == "macro_remove" and "name" in data:
+                try:
+                    from macros import MacroManager
+                    import __main__
+                    mgr = getattr(__main__, 'macro_manager', None)
+                    if mgr is None:
+                        mgr = MacroManager()
+                    msg = mgr.remove(data["name"])
+                    results.append(msg)
+                except Exception as e:
+                    results.append(f"Macro error: {e}")
 
         except json.JSONDecodeError:
             pass

@@ -49,10 +49,33 @@ class ChatViewModel: ObservableObject {
         }
     }
 
+    @Published var ambientMode = false
+
     init() {
         setupGeminiCallbacks()
         Task { await loadSettings() }
         startBriefingSchedule()
+        startAlertPolling()
+    }
+
+    // Poll for triggered alerts every 60s
+    private func startAlertPolling() {
+        Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                guard let self = self else { return }
+                do {
+                    let (data, _) = try await URLSession.shared.data(from: URL(string: "https://darvis1.netlify.app/api/alerts/triggered")!)
+                    struct Triggered: Codable { let triggered: [AlertItem] }
+                    struct AlertItem: Codable { let id: String; let type: String; let message: String }
+                    let result = try JSONDecoder().decode(Triggered.self, from: data)
+                    for alert in result.triggered {
+                        self.statusMessage = "⚡ " + alert.message
+                        self.responseText = "ALERT: " + alert.message
+                        await self.playTTS(alert.message)
+                    }
+                } catch {}
+            }
+        }
     }
 
     // Check every 30s if it's 8:00 AM or 9:30 PM
@@ -143,6 +166,12 @@ class ChatViewModel: ObservableObject {
         inputText = ""
         dismissKeyboard()
         phoneControl.haptic(.light)
+
+        // Ambient mode: only process if "darvis" is in the text
+        if ambientMode && !text.lowercased().contains("darvis") {
+            return
+        }
+
         detectAndSaveMemory(text)
 
         // On-demand briefing

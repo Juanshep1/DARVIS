@@ -60,15 +60,25 @@ body::after{content:'';position:fixed;top:-50%;left:-50%;width:200%;height:200%;
 .agent-footer{padding:10px 16px;border-top:1px solid var(--border)}
 .agent-status{font-family:var(--mono);font-size:0.6rem;color:rgba(255,255,255,0.3)}
 .agent-step{font-family:var(--mono);font-size:0.55rem;color:rgba(255,255,255,0.15);margin-top:2px}
+.situation-panel{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--bg-card);border:1px solid var(--border);border-radius:20px;width:92vw;max-width:600px;max-height:85vh;z-index:200;display:none;backdrop-filter:blur(30px);overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.6)}
+.situation-panel.open{display:flex;flex-direction:column}
+.sit-card{background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:12px;padding:12px}
+.sit-card h3{font-family:var(--mono);font-size:0.55rem;color:rgba(255,255,255,0.3);letter-spacing:2px;text-transform:uppercase;margin:0 0 8px}
+.sit-card .val{font-family:var(--mono);font-size:0.85rem;color:var(--text)}
+.sit-card .sub{font-family:var(--mono);font-size:0.6rem;color:rgba(255,255,255,0.2);margin-top:4px}
+.header-btn.ambient-on{border-color:var(--green);color:var(--green);box-shadow:0 0 10px rgba(0,230,118,0.2)}
+.alert-toast{position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(255,82,82,0.15);border:1px solid var(--red);border-radius:12px;padding:10px 20px;font-family:var(--mono);font-size:0.75rem;color:var(--red);z-index:300;backdrop-filter:blur(20px);animation:fadeIn 0.3s}
+@keyframes fadeIn{from{opacity:0;transform:translateX(-50%) translateY(-10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
 @media(max-width:480px){.orb-wrap{width:220px;height:220px}#orbCanvas{width:220px;height:220px}.response-area{max-height:25vh}.settings-panel{width:calc(100vw - 24px)}.cam-preview{width:110px;height:150px}}
 </style>
 </head>
 <body>
-<div class="header"><div class="header-brand">D.A.R.V.I.S.</div><div class="header-actions"><button class="header-btn" id="fixBtn" onclick="fixYourself()" title="Fix Yourself">&#x1F527;</button><button class="header-btn" id="agentToggle" onclick="toggleAgentView()">&#x1F441;</button><button class="header-btn" onclick="toggleSettings()">&#9881;</button></div></div>
+<div class="header"><div class="header-brand">D.A.R.V.I.S.</div><div class="header-actions"><button class="header-btn" id="ambientBtn" onclick="toggleAmbient()" title="Ambient Mode">&#x1F4A4;</button><button class="header-btn" id="situationBtn" onclick="toggleSituation()" title="Situation Room">&#x1F4CA;</button><button class="header-btn" id="fixBtn" onclick="fixYourself()" title="Fix Yourself">&#x1F527;</button><button class="header-btn" id="agentToggle" onclick="toggleAgentView()">&#x1F441;</button><button class="header-btn" onclick="toggleSettings()">&#9881;</button></div></div>
 <div class="settings-panel" id="settingsPanel"><label>Audio Mode</label><select id="audioModeSelect" onchange="setAudioMode(this.value)"><option value="classic">Classic (Ollama + ElevenLabs)</option><option value="gemini">Gemini Live Audio</option><option value="gemma">Gemma 4 (Fast, Free)</option></select><div id="classicSettings"><label>Model</label><select id="modelSelect" onchange="setModel(this.value)"></select><label>Voice</label><select id="voiceSelect" onchange="setVoice(this.value)"></select></div><div class="settings-status" id="settingsStatus"></div></div>
 <div class="agent-panel" id="agentPanel"><div class="agent-header"><span class="agent-title">Agent Browser</span><button class="agent-close" onclick="toggleAgentView()">&times;</button></div><div class="agent-screen-wrap"><img id="agentScreen" style="display:none" alt="Agent browser view"><div class="agent-no-feed" id="agentNoFeed">No active session<br>Ask DARVIS to browse something</div></div><div class="agent-footer"><div class="agent-status" id="agentStatus">Idle</div><div class="agent-step" id="agentStep"></div></div></div>
 <div class="orb-area"><div class="orb-wrap" id="orbWrap"><canvas id="orbCanvas" width="600" height="600" onclick="if(!orb.classList.contains('speaking'))toggleMic()"></canvas><div class="orb" id="orb"></div></div><div class="response-area"><div id="response"></div></div></div>
 <div class="input-area"><input type="text" id="input" placeholder="Ask DARVIS anything..." autocomplete="off" onkeydown="if(event.key==='Enter')send()"><button class="mic-btn" id="micBtn" onclick="toggleMic()">&#x1F3A4;</button><button class="cam-btn" id="camBtn" onclick="toggleCamera()">&#x1F4F7;</button></div>
+<div class="situation-panel" id="situationPanel"><div class="agent-header"><span class="agent-title">Situation Room</span><button class="agent-close" onclick="toggleSituation()">&times;</button></div><div id="situationGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px;max-height:70vh;overflow-y:auto"></div></div>
 <video class="cam-preview" id="camPreview" autoplay playsinline muted></video>
 <div id="statusBar">Ollama Cloud + ElevenLabs</div>
 <script>
@@ -1057,6 +1067,11 @@ async function send() {
     if (!text) return;
     inputEl.value = '';
 
+    // Ambient mode: only process if "darvis" is in the text
+    if (ambientMode && !text.toLowerCase().includes('darvis')) {
+        return; // Silently ignore non-wake-word input in ambient mode
+    }
+
     // Handle memory saves/forgets directly from user input
     handleMemoryFromUserInput(text);
 
@@ -1653,6 +1668,111 @@ async function fixYourself() {
     fixBtn.classList.remove('fixing');
     orb.className = 'orb';
     responseEl.textContent = 'DIAGNOSTICS COMPLETE\n\n' + results.join('\n') + '\n\n' + (fixed.length ? '🔧 Fixed: ' + fixed.join(', ') : '✓ No issues found.');
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// AMBIENT MODE
+// ══════════════════════════════════════════════════════════════════════════════
+let ambientMode = false;
+
+function toggleAmbient() {
+    ambientMode = !ambientMode;
+    const btn = document.getElementById('ambientBtn');
+    if (ambientMode) {
+        btn.classList.add('ambient-on');
+        statusBar.textContent = 'AMBIENT MODE — SAY "DARVIS" TO WAKE';
+        // Start continuous listening if not already
+        if (!isRecording) toggleMic();
+    } else {
+        btn.classList.remove('ambient-on');
+        statusBar.textContent = audioMode === 'gemini' ? 'GEMINI LIVE AUDIO' : audioMode === 'gemma' ? 'GEMMA 4' : 'POWERED BY OLLAMA CLOUD + ELEVENLABS';
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// SITUATION ROOM
+// ══════════════════════════════════════════════════════════════════════════════
+let situationTimer = null;
+
+function toggleSituation() {
+    const panel = document.getElementById('situationPanel');
+    const isOpen = panel.classList.toggle('open');
+    if (isOpen) {
+        fetchSituation();
+        situationTimer = setInterval(fetchSituation, 60000);
+    } else {
+        if (situationTimer) { clearInterval(situationTimer); situationTimer = null; }
+    }
+}
+
+async function fetchSituation() {
+    try {
+        const res = await fetch('/api/situation', { signal: AbortSignal.timeout(10000) });
+        const data = await res.json();
+        const grid = document.getElementById('situationGrid');
+        const now = new Date();
+
+        let html = '';
+        // Clock
+        html += `<div class="sit-card"><h3>Clock</h3><div class="val">${now.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</div><div class="sub">${now.toLocaleDateString([], {weekday:'long',month:'long',day:'numeric'})}</div></div>`;
+
+        // Weather
+        if (data.weather) {
+            html += `<div class="sit-card"><h3>Weather</h3><div class="val">${data.weather.temp_f || '?'}°F — ${data.weather.condition || 'Unknown'}</div><div class="sub">Humidity: ${data.weather.humidity || '?'}% · Wind: ${data.weather.wind_mph || '?'} mph</div></div>`;
+        } else {
+            html += `<div class="sit-card"><h3>Weather</h3><div class="val">Unavailable</div></div>`;
+        }
+
+        // Settings
+        const s = data.settings || {};
+        html += `<div class="sit-card"><h3>System</h3><div class="val">${s.model || 'Unknown model'}</div><div class="sub">Voice: ${s.voice_id ? 'Custom' : 'Default'} · Mode: ${(s.audio_mode || 'classic').toUpperCase()}</div></div>`;
+
+        // Alerts
+        html += `<div class="sit-card"><h3>Alerts</h3><div class="val">${data.alert_count || 0} active</div><div class="sub">${data.alerts?.map(a => a.type).join(', ') || 'None'}</div></div>`;
+
+        // Tasks
+        html += `<div class="sit-card"><h3>Scheduled Tasks</h3><div class="val">${data.task_count || 0} pending</div><div class="sub">${data.tasks?.[0]?.task?.slice(0,50) || 'None'}</div></div>`;
+
+        // Memory
+        html += `<div class="sit-card"><h3>Memory</h3><div class="val">${data.memory_count || 0} stored</div></div>`;
+
+        // Agent
+        const ag = data.agent || {};
+        html += `<div class="sit-card"><h3>Agent</h3><div class="val">${ag.active ? 'Active' : 'Idle'}</div><div class="sub">${ag.goal || ''}</div></div>`;
+
+        // Timestamp
+        html += `<div class="sit-card"><h3>Last Updated</h3><div class="val">${new Date(data.timestamp).toLocaleTimeString()}</div></div>`;
+
+        grid.innerHTML = html;
+    } catch (e) {
+        document.getElementById('situationGrid').innerHTML = '<div class="sit-card"><h3>Error</h3><div class="val">Could not load data</div></div>';
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// PROACTIVE ALERT POLLING
+// ══════════════════════════════════════════════════════════════════════════════
+setInterval(async () => {
+    try {
+        const res = await fetch('/api/alerts/triggered', { signal: AbortSignal.timeout(5000) });
+        const data = await res.json();
+        if (data.triggered && data.triggered.length > 0) {
+            for (const alert of data.triggered) {
+                showAlertToast(alert.message);
+                // Flash orb red briefly
+                orb.className = 'orb listening';
+                setTimeout(() => { if (orb.className === 'orb listening') orb.className = 'orb'; }, 3000);
+            }
+        }
+    } catch {}
+}, 60000);
+
+function showAlertToast(message) {
+    const toast = document.createElement('div');
+    toast.className = 'alert-toast';
+    toast.textContent = '⚡ ' + message;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 8000);
 }
 
 // Check every minute if it's briefing time

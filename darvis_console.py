@@ -2,7 +2,7 @@
 """
 D.A.R.V.I.S. Console — macOS desktop app with holographic orb.
 Compact mode: floating orb + status. Double-click to expand.
-Expanded mode: full console with chat, voice, commands, settings.
+Expanded mode: full console with ALL terminal darvis.py features.
 """
 
 import os
@@ -27,9 +27,8 @@ try:
         NSTextField, NSTextView, NSScrollView,
         NSButton, NSBezelStyleRounded,
         NSFontAttributeName, NSForegroundColorAttributeName,
-        NSTrackingArea, NSTrackingActiveAlways, NSTrackingMouseEnteredAndExited,
     )
-    from Foundation import NSRect, NSPoint, NSSize, NSMakeRect, NSDate, NSAttributedString, NSMutableAttributedString, NSRange
+    from Foundation import NSMakeRect, NSPoint, NSSize, NSAttributedString, NSRange
 except ImportError as e:
     print(f"PyObjC required ({e}). Install: pip3 install pyobjc-framework-Cocoa pyobjc-framework-Quartz")
     sys.exit(1)
@@ -44,6 +43,7 @@ RED = (1.0, 0.32, 0.32)
 GREEN = (0.0, 0.9, 0.46)
 TEXT = (0.78, 0.79, 0.82)
 DIM = (0.33, 0.33, 0.38)
+WHITE = (1.0, 1.0, 1.0)
 FONT = "Menlo"
 
 COMPACT_W = 260
@@ -57,14 +57,20 @@ ollama_key = ""
 elevenlabs_key = ""
 gemini_key = ""
 audio_mode = "classic"
+gemini_available = False
 backend_ready = False
-console_app = None  # Set after init
+settings = {}
+scheduler = None
 
 
 def init_backend():
-    global brain, tts, ear, ollama_key, elevenlabs_key, gemini_key, backend_ready
+    global brain, tts, ear, ollama_key, elevenlabs_key, gemini_key
+    global audio_mode, gemini_available, backend_ready, settings, scheduler
     try:
-        from darvis import Brain, Ear, ElevenLabsVoice, load_env, load_settings
+        from darvis import (
+            Brain, Ear, ElevenLabsVoice, load_env, load_settings, save_settings,
+            check_ollama_cloud, list_cloud_models, select_initial_voice,
+        )
 
         env = load_env()
         ollama_key = env.get("OLLAMA_API_KEY", os.environ.get("OLLAMA_API_KEY", ""))
@@ -79,6 +85,23 @@ def init_backend():
             tts.set_voice(settings["voice_id"])
         ear = Ear()
         ear.init_mic()
+
+        # Gemini availability
+        if gemini_key:
+            try:
+                from gemini_live import HAS_WS
+                gemini_available = HAS_WS
+            except ImportError:
+                gemini_available = False
+
+        # Scheduler
+        try:
+            from scheduler import DARVISScheduler
+            scheduler = DARVISScheduler()
+            scheduler.sync_from_cloud()
+        except Exception:
+            pass
+
         backend_ready = True
     except Exception as e:
         print(f"Backend init error: {e}")
@@ -87,11 +110,9 @@ def init_backend():
         backend_ready = False
 
 
-# ── Clickable Orb View ────────────────────────────────────────────────────────
+# ── Holographic Orb View ──────────────────────────────────────────────────────
 
 class ClickableOrbView(NSView):
-    """Holographic wireframe sphere. Accepts clicks for expand/collapse."""
-
     def initWithFrame_(self, frame):
         self = objc.super(ClickableOrbView, self).initWithFrame_(frame)
         if self is None:
@@ -100,52 +121,45 @@ class ClickableOrbView(NSView):
         self.state = 'idle'
         self._speak_intensity = 0.0
         self.click_callback = None
-        self.drag_callback = None
         self._drag_origin = None
         self._win_origin = None
         self.nodes = []
-        self._generate_nodes()
+        self._gen()
         return self
 
-    def _generate_nodes(self):
+    def _gen(self):
         import random
         golden = math.pi * (3 - math.sqrt(5))
-        count = 90
-        for i in range(count):
-            y = 1 - (i / (count - 1)) * 2
+        for i in range(90):
+            y = 1 - (i / 89) * 2
             r = math.sqrt(1 - y * y)
-            theta = golden * i
+            t = golden * i
             self.nodes.append({
-                'ox': math.cos(theta) * r, 'oy': y, 'oz': math.sin(theta) * r,
+                'ox': math.cos(t) * r, 'oy': y, 'oz': math.sin(t) * r,
                 'pulse': random.random() * math.pi * 2,
                 'size': 1.2 + random.random() * 1.8,
             })
 
     def mouseDown_(self, event):
-        if event.clickCount() >= 2:
-            if self.click_callback:
-                self.click_callback()
+        if event.clickCount() >= 2 and self.click_callback:
+            self.click_callback()
         else:
-            # Start drag
             self._drag_origin = event.locationInWindow()
-            win = self.window()
-            if win:
-                self._win_origin = win.frame().origin
+            w = self.window()
+            if w:
+                self._win_origin = w.frame().origin
 
     def mouseDragged_(self, event):
-        if self._drag_origin is not None and self._win_origin is not None:
-            win = self.window()
-            if win:
-                cur = event.locationInWindow()
-                dx = cur.x - self._drag_origin.x
-                dy = cur.y - self._drag_origin.y
-                new_x = self._win_origin.x + dx
-                new_y = self._win_origin.y + dy
-                win.setFrameOrigin_(NSPoint(new_x, new_y))
+        if self._drag_origin and self._win_origin:
+            w = self.window()
+            if w:
+                c = event.locationInWindow()
+                w.setFrameOrigin_(NSPoint(
+                    self._win_origin.x + c.x - self._drag_origin.x,
+                    self._win_origin.y + c.y - self._drag_origin.y))
 
     def mouseUp_(self, event):
         self._drag_origin = None
-        self._win_origin = None
 
     def acceptsFirstResponder(self):
         return True
@@ -156,12 +170,10 @@ class ClickableOrbView(NSView):
     def drawRect_(self, rect):
         NSColor.clearColor().set()
         NSBezierPath.fillRect_(rect)
-
-        w = rect.size.width
-        h = rect.size.height
+        w, h = rect.size.width, rect.size.height
         cx, cy = w / 2, h / 2
-        radius = min(w, h) * 0.38
-        conn_dist = radius * 0.6
+        R = min(w, h) * 0.38
+        cd = R * 0.6
 
         self.phase += 0.015 + self._speak_intensity * 0.015
         if self.state == 'speaking':
@@ -170,72 +182,59 @@ class ClickableOrbView(NSView):
             self._speak_intensity *= 0.95
         si = self._speak_intensity
 
-        colors = {
-            'idle': (0.31, 0.71, 1.0), 'thinking': (1.0, 0.67, 0.25),
-            'speaking': (0.0, 0.9, 1.0), 'listening': (1.0, 0.32, 0.32),
-        }
-        cr, cg, cb = colors.get(self.state, (0.31, 0.71, 1.0))
+        cols = {'idle': (0.31, 0.71, 1.0), 'thinking': (1.0, 0.67, 0.25),
+                'speaking': (0.0, 0.9, 1.0), 'listening': (1.0, 0.32, 0.32)}
+        cr, cg, cb = cols.get(self.state, (0.31, 0.71, 1.0))
 
         # Center glow
-        gr = radius * 0.6
         for i in range(12, 0, -1):
-            frac = i / 12.0
-            s = gr * frac
-            a = (0.06 + si * 0.08) * (1 - frac)
+            f = i / 12.0
+            s = R * 0.6 * f
+            a = (0.06 + si * 0.08) * (1 - f)
             NSColor.colorWithCalibratedRed_green_blue_alpha_(cr, cg, cb, a).set()
-            NSBezierPath.bezierPathWithOvalInRect_(NSMakeRect(cx - s, cy - s, s * 2, s * 2)).fill()
+            NSBezierPath.bezierPathWithOvalInRect_(NSMakeRect(cx-s, cy-s, s*2, s*2)).fill()
 
-        # Project
-        ry = self.phase
-        rx = math.sin(self.phase * 0.3) * 0.3
+        ry, rx = self.phase, math.sin(self.phase * 0.3) * 0.3
         cy_, sy_ = math.cos(ry), math.sin(ry)
         cx_, sx_ = math.cos(rx), math.sin(rx)
-
-        projected = []
+        proj = []
         for n in self.nodes:
-            x = n['ox'] * cy_ - n['oz'] * sy_
-            z = n['ox'] * sy_ + n['oz'] * cy_
-            y = n['oy'] * cx_ - z * sx_
-            z2 = n['oy'] * sx_ + z * cx_
-            dist = 1 + si * (0.15 + math.sin(n['pulse'] + self.phase * 5) * 0.1)
-            scale = 1 / (1 + z2 * 0.3)
-            projected.append((
-                cx + x * radius * scale * dist,
-                cy + y * radius * scale * dist,
-                z2, n['pulse'], scale, n['size']
-            ))
-        projected.sort(key=lambda p: p[2])
+            x = n['ox']*cy_ - n['oz']*sy_
+            z = n['ox']*sy_ + n['oz']*cy_
+            y = n['oy']*cx_ - z*sx_
+            z2 = n['oy']*sx_ + z*cx_
+            d = 1 + si * (0.15 + math.sin(n['pulse'] + self.phase*5)*0.1)
+            sc = 1/(1+z2*0.3)
+            proj.append((cx+x*R*sc*d, cy+y*R*sc*d, z2, n['pulse'], sc, n['size']))
+        proj.sort(key=lambda p: p[2])
 
-        # Connections
-        for i in range(len(projected)):
-            for j in range(i + 1, len(projected)):
-                dx = projected[i][0] - projected[j][0]
-                dy = projected[i][1] - projected[j][1]
-                d = math.sqrt(dx * dx + dy * dy)
-                if d < conn_dist:
-                    dep = (projected[i][2] + projected[j][2] + 2) / 4
-                    a = (1 - d / conn_dist) * 0.3 * max(0, dep)
+        for i in range(len(proj)):
+            for j in range(i+1, len(proj)):
+                dx, dy = proj[i][0]-proj[j][0], proj[i][1]-proj[j][1]
+                dd = math.sqrt(dx*dx+dy*dy)
+                if dd < cd:
+                    dep = (proj[i][2]+proj[j][2]+2)/4
+                    a = (1-dd/cd)*0.3*max(0, dep)
                     NSColor.colorWithCalibratedRed_green_blue_alpha_(cr, cg, cb, a).set()
                     p = NSBezierPath.bezierPath()
-                    p.moveToPoint_(NSPoint(projected[i][0], projected[i][1]))
-                    p.lineToPoint_(NSPoint(projected[j][0], projected[j][1]))
+                    p.moveToPoint_(NSPoint(proj[i][0], proj[i][1]))
+                    p.lineToPoint_(NSPoint(proj[j][0], proj[j][1]))
                     p.setLineWidth_(0.5)
                     p.stroke()
 
-        # Nodes
         t = self.phase * 2
-        for sx, sy, depth, pulse, scale, nsz in projected:
-            alpha = max(0, (depth + 1.5) / 2.5)
-            pa = 0.5 + math.sin(pulse + t) * 0.3
-            sz = nsz * scale * (1 + si * 0.5)
-            g = sz * 3
-            NSColor.colorWithCalibratedRed_green_blue_alpha_(cr, cg, cb, alpha * 0.1 * pa).set()
-            NSBezierPath.bezierPathWithOvalInRect_(NSMakeRect(sx - g, sy - g, g * 2, g * 2)).fill()
-            NSColor.colorWithCalibratedRed_green_blue_alpha_(cr, cg, cb, alpha * 0.8 * pa).set()
-            NSBezierPath.bezierPathWithOvalInRect_(NSMakeRect(sx - sz, sy - sz, sz * 2, sz * 2)).fill()
-            c = sz * 0.4
-            NSColor.colorWithCalibratedRed_green_blue_alpha_(1, 1, 1, alpha * 0.6 * pa).set()
-            NSBezierPath.bezierPathWithOvalInRect_(NSMakeRect(sx - c, sy - c, c * 2, c * 2)).fill()
+        for sx, sy, depth, pulse, scale, nsz in proj:
+            al = max(0, (depth+1.5)/2.5)
+            pa = 0.5 + math.sin(pulse+t)*0.3
+            sz = nsz*scale*(1+si*0.5)
+            g = sz*3
+            NSColor.colorWithCalibratedRed_green_blue_alpha_(cr, cg, cb, al*0.1*pa).set()
+            NSBezierPath.bezierPathWithOvalInRect_(NSMakeRect(sx-g, sy-g, g*2, g*2)).fill()
+            NSColor.colorWithCalibratedRed_green_blue_alpha_(cr, cg, cb, al*0.8*pa).set()
+            NSBezierPath.bezierPathWithOvalInRect_(NSMakeRect(sx-sz, sy-sz, sz*2, sz*2)).fill()
+            c = sz*0.4
+            NSColor.colorWithCalibratedRed_green_blue_alpha_(1, 1, 1, al*0.6*pa).set()
+            NSBezierPath.bezierPathWithOvalInRect_(NSMakeRect(sx-c, sy-c, c*2, c*2)).fill()
 
     def isOpaque(self):
         return False
@@ -246,85 +245,65 @@ class ClickableOrbView(NSView):
 class DarvisConsoleApp:
     def __init__(self):
         self.app = NSApplication.sharedApplication()
-        self.app.setActivationPolicy_(0)  # Regular app (shows in Dock)
+        self.app.setActivationPolicy_(0)
         self.expanded = False
         self.orb_state = 'idle'
         self.mq = queue.Queue()
         self.listening = False
-        self.chat_history = []  # Keep history across compact/expand
+        self.chat_history = []
 
-        # Init backend
-        self.backend_thread = threading.Thread(target=self._init_backend, daemon=True)
-        self.backend_thread.start()
-
-        # Build compact window
+        threading.Thread(target=self._init_backend, daemon=True).start()
         self._build_compact()
 
-        # Timers
         NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
-            1.0 / 30.0, self, 'tick:', None, True)
+            1.0/30.0, self, 'tick:', None, True)
         NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
             0.1, self, 'drain:', None, True)
+        # Scheduler check every 30s
+        NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
+            30.0, self, 'checkScheduler:', None, True)
 
     def _init_backend(self):
         init_backend()
-        model_name = brain.model if backend_ready else "error"
         self.mq.put(('ui', lambda: self._update_compact_status()))
         if backend_ready:
-            self.mq.put(('system', f"Backend ready. Model: {model_name}"))
+            self.mq.put(('system', f"Backend ready. Model: {brain.model} | Voice: {tts.voice_name}"))
+            if gemini_available:
+                self.mq.put(('system', "Gemini Live Audio available (/gemini)"))
 
     def _update_compact_status(self):
         if hasattr(self, 'compact_status') and self.compact_status:
-            txt = f"{brain.model}" if backend_ready else "Connecting..."
-            self.compact_status.setStringValue_(txt)
-        if hasattr(self, 'compact_hint') and self.compact_hint:
-            self.compact_hint.setStringValue_("Double-click orb to open console")
+            self.compact_status.setStringValue_(brain.model if backend_ready else "Connecting...")
 
     # ── Compact Mode ──────────────────────────────────────────────────────────
 
     def _build_compact(self):
         screen = NSScreen.mainScreen().frame()
         x = screen.size.width - COMPACT_W - 30
-        y = 60
 
         self.window = NSWindow.alloc().initWithContentRect_styleMask_backing_defer_(
-            NSMakeRect(x, y, COMPACT_W, COMPACT_H),
-            NSWindowStyleMaskBorderless,
-            NSBackingStoreBuffered, False)
+            NSMakeRect(x, 60, COMPACT_W, COMPACT_H),
+            NSWindowStyleMaskBorderless, NSBackingStoreBuffered, False)
         self.window.setLevel_(NSFloatingWindowLevel)
         self.window.setOpaque_(False)
         self.window.setBackgroundColor_(NSColor.clearColor())
         self.window.setHasShadow_(False)
-        self.window.setIgnoresMouseEvents_(False)
 
         content = NSView.alloc().initWithFrame_(NSMakeRect(0, 0, COMPACT_W, COMPACT_H))
-
-        # Title
-        title = self._make_label(NSMakeRect(0, COMPACT_H - 25, COMPACT_W, 18),
-                                 "D . A . R . V . I . S .", 8, BLUE, center=True)
-        content.addSubview_(title)
-
-        # Orb
+        content.addSubview_(self._lbl(NSMakeRect(0, COMPACT_H-25, COMPACT_W, 18),
+                                       "D . A . R . V . I . S .", 8, BLUE, 1))
         orb_sz = 200
-        orb_x = (COMPACT_W - orb_sz) / 2
         self.orb_view = ClickableOrbView.alloc().initWithFrame_(
-            NSMakeRect(orb_x, 55, orb_sz, orb_sz))
+            NSMakeRect((COMPACT_W-orb_sz)/2, 55, orb_sz, orb_sz))
         self.orb_view.state = self.orb_state
         self.orb_view.click_callback = lambda: self._expand()
         content.addSubview_(self.orb_view)
 
-        # Status (model name)
-        self.compact_status = self._make_label(
-            NSMakeRect(0, 30, COMPACT_W, 16),
-            "Initializing..." if not backend_ready else brain.model,
-            9, TEXT, center=True)
+        self.compact_status = self._lbl(NSMakeRect(0, 30, COMPACT_W, 16),
+            brain.model if backend_ready else "Initializing...", 9, TEXT, 1)
         content.addSubview_(self.compact_status)
-
-        # Hint
-        self.compact_hint = self._make_label(
-            NSMakeRect(0, 10, COMPACT_W, 14),
-            "Double-click orb to open console", 8, DIM, center=True)
-        content.addSubview_(self.compact_hint)
+        content.addSubview_(self._lbl(NSMakeRect(0, 10, COMPACT_W, 14),
+            "Double-click to open console", 8, DIM, 1))
 
         self.window.setContentView_(content)
         self.window.makeKeyAndOrderFront_(None)
@@ -337,9 +316,6 @@ class DarvisConsoleApp:
         self.expanded = True
         screen = NSScreen.mainScreen().frame()
         ew, eh = 850, 650
-        ex = (screen.size.width - ew) / 2
-        ey = (screen.size.height - eh) / 2
-
         self.window.setStyleMask_(
             NSWindowStyleMaskTitled | NSWindowStyleMaskClosable |
             NSWindowStyleMaskMiniaturizable | NSWindowStyleMaskResizable)
@@ -349,60 +325,47 @@ class DarvisConsoleApp:
         self.window.setBackgroundColor_(NSColor.colorWithCalibratedRed_green_blue_alpha_(*BG))
         self.window.setHasShadow_(True)
         self.window.setMinSize_(NSSize(600, 450))
-        self.window.setFrame_display_animate_(NSMakeRect(ex, ey, ew, eh), True, True)
-
+        self.window.setFrame_display_animate_(
+            NSMakeRect((screen.size.width-ew)/2, (screen.size.height-eh)/2, ew, eh), True, True)
         self._build_expanded(ew, eh)
 
     def _build_expanded(self, w, h):
-        content = NSView.alloc().initWithFrame_(NSMakeRect(0, 0, w, h))
+        c = NSView.alloc().initWithFrame_(NSMakeRect(0, 0, w, h))
 
-        # ── Header bar ──
-        header_y = h - 40
-        title = self._make_label(NSMakeRect(15, header_y + 5, 200, 20),
-                                 "D . A . R . V . I . S .", 9, BLUE)
-        content.addSubview_(title)
+        # Header
+        hy = h - 40
+        c.addSubview_(self._lbl(NSMakeRect(15, hy+5, 200, 20), "D . A . R . V . I . S .", 9, BLUE))
+        info = f"Model: {brain.model}  |  Voice: {tts.voice_name}  |  Mode: {audio_mode}" if backend_ready else "Connecting..."
+        self.header_info = self._lbl(NSMakeRect(220, hy+5, w-240, 20), info, 9, DIM)
+        self.header_info.setAlignment_(2)
+        c.addSubview_(self.header_info)
 
-        model_txt = f"Model: {brain.model}  |  Voice: {tts.voice_name if tts else '...'}" if backend_ready else "Connecting..."
-        self.header_info = self._make_label(NSMakeRect(220, header_y + 5, w - 240, 20),
-                                            model_txt, 9, DIM)
-        self.header_info.setAlignment_(2)  # Right align
-        content.addSubview_(self.header_info)
-
-        # Separator
-        sep = NSView.alloc().initWithFrame_(NSMakeRect(15, header_y - 1, w - 30, 1))
+        sep = NSView.alloc().initWithFrame_(NSMakeRect(15, hy-1, w-30, 1))
         sep.setWantsLayer_(True)
-        sep.layer().setBackgroundColor_(NSColor.colorWithCalibratedRed_green_blue_alpha_(1, 1, 1, 0.06).CGColor())
-        content.addSubview_(sep)
+        sep.layer().setBackgroundColor_(NSColor.colorWithCalibratedRed_green_blue_alpha_(1,1,1,0.06).CGColor())
+        c.addSubview_(sep)
 
-        # ── Orb (smaller in expanded) ──
-        orb_sz = 130
-        orb_x = (w - orb_sz) / 2
-        orb_y = header_y - orb_sz - 10
+        # Orb
+        orb_sz = 120
+        oy = hy - orb_sz - 8
         self.orb_view = ClickableOrbView.alloc().initWithFrame_(
-            NSMakeRect(orb_x, orb_y, orb_sz, orb_sz))
+            NSMakeRect((w-orb_sz)/2, oy, orb_sz, orb_sz))
         self.orb_view.state = self.orb_state
-        self.orb_view.click_callback = None  # No action in expanded
-        content.addSubview_(self.orb_view)
+        c.addSubview_(self.orb_view)
 
-        # Status below orb
-        self.status_label = self._make_label(
-            NSMakeRect(0, orb_y - 22, w, 16), self._status_text(), 10, DIM, center=True)
-        content.addSubview_(self.status_label)
+        self.status_label = self._lbl(NSMakeRect(0, oy-20, w, 16), self._state_txt(), 10, DIM, 1)
+        c.addSubview_(self.status_label)
 
-        # ── Chat transcript ──
-        chat_top = orb_y - 40
-        chat_bottom = 100
-        chat_h = chat_top - chat_bottom
-        if chat_h < 50:
-            chat_h = 50
-
-        scroll = NSScrollView.alloc().initWithFrame_(NSMakeRect(15, chat_bottom, w - 30, chat_h))
+        # Chat
+        ct = oy - 38
+        cb = 95
+        ch = max(ct - cb, 60)
+        scroll = NSScrollView.alloc().initWithFrame_(NSMakeRect(15, cb, w-30, ch))
         scroll.setHasVerticalScroller_(True)
         scroll.setBorderType_(0)
         scroll.setDrawsBackground_(True)
         scroll.setBackgroundColor_(NSColor.colorWithCalibratedRed_green_blue_alpha_(*BG_CARD))
-
-        self.chat_view = NSTextView.alloc().initWithFrame_(NSMakeRect(0, 0, w - 45, chat_h))
+        self.chat_view = NSTextView.alloc().initWithFrame_(NSMakeRect(0, 0, w-45, ch))
         self.chat_view.setEditable_(False)
         self.chat_view.setSelectable_(True)
         self.chat_view.setRichText_(True)
@@ -410,15 +373,15 @@ class DarvisConsoleApp:
         self.chat_view.setFont_(NSFont.fontWithName_size_(FONT, 12))
         self.chat_view.setTextContainerInset_(NSSize(10, 10))
         scroll.setDocumentView_(self.chat_view)
-        content.addSubview_(scroll)
+        c.addSubview_(scroll)
 
-        # Replay chat history
-        for sender, text, color in self.chat_history:
-            self._append_chat_raw(sender, text, color)
+        # Replay history
+        for s, t, col in self.chat_history:
+            self._chat_raw(s, t, col)
 
-        # ── Input row ──
-        input_y = 55
-        self.input_field = NSTextField.alloc().initWithFrame_(NSMakeRect(15, input_y, w - 310, 32))
+        # Input row
+        iy = 55
+        self.input_field = NSTextField.alloc().initWithFrame_(NSMakeRect(15, iy, w-300, 32))
         self.input_field.setPlaceholderString_("Talk to DARVIS... (Enter to send)")
         self.input_field.setTextColor_(NSColor.whiteColor())
         self.input_field.setBackgroundColor_(NSColor.colorWithCalibratedRed_green_blue_alpha_(0.06, 0.06, 0.10, 1))
@@ -427,68 +390,52 @@ class DarvisConsoleApp:
         self.input_field.setBordered_(True)
         self.input_field.setTarget_(self)
         self.input_field.setAction_(b"sendMessage:")
-        content.addSubview_(self.input_field)
+        c.addSubview_(self.input_field)
 
-        # Buttons
-        bx = w - 290
-        content.addSubview_(self._make_btn(NSMakeRect(bx, input_y, 55, 32), "Send", b"sendMessage:"))
-        bx += 60
-        self.mic_btn = self._make_btn(NSMakeRect(bx, input_y, 50, 32), "Mic", b"toggleMic:")
-        content.addSubview_(self.mic_btn)
-        bx += 55
-        content.addSubview_(self._make_btn(NSMakeRect(bx, input_y, 45, 32), "Fix", b"fixSelf:"))
-        bx += 50
-        content.addSubview_(self._make_btn(NSMakeRect(bx, input_y, 70, 32), "Compact", b"collapseWindow:"))
+        bx = w - 280
+        c.addSubview_(self._btn(NSMakeRect(bx, iy, 50, 32), "Send", b"sendMessage:"))
+        bx += 54
+        self.mic_btn = self._btn(NSMakeRect(bx, iy, 45, 32), "Mic", b"toggleMic:")
+        c.addSubview_(self.mic_btn)
+        bx += 49
+        c.addSubview_(self._btn(NSMakeRect(bx, iy, 40, 32), "Fix", b"fixSelf:"))
+        bx += 44
+        c.addSubview_(self._btn(NSMakeRect(bx, iy, 45, 32), "Mini", b"collapseWindow:"))
+        bx += 49
+        c.addSubview_(self._btn(NSMakeRect(bx, iy, 40, 32), "?", b"showHelp:"))
 
-        # ── Bottom bar ──
-        bar_txt = f"Mode: {audio_mode.upper()}"
-        if ear and ear._mic_available:
-            bar_txt += "  |  Mic: ready"
-        bar_txt += f"  |  /fix /compact"
-        self.bottom_label = self._make_label(NSMakeRect(15, 15, w - 30, 16), bar_txt, 8, DIM, center=True)
-        content.addSubview_(self.bottom_label)
+        # Bottom bar
+        bar = f"Mode: {audio_mode.upper()}"
+        if gemini_available:
+            bar += " | Gemini: ready"
+        bar += f" | Mic: {'on' if self.listening else 'off'}"
+        self.bottom_label = self._lbl(NSMakeRect(15, 15, w-30, 16), bar, 8, DIM, 1)
+        c.addSubview_(self.bottom_label)
 
-        # Separator above input
-        sep2 = NSView.alloc().initWithFrame_(NSMakeRect(15, input_y + 40, w - 30, 1))
-        sep2.setWantsLayer_(True)
-        sep2.layer().setBackgroundColor_(NSColor.colorWithCalibratedRed_green_blue_alpha_(1, 1, 1, 0.04).CGColor())
-        content.addSubview_(sep2)
-
-        self.window.setContentView_(content)
+        self.window.setContentView_(c)
         self.input_field.becomeFirstResponder()
 
     def _collapse(self):
         self.expanded = False
         self.window.setStyleMask_(NSWindowStyleMaskBorderless)
         screen = NSScreen.mainScreen().frame()
-        x = screen.size.width - COMPACT_W - 30
         self.window.setFrame_display_animate_(
-            NSMakeRect(x, 60, COMPACT_W, COMPACT_H), True, True)
+            NSMakeRect(screen.size.width-COMPACT_W-30, 60, COMPACT_W, COMPACT_H), True, True)
 
-        # Rebuild compact content
         content = NSView.alloc().initWithFrame_(NSMakeRect(0, 0, COMPACT_W, COMPACT_H))
-
-        title = self._make_label(NSMakeRect(0, COMPACT_H - 25, COMPACT_W, 18),
-                                 "D . A . R . V . I . S .", 8, BLUE, center=True)
-        content.addSubview_(title)
-
+        content.addSubview_(self._lbl(NSMakeRect(0, COMPACT_H-25, COMPACT_W, 18),
+                                       "D . A . R . V . I . S .", 8, BLUE, 1))
         orb_sz = 200
-        orb_x = (COMPACT_W - orb_sz) / 2
         self.orb_view = ClickableOrbView.alloc().initWithFrame_(
-            NSMakeRect(orb_x, 55, orb_sz, orb_sz))
+            NSMakeRect((COMPACT_W-orb_sz)/2, 55, orb_sz, orb_sz))
         self.orb_view.state = self.orb_state
         self.orb_view.click_callback = lambda: self._expand()
         content.addSubview_(self.orb_view)
-
-        self.compact_status = self._make_label(
-            NSMakeRect(0, 30, COMPACT_W, 16),
-            brain.model if backend_ready else "...", 9, TEXT, center=True)
+        self.compact_status = self._lbl(NSMakeRect(0, 30, COMPACT_W, 16),
+            brain.model if backend_ready else "...", 9, TEXT, 1)
         content.addSubview_(self.compact_status)
-
-        self.compact_hint = self._make_label(
-            NSMakeRect(0, 10, COMPACT_W, 14),
-            "Double-click to expand", 8, DIM, center=True)
-        content.addSubview_(self.compact_hint)
+        content.addSubview_(self._lbl(NSMakeRect(0, 10, COMPACT_W, 14),
+            "Double-click to expand", 8, DIM, 1))
 
         self.window.setLevel_(NSFloatingWindowLevel)
         self.window.setOpaque_(False)
@@ -496,7 +443,7 @@ class DarvisConsoleApp:
         self.window.setHasShadow_(False)
         self.window.setContentView_(content)
 
-    # ── Timer callbacks ───────────────────────────────────────────────────────
+    # ── Timers ────────────────────────────────────────────────────────────────
 
     def tick_(self, timer):
         self.orb_view.setNeedsDisplay_(True)
@@ -504,71 +451,90 @@ class DarvisConsoleApp:
     def drain_(self, timer):
         while not self.mq.empty():
             try:
-                kind, data = self.mq.get_nowait()
-                if kind == 'ui' and callable(data):
-                    data()
-                elif kind == 'response':
-                    self._append_chat("DARVIS", data, TEXT)
-                elif kind == 'user':
-                    self._append_chat("You", data, CYAN)
-                elif kind == 'system':
-                    self._append_chat("System", data, ORANGE)
-                elif kind == 'state':
-                    self.orb_state = data
-                    self.orb_view.state = data
+                k, d = self.mq.get_nowait()
+                if k == 'ui' and callable(d):
+                    d()
+                elif k == 'response':
+                    self._chat("DARVIS", d, TEXT)
+                elif k == 'user':
+                    self._chat("You", d, CYAN)
+                elif k == 'system':
+                    self._chat("System", d, ORANGE)
+                elif k == 'state':
+                    self.orb_state = d
+                    self.orb_view.state = d
                     if hasattr(self, 'status_label') and self.status_label:
-                        self.status_label.setStringValue_(self._status_text())
+                        self.status_label.setStringValue_(self._state_txt())
             except queue.Empty:
                 break
 
-    # ── UI Helpers ────────────────────────────────────────────────────────────
-
-    def _make_label(self, frame, text, size, color, center=False):
-        lbl = NSTextField.alloc().initWithFrame_(frame)
-        lbl.setStringValue_(text)
-        lbl.setTextColor_(NSColor.colorWithCalibratedRed_green_blue_alpha_(*color, 1))
-        lbl.setFont_(NSFont.fontWithName_size_(FONT, size))
-        lbl.setBezeled_(False)
-        lbl.setDrawsBackground_(False)
-        lbl.setEditable_(False)
-        lbl.setSelectable_(False)
-        if center:
-            lbl.setAlignment_(1)
-        return lbl
-
-    def _make_btn(self, frame, title, action):
-        btn = NSButton.alloc().initWithFrame_(frame)
-        btn.setTitle_(title)
-        btn.setBezelStyle_(NSBezelStyleRounded)
-        btn.setFont_(NSFont.fontWithName_size_(FONT, 10))
-        btn.setTarget_(self)
-        btn.setAction_(action)
-        return btn
-
-    def _status_text(self):
-        states = {'idle': 'Ready', 'thinking': 'Thinking...', 'speaking': 'Speaking...', 'listening': 'Listening...'}
-        return states.get(self.orb_state, 'Ready')
-
-    def _append_chat(self, sender, text, color):
-        self.chat_history.append((sender, text, color))
-        self._append_chat_raw(sender, text, color)
-
-    def _append_chat_raw(self, sender, text, color):
-        if not hasattr(self, 'chat_view') or self.chat_view is None:
+    def checkScheduler_(self, timer):
+        if not backend_ready or not scheduler:
             return
-        storage = self.chat_view.textStorage()
+        threading.Thread(target=self._run_scheduler, daemon=True).start()
+
+    def _run_scheduler(self):
+        from darvis import extract_and_run_commands
+        try:
+            scheduler.check_and_run(brain, extract_and_run_commands, None, tts)
+        except Exception:
+            pass
+
+    # ── Helpers ───────────────────────────────────────────────────────────────
+
+    def _lbl(self, frame, text, size, color, align=0):
+        l = NSTextField.alloc().initWithFrame_(frame)
+        l.setStringValue_(text)
+        l.setTextColor_(NSColor.colorWithCalibratedRed_green_blue_alpha_(*color, 1))
+        l.setFont_(NSFont.fontWithName_size_(FONT, size))
+        l.setBezeled_(False)
+        l.setDrawsBackground_(False)
+        l.setEditable_(False)
+        l.setSelectable_(False)
+        l.setAlignment_(align)
+        return l
+
+    def _btn(self, frame, title, action):
+        b = NSButton.alloc().initWithFrame_(frame)
+        b.setTitle_(title)
+        b.setBezelStyle_(NSBezelStyleRounded)
+        b.setFont_(NSFont.fontWithName_size_(FONT, 10))
+        b.setTarget_(self)
+        b.setAction_(action)
+        return b
+
+    def _state_txt(self):
+        return {'idle': 'Ready', 'thinking': 'Thinking...', 'speaking': 'Speaking...', 'listening': 'Listening...'}.get(self.orb_state, 'Ready')
+
+    def _chat(self, sender, text, color):
+        self.chat_history.append((sender, text, color))
+        self._chat_raw(sender, text, color)
+
+    def _chat_raw(self, sender, text, color):
+        if not hasattr(self, 'chat_view') or not self.chat_view:
+            return
+        st = self.chat_view.textStorage()
         attrs = {
             NSFontAttributeName: NSFont.fontWithName_size_(FONT, 12),
             NSForegroundColorAttributeName: NSColor.colorWithCalibratedRed_green_blue_alpha_(*color, 1),
         }
-        prefix = "\n" if storage.length() > 0 else ""
-        line = f"{prefix}{sender}: {text}"
-        attr_str = NSAttributedString.alloc().initWithString_attributes_(line, attrs)
-        storage.appendAttributedString_(attr_str)
-        rng = NSRange(storage.length(), 0)
-        self.chat_view.scrollRangeToVisible_(rng)
+        pre = "\n" if st.length() > 0 else ""
+        s = NSAttributedString.alloc().initWithString_attributes_(f"{pre}{sender}: {text}", attrs)
+        st.appendAttributedString_(s)
+        self.chat_view.scrollRangeToVisible_(NSRange(st.length(), 0))
 
-    # ── Actions ───────────────────────────────────────────────────────────────
+    def _update_header(self):
+        if hasattr(self, 'header_info') and self.header_info and backend_ready:
+            self.header_info.setStringValue_(
+                f"Model: {brain.model}  |  Voice: {tts.voice_name}  |  Mode: {audio_mode}")
+        if hasattr(self, 'bottom_label') and self.bottom_label:
+            bar = f"Mode: {audio_mode.upper()}"
+            if gemini_available:
+                bar += " | Gemini: ready"
+            bar += f" | Mic: {'on' if self.listening else 'off'}"
+            self.bottom_label.setStringValue_(bar)
+
+    # ── Command Handler ───────────────────────────────────────────────────────
 
     def sendMessage_(self, sender):
         if not hasattr(self, 'input_field') or not self.input_field:
@@ -579,40 +545,129 @@ class DarvisConsoleApp:
         self.input_field.setStringValue_("")
 
         if not backend_ready:
-            self._append_chat("System", "Backend not ready yet.", ORANGE)
+            self._chat("System", "Backend not ready yet.", ORANGE)
             return
 
-        lower = text.lower()
+        lower = text.lower().strip()
+
+        # ── Slash commands (matching terminal darvis.py exactly) ──
+
+        if lower in ("goodbye", "exit", "quit"):
+            self._chat("DARVIS", "Goodbye, sir. I'll be here if you need me.", TEXT)
+            if tts:
+                threading.Thread(target=lambda: (tts.speak("Goodbye, sir."), time.sleep(2), os._exit(0)), daemon=True).start()
+            else:
+                self.app.terminate_(None)
+            return
+
+        if lower in ("/type", "/text"):
+            self.listening = False
+            self.mq.put(('state', 'idle'))
+            self._chat("System", "Mic off — text only. /listen to resume.", GREEN)
+            self._update_header()
+            return
+
+        if lower in ("/listen", "/mic"):
+            if ear and ear._mic_available:
+                self.listening = True
+                self.mq.put(('state', 'listening'))
+                self._chat("System", "Mic on — listening. /type to pause.", GREEN)
+                self._update_header()
+                threading.Thread(target=self._listen_loop, daemon=True).start()
+            else:
+                self._chat("System", "No microphone available.", RED)
+            return
+
+        if lower == "/gemini":
+            global audio_mode
+            if gemini_available:
+                audio_mode = "gemini"
+                self._chat("System", "Gemini Live Audio mode. /classic to switch back.", GREEN)
+                self._update_header()
+            else:
+                self._chat("System", "Gemini not available — set GEMINI_API_KEY and install websockets.", RED)
+            return
+
+        if lower == "/classic":
+            audio_mode = "classic"
+            self._chat("System", "Classic mode (Ollama + ElevenLabs).", GREEN)
+            self._update_header()
+            return
+
+        if lower.startswith("/browse "):
+            goal = text[8:].strip()
+            if goal and gemini_key:
+                self._chat("System", f"Launching browser agent: {goal}", BLUE)
+                threading.Thread(target=self._browse_thread, args=(goal,), daemon=True).start()
+            elif not gemini_key:
+                self._chat("System", "No GEMINI_API_KEY — add it to .env", RED)
+            else:
+                self._chat("System", "Usage: /browse <goal>", DIM)
+            return
+
+        if lower == "/voices" or lower.startswith("/voice "):
+            if lower.startswith("/voice ") and len(lower) > 7:
+                arg = text.split(None, 1)[1]
+                from darvis import ElevenLabsVoice as ELV
+                matched = False
+                for name, info in ELV.PRESET_VOICES.items():
+                    if arg.lower() == name:
+                        tts.set_voice(info["id"])
+                        matched = True
+                        break
+                if not matched:
+                    tts.set_voice(arg)
+                from darvis import save_settings as ss
+                settings["voice_id"] = tts.voice_id
+                ss(settings)
+                self._chat("System", f"Voice: {tts.voice_name}", GREEN)
+                self._update_header()
+                threading.Thread(target=lambda: tts.speak("Voice updated. How do I sound, sir?"), daemon=True).start()
+            else:
+                from darvis import ElevenLabsVoice as ELV
+                names = ", ".join(f"{n} ({v['desc']})" for n, v in ELV.PRESET_VOICES.items())
+                self._chat("System", f"Available voices: {names}\n\nUse /voice NAME to switch.", DIM)
+            return
+
+        if lower in ("/models", "/model", "/m") or lower.startswith("/model "):
+            if lower.startswith("/model ") and len(lower) > 7:
+                new_model = text.split(None, 1)[1]
+            else:
+                from darvis import list_cloud_models
+                models = list_cloud_models(ollama_key)
+                self._chat("System", f"Available models: {', '.join(models[:15])}\n\nUse /model NAME to switch.", DIM)
+                return
+            brain.model = new_model
+            from darvis import save_settings as ss
+            settings["model"] = new_model
+            ss(settings)
+            self._chat("System", f"Model: {new_model}", GREEN)
+            self._update_header()
+            return
+
+        if lower == "/briefing":
+            self._chat("System", "Running briefing...", BLUE)
+            threading.Thread(target=self._briefing_thread, daemon=True).start()
+            return
+
         if lower == "/fix":
             self._run_fix()
             return
+
         if lower == "/compact":
             self._collapse()
             return
-        if lower.startswith("/model "):
-            new_model = text[7:].strip()
-            brain.model = new_model
-            from darvis import save_settings
-            save_settings({"model": new_model, "voice_id": tts.voice_id if tts else ""})
-            self._append_chat("System", f"Switched model to: {new_model}", GREEN)
-            if hasattr(self, 'header_info'):
-                self.header_info.setStringValue_(f"Model: {brain.model}  |  Voice: {tts.voice_name if tts else '...'}")
-            return
+
         if lower == "/help":
-            self._append_chat("System",
-                "/fix — run diagnostics\n"
-                "/compact — collapse to orb\n"
-                "/model NAME — switch model\n"
-                "/help — show this", DIM)
+            self.showHelp_(None)
             return
 
-        self._append_chat("You", text, CYAN)
-        self.orb_view.state = 'thinking'
-        self.orb_state = 'thinking'
-        if hasattr(self, 'status_label') and self.status_label:
-            self.status_label.setStringValue_("Thinking...")
-
+        # ── Regular message ───────────────────────────────────────────────────
+        self._chat("You", text, CYAN)
+        self.mq.put(('state', 'thinking'))
         threading.Thread(target=self._think_thread, args=(text,), daemon=True).start()
+
+    # ── Background Threads ────────────────────────────────────────────────────
 
     def _think_thread(self, user_input):
         try:
@@ -621,8 +676,8 @@ class DarvisConsoleApp:
 
             cmd_results = extract_and_run_commands(response)
             if cmd_results:
+                self.mq.put(('system', f"Executed {len(cmd_results)} command(s)"))
                 context = "\n".join(cmd_results)
-                self.mq.put(('system', f"Commands executed: {len(cmd_results)} result(s)"))
                 response = brain.think(
                     "(Report the results naturally. Be concise.)", context=context)
 
@@ -633,32 +688,27 @@ class DarvisConsoleApp:
             self.mq.put(('response', display))
             self.mq.put(('state', 'speaking'))
 
-            if tts:
+            # TTS — Gemini mode uses Gemini TTS, classic uses ElevenLabs
+            if audio_mode == "gemini" and gemini_available:
+                try:
+                    from gemini_live import run_gemini_text_turn
+                    run_gemini_text_turn(
+                        api_key=gemini_key,
+                        text=f"Say this exactly: {display}",
+                        system_instruction="You are DARVIS. Speak naturally in a British accent.",
+                    )
+                except Exception:
+                    if tts:
+                        tts.speak(display)
+                        tts.wait_for_speech()
+            elif tts:
                 tts.speak(display)
-                time.sleep(0.5)
-                while getattr(tts, '_speaking', False):
-                    time.sleep(0.2)
+                tts.wait_for_speech()
 
             self.mq.put(('state', 'idle'))
-
         except Exception as e:
             self.mq.put(('system', f"Error: {e}"))
             self.mq.put(('state', 'idle'))
-
-    def toggleMic_(self, sender):
-        if not backend_ready or not ear:
-            self._append_chat("System", "Backend not ready.", ORANGE)
-            return
-
-        if self.listening:
-            self.listening = False
-            self.mq.put(('state', 'idle'))
-            self._append_chat("System", "Mic stopped.", DIM)
-        else:
-            self.listening = True
-            self.mq.put(('state', 'listening'))
-            self._append_chat("System", "Listening... speak now.", GREEN)
-            threading.Thread(target=self._listen_loop, daemon=True).start()
 
     def _listen_loop(self):
         while self.listening:
@@ -668,19 +718,67 @@ class DarvisConsoleApp:
                     self.listening = False
                     self.mq.put(('user', text))
                     self.mq.put(('state', 'thinking'))
+                    self._update_header()
                     self._think_thread(text)
                     return
             except Exception:
                 time.sleep(0.5)
 
+    def _browse_thread(self, goal):
+        self.mq.put(('state', 'thinking'))
+        try:
+            if ear:
+                ear.suppressed = True
+            from computer_use import run_agent
+            summary = run_agent(gemini_key, goal)
+            self.mq.put(('response', f"Agent complete: {summary}"))
+            if tts:
+                tts.speak(summary)
+                tts.wait_for_speech()
+        except Exception as e:
+            self.mq.put(('system', f"Agent error: {e}"))
+        finally:
+            if ear:
+                ear.suppressed = False
+            self.mq.put(('state', 'idle'))
+
+    def _briefing_thread(self):
+        self.mq.put(('state', 'thinking'))
+        try:
+            from darvis import extract_and_run_commands
+            resp = brain.think("""Do ALL of these NOW with command blocks:
+1. fetch_url https://wttr.in/?format=%C+%t+%h+%w to get weather
+2. search_web for today's top news
+3. Create a briefing file on Desktop called DARVIS_Briefing.txt with date, time, weather, and top 5 news stories with summaries
+4. Open that file with open_file
+5. Navigate Safari to https://news.google.com""")
+            results = extract_and_run_commands(resp)
+            context = "\n".join(results) if results else ""
+            summary = brain.think(
+                f"You just ran a briefing. Results:\n{context}\n\n"
+                "Give a spoken briefing: greeting, weather, 2-3 news stories summarized. 5-7 sentences. No command blocks."
+            )
+            summary = re.sub(r'```command\s*\n.*?\n```', '', summary, flags=re.DOTALL).strip()
+            if summary:
+                self.mq.put(('response', summary))
+                self.mq.put(('state', 'speaking'))
+                if tts:
+                    tts.speak(summary)
+                    tts.wait_for_speech()
+        except Exception as e:
+            self.mq.put(('system', f"Briefing error: {e}"))
+        self.mq.put(('state', 'idle'))
+
+    # ── Fix Yourself ──────────────────────────────────────────────────────────
+
     def fixSelf_(self, sender):
         if not backend_ready:
-            self._append_chat("System", "Backend not ready.", ORANGE)
+            self._chat("System", "Backend not ready.", ORANGE)
             return
         self._run_fix()
 
     def _run_fix(self):
-        self._append_chat("System", "Running diagnostics...", ORANGE)
+        self._chat("System", "Running diagnostics...", ORANGE)
         self.mq.put(('state', 'thinking'))
         threading.Thread(target=self._fix_thread, daemon=True).start()
 
@@ -691,10 +789,8 @@ class DarvisConsoleApp:
 
         if check_ollama_cloud(ollama_key):
             models = list_cloud_models(ollama_key)
-            if brain.model in models:
-                results.append(f"Ollama Cloud: OK ({brain.model})")
-            else:
-                results.append(f"Ollama Cloud: online, model '{brain.model}' not in list")
+            results.append(f"Ollama Cloud: OK ({brain.model})" if brain.model in models
+                          else f"Ollama Cloud: online, model '{brain.model}' not found")
         else:
             results.append("Ollama Cloud: UNREACHABLE")
 
@@ -702,32 +798,54 @@ class DarvisConsoleApp:
             voices = tts.fetch_voices()
             results.append(f"ElevenLabs: OK ({tts.voice_name})" if voices else "ElevenLabs: UNREACHABLE")
 
-        results.append("Gemini key: " + ("present" if gemini_key else "not configured"))
+        results.append("Gemini: " + ("available" if gemini_available else "key " + ("present" if gemini_key else "missing")))
 
         if ear and ear._mic_available:
-            results.append("Microphone: available")
-        elif ear:
-            if ear.init_mic():
-                results.append("Microphone: reinitialized")
-                fixed.append("reinitialized mic")
-            else:
-                results.append("Microphone: NOT AVAILABLE")
+            results.append("Microphone: OK")
+        elif ear and ear.init_mic():
+            results.append("Microphone: reinitialized")
+            fixed.append("reinitialized mic")
+        else:
+            results.append("Microphone: NOT AVAILABLE")
 
         if ear and getattr(ear, 'suppressed', False):
             ear.suppressed = False
             fixed.append("unblocked mic")
 
-        summary = "\n".join(results)
-        fix_str = ", ".join(fixed) if fixed else "No issues found"
-        self.mq.put(('system', f"DIAGNOSTICS COMPLETE:\n{summary}\nFixed: {fix_str}"))
+        fix_str = ", ".join(fixed) if fixed else "No issues"
+        self.mq.put(('system', "DIAGNOSTICS:\n" + "\n".join(results) + f"\nFixed: {fix_str}"))
         self.mq.put(('state', 'idle'))
 
         if tts:
             fail = sum(1 for r in results if "UNREACHABLE" in r or "NOT AVAILABLE" in r)
-            if fail:
-                tts.speak(f"Diagnostics complete. {fail} issues found.")
-            else:
-                tts.speak("All systems nominal, sir.")
+            tts.speak(f"Diagnostics complete. {fail} issues found." if fail else "All systems nominal, sir.")
+
+    # ── Other Actions ─────────────────────────────────────────────────────────
+
+    def toggleMic_(self, sender):
+        if not backend_ready or not ear:
+            self._chat("System", "Backend not ready.", ORANGE)
+            return
+        if self.listening:
+            self.listening = False
+            self.mq.put(('state', 'idle'))
+            self._chat("System", "Mic off.", DIM)
+        else:
+            self.listening = True
+            self.mq.put(('state', 'listening'))
+            self._chat("System", "Listening... speak now.", GREEN)
+            threading.Thread(target=self._listen_loop, daemon=True).start()
+        self._update_header()
+
+    def showHelp_(self, sender):
+        self._chat("System",
+            "/listen — start mic  |  /type — stop mic\n"
+            "/gemini — Gemini Live Audio  |  /classic — Ollama + ElevenLabs\n"
+            "/voice NAME — change voice  |  /voices — list voices\n"
+            "/model NAME — change model  |  /models — list models\n"
+            "/browse GOAL — browser agent  |  /briefing — news briefing\n"
+            "/fix — diagnostics  |  /compact — minimize to orb\n"
+            "goodbye — exit", DIM)
 
     def collapseWindow_(self, sender):
         self._collapse()
@@ -737,5 +855,5 @@ class DarvisConsoleApp:
 
 
 if __name__ == "__main__":
-    console_app = DarvisConsoleApp()
-    console_app.run()
+    app = DarvisConsoleApp()
+    app.run()

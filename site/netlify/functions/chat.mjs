@@ -333,7 +333,7 @@ Use when the user says "in X minutes", "at X o'clock", "later do", "remind me in
             : cmd.at || new Date(Date.now() + 60000).toISOString();
           tasks.push({ id: Math.random().toString(36).slice(2, 10), task: cmd.task, execute_at: executeAt, recurring: cmd.recurring_minutes || null, created: new Date().toISOString() });
           await schedStore.setJSON("tasks", tasks);
-          clientActions.push({ action: "scheduled", task: cmd.task, at: executeAt });
+          clientActions.push({ action: "scheduled", task: cmd.task, at: executeAt, goal: cmd.task });
         }
       } catch {}
     }
@@ -359,6 +359,18 @@ Use when the user says "in X minutes", "at X o'clock", "later do", "remind me in
       }
       await historyStore.setJSON("conversation", history);
     } catch {}
+
+    // If reply is empty but we executed actions, generate a confirmation
+    if (!reply && (clientActions.length > 0 || cmdResults.length > 0)) {
+      const confirmParts = [];
+      for (const a of clientActions) {
+        if (a.action === "scheduled") confirmParts.push(`Scheduled: ${a.task}`);
+        else if (a.action === "queued") confirmParts.push(a.message);
+        else if (a.action === "open_url") confirmParts.push(`Opening ${a.url}`);
+        else if (a.action === "agent_started") confirmParts.push(`Browser agent launched: ${a.goal}`);
+      }
+      reply = confirmParts.join(". ") || "Done.";
+    }
 
     const response = { reply };
     if (clientActions.length > 0) response.actions = clientActions;

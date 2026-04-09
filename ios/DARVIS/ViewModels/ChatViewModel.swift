@@ -252,6 +252,25 @@ class ChatViewModel: ObservableObject {
                         if action.action == "agent_started" {
                             NotificationCenter.default.post(name: .agentStarted, object: nil)
                         }
+                        if action.action == "scheduled" {
+                            let content = UNMutableNotificationContent()
+                            content.title = "D.A.R.V.I.S. Reminder"
+                            content.body = action.task ?? action.goal ?? "Reminder"
+                            content.sound = .default
+
+                            if let atStr = action.at {
+                                let fmt = ISO8601DateFormatter()
+                                fmt.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                                let date = fmt.date(from: atStr) ?? ISO8601DateFormatter().date(from: atStr)
+                                if let date = date {
+                                    let interval = max(date.timeIntervalSinceNow, 1)
+                                    let trigger = UNTimeIntervalNotificationTrigger(timeInterval: interval, repeats: false)
+                                    let req = UNNotificationRequest(identifier: "darvis-reminder-\(UUID().uuidString.prefix(8))", content: content, trigger: trigger)
+                                    Task { try? await UNUserNotificationCenter.current().add(req) }
+                                    statusMessage = "Reminder set for \(date.formatted(date: .omitted, time: .shortened))"
+                                }
+                            }
+                        }
                     }
                 }
 

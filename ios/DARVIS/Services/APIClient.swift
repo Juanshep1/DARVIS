@@ -9,6 +9,9 @@ struct ChatAction: Codable {
     let action: String
     let url: String?
     let goal: String?
+    let task: String?
+    let at: String?
+    let message: String?
 }
 
 struct VisionResponse: Codable {

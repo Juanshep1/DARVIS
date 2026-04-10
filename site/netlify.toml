@@ -7,7 +7,10 @@
   external_node_modules = ["@netlify/blobs"]
 
 [functions."chat"]
-  timeout = 60
+  timeout = 120
 
 [functions."briefing"]
-  timeout = 60
+  timeout = 120
+
+[functions."situation"]
+  timeout = 30

@@ -214,7 +214,7 @@ Common shortcuts:
         Authorization: `Bearer ${OLLAMA_KEY}`,
       },
       body: JSON.stringify({ model: MODEL, messages, stream: false }),
-      signal: AbortSignal.timeout(55000),
+      signal: AbortSignal.timeout(110000),
     });
 
     if (!res.ok) {

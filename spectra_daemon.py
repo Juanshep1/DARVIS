@@ -29,7 +29,7 @@ PLIST_PATH = Path.home() / f"Library/LaunchAgents/{PLIST_NAME}.plist"
 def log(msg):
     timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
     line = f"[{timestamp}] {msg}"
-    print(line, flush=True)
+    # Only write to log file — launchd stdout already goes here, so don't print() too
     try:
         with open(LOG_FILE, "a") as f:
             f.write(line + "\n")
@@ -84,13 +84,14 @@ def poll_and_execute():
         commands = data.get("commands", [])
         for cmd in commands:
             action = cmd.get("action", "")
-            log(f"Executing: {action}")
+            log(f"Executing: {action} — {json.dumps(cmd)}")
             try:
                 if action == "create_file" and cmd.get("path") and cmd.get("content"):
                     result = create_file(cmd["path"], cmd["content"])
                     log(result)
-                    # Auto-open the file
-                    open_file(cmd["path"])
+                    time.sleep(0.5)  # Ensure file is fully written before opening
+                    open_result = open_file(cmd["path"])
+                    log(open_result)
                 elif action == "create_folder" and cmd.get("path"):
                     log(create_folder(cmd["path"]))
                 elif action == "open_file" and cmd.get("path"):

@@ -188,18 +188,24 @@ Use this when you need current information and no search results are provided be
 \`\`\`command
 {"action": "create_file", "path": "~/Desktop/filename.txt", "content": "file contents here"}
 \`\`\`
-CRITICAL: When the user says "create a file", "write a file", "save to desktop", "make a document", "make a file about...", etc., you MUST output a create_file command block with the FULL content. Use ~/Desktop/ as default location. The file will be created and auto-opened on the user's Mac even if they're on mobile — this works cross-device. ALWAYS include a create_file command block for file requests — never just describe the content.
+CRITICAL: When the user says "create a file", "write a file", "save to desktop", "make a document", "make a file about...", etc., you MUST output a create_file command block with the FULL content. Use ~/Desktop/ as default location. The file will be created AND automatically opened on the user's Mac — do NOT add a separate shell command to open it. This works cross-device even from mobile.
 
 ### Create Folder:
 \`\`\`command
 {"action": "create_folder", "path": "~/Desktop/folder_name"}
 \`\`\`
 
+### Open File (on user's Mac):
+\`\`\`command
+{"action": "open_file", "path": "~/Desktop/filename.txt"}
+\`\`\`
+Use when the user asks to open an existing file. Use the EXACT filename — do not guess or change the name.
+
 ### Shell Command (runs on user's Mac):
 \`\`\`command
-{"action": "shell", "command": "open ~/Desktop/filename.txt"}
+{"action": "shell", "command": "ls ~/Desktop"}
 \`\`\`
-Use to open files after creating them, or run any system command.
+Use for system commands. Do NOT use shell to open files — use open_file instead.
 
 ### Remember/Forget:
 \`\`\`command

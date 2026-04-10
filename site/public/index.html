@@ -1042,8 +1042,13 @@ async function toggleMic() {
 
 function looksLikeOpenRequest(text) {
     const lower = text.toLowerCase();
-    const triggers = ['open ', 'go to ', 'pull up ', 'navigate to ', 'take me to ', 'show me ', 'launch ', 'bring up ', 'load ', 'google '];
-    return triggers.some(t => lower.startsWith(t) || lower.includes('open '));
+    // Don't open a Safari tab for file/folder operations — those go through the daemon
+    const fileKeywords = ['file', 'folder', 'document', 'desktop', 'create', 'write', 'save', 'make a', 'text'];
+    if (fileKeywords.some(k => lower.includes(k))) return false;
+    const triggers = ['open youtube', 'open google', 'open amazon', 'open netflix', 'open reddit',
+        'open ebay', 'open walmart', 'open espn', 'open gmail', 'open twitter', 'open instagram',
+        'go to ', 'pull up ', 'navigate to ', 'take me to '];
+    return triggers.some(t => lower.includes(t));
 }
 
 function looksLikeCameraRequest(text) {

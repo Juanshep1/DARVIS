@@ -9,6 +9,20 @@ class SettingsViewModel: ObservableObject {
     @Published var currentVoice = ""
     @Published var customVoiceId = ""
     @Published var voiceStatus = ""
+    @Published var geminiVoice: String = UserDefaults.standard.string(forKey: "geminiVoice") ?? "Kore" {
+        didSet { UserDefaults.standard.set(geminiVoice, forKey: "geminiVoice") }
+    }
+
+    static let geminiVoices = [
+        ("Kore", "Calm female (default)"),
+        ("Puck", "Warm male"),
+        ("Charon", "Deep male"),
+        ("Fenrir", "Bold male"),
+        ("Aoede", "Bright female"),
+        ("Leda", "Soft female"),
+        ("Orus", "Clear male"),
+        ("Zephyr", "Breezy female"),
+    ]
 
     func load() async {
         do {
@@ -127,6 +141,19 @@ struct SettingsView: View {
                                     .font(.system(size: 10, design: .monospaced))
                                     .foregroundColor(.spectraGreen)
                             }
+                        }
+                    }
+
+                    // Gemini Voice (shown in gemini mode)
+                    if vm.settings.audio_mode == "gemini" {
+                        settingSection("GEMINI VOICE") {
+                            Picker("Voice", selection: $vm.geminiVoice) {
+                                ForEach(SettingsViewModel.geminiVoices, id: \.0) { voice in
+                                    Text("\(voice.0) — \(voice.1)").tag(voice.0)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .tint(.spectraCyan)
                         }
                     }
 

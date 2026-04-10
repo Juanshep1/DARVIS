@@ -74,7 +74,7 @@ body::after{content:'';position:fixed;top:-50%;left:-50%;width:200%;height:200%;
 </head>
 <body>
 <div class="header"><div class="header-brand">S.P.E.C.T.R.A.</div><div class="header-actions"><button class="header-btn" id="ambientBtn" onclick="toggleAmbient()" title="Ambient Mode">&#x1F4A4;</button><button class="header-btn" id="situationBtn" onclick="toggleSituation()" title="Situation Room">&#x1F4CA;</button><button class="header-btn" id="fixBtn" onclick="fixYourself()" title="Fix Yourself">&#x1F527;</button><button class="header-btn" id="agentToggle" onclick="toggleAgentView()">&#x1F441;</button><button class="header-btn" onclick="toggleSettings()">&#9881;</button></div></div>
-<div class="settings-panel" id="settingsPanel"><label>Audio Mode</label><select id="audioModeSelect" onchange="setAudioMode(this.value)"><option value="classic">Classic (Ollama + ElevenLabs)</option><option value="gemini">Gemini Live Audio</option><option value="gemma">Gemma 4 (Fast, Free)</option></select><div id="classicSettings"><label>Model</label><select id="modelSelect" onchange="setModel(this.value)"></select><label>Voice</label><select id="voiceSelect" onchange="setVoice(this.value)"></select><label>Custom Voice ID</label><div style="display:flex;gap:6px"><input type="text" id="voiceIdInput" placeholder="Paste ElevenLabs Voice ID..." style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:rgba(255,255,255,0.04);color:var(--text);font-family:var(--mono);font-size:0.7rem;outline:none"><button onclick="setCustomVoiceId()" style="padding:8px 12px;border:1px solid rgba(0,229,255,0.3);border-radius:8px;background:rgba(0,229,255,0.08);color:var(--cyan);font-family:var(--mono);font-size:0.7rem;font-weight:600;cursor:pointer">Set</button></div></div><div class="settings-status" id="settingsStatus"></div></div>
+<div class="settings-panel" id="settingsPanel"><label>Audio Mode</label><select id="audioModeSelect" onchange="setAudioMode(this.value)"><option value="classic">Classic (Ollama + ElevenLabs)</option><option value="gemini">Gemini Live Audio</option><option value="gemma">Gemma 4 (Fast, Free)</option></select><div id="classicSettings"><label>Model</label><select id="modelSelect" onchange="setModel(this.value)"></select><label>Voice</label><select id="voiceSelect" onchange="setVoice(this.value)"></select><label>Custom Voice ID</label><div style="display:flex;gap:6px"><input type="text" id="voiceIdInput" placeholder="Paste ElevenLabs Voice ID..." style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:rgba(255,255,255,0.04);color:var(--text);font-family:var(--mono);font-size:0.7rem;outline:none"><button onclick="setCustomVoiceId()" style="padding:8px 12px;border:1px solid rgba(0,229,255,0.3);border-radius:8px;background:rgba(0,229,255,0.08);color:var(--cyan);font-family:var(--mono);font-size:0.7rem;font-weight:600;cursor:pointer">Set</button></div></div><div id="geminiVoiceSettings" style="display:none"><label>Gemini Voice</label><select id="geminiVoiceSelect" onchange="setGeminiVoice(this.value)"><option value="Kore">Kore (Default, calm female)</option><option value="Puck">Puck (warm male)</option><option value="Charon">Charon (deep male)</option><option value="Fenrir">Fenrir (bold male)</option><option value="Aoede">Aoede (bright female)</option><option value="Leda">Leda (soft female)</option><option value="Orus">Orus (clear male)</option><option value="Zephyr">Zephyr (breezy female)</option></select></div><div class="settings-status" id="settingsStatus"></div></div>
 <div class="agent-panel" id="agentPanel"><div class="agent-header"><span class="agent-title">Agent Browser</span><button class="agent-close" onclick="toggleAgentView()">&times;</button></div><div class="agent-screen-wrap"><img id="agentScreen" style="display:none" alt="Agent browser view"><div class="agent-no-feed" id="agentNoFeed">No active session<br>Ask SPECTRA to browse something</div></div><div class="agent-footer"><div class="agent-status" id="agentStatus">Idle</div><div class="agent-step" id="agentStep"></div></div></div>
 <div class="orb-area"><div class="orb-wrap" id="orbWrap"><canvas id="orbCanvas" width="600" height="600" onclick="if(!orb.classList.contains('speaking'))toggleMic()"></canvas><div class="orb" id="orb"></div></div><div class="response-area"><div id="response"></div></div></div>
 <div class="input-area"><input type="text" id="input" placeholder="Ask SPECTRA anything..." autocomplete="off" onkeydown="if(event.key==='Enter')send()"><button class="mic-btn" id="micBtn" onclick="toggleMic()">&#x1F3A4;</button><button class="cam-btn" id="camBtn" onclick="toggleCamera()">&#x1F4F7;</button></div>
@@ -353,7 +353,7 @@ async function geminiConnect() {
                             response_modalities: ['AUDIO'],
                             speech_config: {
                                 voice_config: {
-                                    prebuilt_voice_config: { voice_name: 'Kore' }
+                                    prebuilt_voice_config: { voice_name: geminiVoiceName }
                                 }
                             }
                         },
@@ -1283,17 +1283,36 @@ function toggleSettings() {
     document.getElementById('settingsPanel').classList.toggle('open');
 }
 
+let geminiVoiceName = 'Kore';
+
 function updateModeUI() {
     const classic = document.getElementById('classicSettings');
+    const geminiVoice = document.getElementById('geminiVoiceSettings');
     if (audioMode === 'gemini') {
         classic.style.display = 'none';
+        geminiVoice.style.display = 'block';
         statusBar.textContent = 'GEMINI LIVE AUDIO';
     } else if (audioMode === 'gemma') {
         classic.style.display = 'none';
+        geminiVoice.style.display = 'none';
         statusBar.textContent = 'GEMMA 4 — FAST & FREE';
     } else {
         classic.style.display = 'block';
+        geminiVoice.style.display = 'none';
         statusBar.textContent = 'POWERED BY OLLAMA CLOUD + ELEVENLABS';
+    }
+}
+
+function setGeminiVoice(voice) {
+    geminiVoiceName = voice;
+    const status = document.getElementById('settingsStatus');
+    status.textContent = 'Gemini voice: ' + voice;
+    // If already connected, need to reconnect to change voice
+    if (geminiWs && geminiWs.readyState === 1) {
+        geminiWs.close();
+        geminiWs = null;
+        geminiSessionActive = false;
+        status.textContent = 'Voice changed to ' + voice + ' — will apply on next connection';
     }
 }
 
@@ -1387,8 +1406,19 @@ async function setVoice(voice_id) {
 function setCustomVoiceId() {
     const vid = document.getElementById('voiceIdInput').value.trim();
     if (!vid) return;
+    // Add to dropdown if not already there
+    const sel = document.getElementById('voiceSelect');
+    const exists = Array.from(sel.options).some(o => o.value === vid);
+    if (!exists) {
+        const opt = document.createElement('option');
+        opt.value = vid;
+        opt.textContent = 'Custom (' + vid.slice(0, 8) + '...)';
+        sel.appendChild(opt);
+    }
+    sel.value = vid;
     setVoice(vid);
     document.getElementById('voiceIdInput').value = '';
+    document.getElementById('settingsStatus').textContent = 'Custom voice ID set';
 }
 
 // Close settings when clicking outside

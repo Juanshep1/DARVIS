@@ -6,6 +6,7 @@ import AVFoundation
 class GeminiLiveService: ObservableObject {
     @Published var isConnected = false
     @Published var responseText = ""
+    var voiceName = "Kore"
 
     private var webSocket: URLSessionWebSocketTask?
     private var session: URLSession?
@@ -16,6 +17,8 @@ class GeminiLiveService: ObservableObject {
 
     func connect() async -> Bool {
         do {
+            // Load voice preference
+            voiceName = UserDefaults.standard.string(forKey: "geminiVoice") ?? "Kore"
             let tokenResp = try await APIClient.shared.getGeminiToken()
             let urlStr = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=\(tokenResp.token)"
             guard let url = URL(string: urlStr) else { return false }
@@ -38,7 +41,7 @@ class GeminiLiveService: ObservableObject {
                         "response_modalities": ["AUDIO"],
                         "speech_config": [
                             "voice_config": [
-                                "prebuilt_voice_config": ["voice_name": "Kore"]
+                                "prebuilt_voice_config": ["voice_name": voiceName]
                             ]
                         ]
                     ],

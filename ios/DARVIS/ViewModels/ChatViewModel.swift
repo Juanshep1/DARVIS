@@ -325,13 +325,7 @@ class ChatViewModel: ObservableObject {
                     }
                 }
 
-                // Save history in background
-                Task.detached {
-                    try? await APIClient.shared.appendHistory(messages: [
-                        ChatMessage(role: "user", content: text),
-                        ChatMessage(role: "assistant", content: reply),
-                    ])
-                }
+                // History is saved by the chat.mjs endpoint — no need to double-save
 
                 await playTTS(reply)
             } catch let error as URLError where error.code == .timedOut {

@@ -93,22 +93,50 @@ export default async (req) => {
   const historyStore = getStore("darvis-history");
   const memoryStore = getStore("darvis-memory");
 
-  const [settingsData, historyData, memoryData, searchResults] = await Promise.all([
+  // Load settings, history, memory first
+  const [settingsData, historyData, memoryData] = await Promise.all([
     settingsStore.get("current", { type: "json" }).catch(() => null),
     historyStore.get("conversation", { type: "json" }).catch(() => null),
     memoryStore.get("all", { type: "json" }).catch(() => null),
-    needsSearch(message) ? tavilySearch(message) : Promise.resolve(null),
   ]);
+
+  // Build contextual search query using conversation history
+  let searchQuery = message;
+  if (needsSearch(message)) {
+    const rawHistory = Array.isArray(historyData) ? historyData : [];
+    const words = message.trim().split(/\s+/);
+    if (words.length <= 6 && rawHistory.length >= 2) {
+      const recentCtx = rawHistory.slice(-4).map(m => m.content || '').join(' ').substring(0, 300);
+      searchQuery = `${message} ${recentCtx}`;
+    }
+  }
+
+  // Now search with context-enhanced query
+  const searchResults = needsSearch(message) ? await tavilySearch(searchQuery, 10) : null;
 
   let MODEL = settingsData?.model || Netlify.env.get("DARVIS_MODEL") || "glm-5";
   let history = Array.isArray(historyData) ? historyData : [];
+
+  // Keep only last 20 messages and clean any chain-of-thought junk
+  history = history.slice(-20).filter(m => {
+    if (!m.role || !m.content) return false;
+    // Remove thinking/reasoning artifacts from qwen/deepseek models
+    if (m.role === 'assistant' && (
+      m.content.startsWith("I'm now") || m.content.startsWith("I've determined") ||
+      m.content.startsWith("I need to") || m.content.startsWith("I must") ||
+      m.content.startsWith("Let me think") || m.content.length < 10
+    )) return false;
+    return true;
+  });
+
   let memoryContext = "";
   if (Array.isArray(memoryData) && memoryData.length > 0) {
     memoryContext = "\n\nUser's saved memories:\n" + memoryData.map((m) => `- [${m.category}] ${m.content}`).join("\n");
   }
+
   let searchContext = "";
   if (searchResults) {
-    searchContext = `\n\nWEB SEARCH RESULTS for "${message}":\n${searchResults}\nUse these results to give a thorough, detailed answer. Cite specific facts and numbers. Do NOT say the information is unavailable — it's right here.`;
+    searchContext = `\n\nWEB SEARCH RESULTS for "${message}":\n${searchResults}\nIMPORTANT: Use ONLY these search results to answer. Do NOT use your training data for facts that could be outdated. The search results are current and accurate. Cite specific facts, numbers, and standings exactly as shown.`;
   }
 
   // Force Central Time
@@ -126,10 +154,12 @@ British-accented speech patterns. Addresses user as "sir" naturally.
 ${timeBlock}
 
 IMPORTANT RULES:
-- When web search results are provided below, use them to give THOROUGH, DETAILED answers. Include specific facts, numbers, dates, and names. Do NOT give vague or one-line answers when you have detailed search results.
-- When the user asks about current events, news, scores, prices, weather, or anything requiring real-time data AND no search results are provided below, you MUST use the search_web command block to fetch results.
-- ALWAYS provide a spoken text response ALONGSIDE any command blocks. Never output ONLY command blocks with no text.
-- Give substantive answers. If the user asks "what's happening in the news", give them 5+ stories with details, not a one-liner.
+- When web search results are provided below, use ONLY those results for factual claims. Do NOT mix in your training data which may be outdated. The search results are live and accurate — your training data is NOT.
+- Quote specific numbers, records, standings, and dates EXACTLY as they appear in search results. Do not guess or infer different numbers.
+- When the user asks about current events, news, scores, prices, weather, or anything real-time AND no search results are provided below, you MUST use the search_web command block.
+- ALWAYS provide a spoken text response ALONGSIDE any command blocks. Never output ONLY command blocks.
+- Give substantive answers. If the user asks about news, give 5+ stories with details.
+- Pay attention to conversation history. If the user says "their record" or "what about them", look at previous messages to understand who/what they're referring to. Don't ask the user to repeat themselves.
 
 You run on ${MODEL} via Ollama Cloud across iPhone, web browser, macOS terminal.
 

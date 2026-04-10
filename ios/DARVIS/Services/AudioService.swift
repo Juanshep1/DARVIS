@@ -7,17 +7,21 @@ class AudioService: NSObject, ObservableObject {
     private var audioPlayer: AVAudioPlayer?
     private var pcmPlayerNode: AVAudioPlayerNode?
     private var playbackEngine: AVAudioEngine?
+    private var pcmFormat: AVAudioFormat?
+    private var sessionReady = false
 
     @Published var isCapturing = false
 
     var onPCMChunk: ((String) -> Void)? // base64 PCM chunk callback
 
-    // MARK: - Audio Session
+    // MARK: - Audio Session (call once, not per chunk)
 
     func setupSession() {
+        guard !sessionReady else { return }
         let session = AVAudioSession.sharedInstance()
         try? session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetoothA2DP])
         try? session.setActive(true)
+        sessionReady = true
     }
 
     // MARK: - Mic Capture (16kHz Int16 PCM → base64)
@@ -31,7 +35,6 @@ class AudioService: NSObject, ObservableObject {
         let nativeFormat = inputNode.outputFormat(forBus: 0)
         let targetRate: Double = 16000
 
-        // Tap at native rate, resample in the callback
         inputNode.installTap(onBus: 0, bufferSize: 4096, format: nativeFormat) { [weak self] buffer, _ in
             guard let self = self else { return }
 
@@ -39,7 +42,6 @@ class AudioService: NSObject, ObservableObject {
             let frameCount = Int(buffer.frameLength)
             guard let samples = channelData, frameCount > 0 else { return }
 
-            // Resample to 16kHz
             let ratio = nativeFormat.sampleRate / targetRate
             let outputCount = Int(Double(frameCount) / ratio)
             var int16Samples = [Int16](repeating: 0, count: outputCount)
@@ -49,7 +51,6 @@ class AudioService: NSObject, ObservableObject {
                 int16Samples[i] = Int16(val * 32767)
             }
 
-            // To base64
             let data = int16Samples.withUnsafeBufferPointer { Data(buffer: $0) }
             let b64 = data.base64EncodedString()
             self.onPCMChunk?(b64)
@@ -84,16 +85,24 @@ class AudioService: NSObject, ObservableObject {
     // MARK: - Play PCM (Gemini 24kHz Int16)
 
     func playPCM(_ data: Data) {
-        setupSession()
-
-        // Convert Int16 PCM to AVAudioPCMBuffer
         let sampleRate: Double = 24000
         let sampleCount = data.count / 2
         guard sampleCount > 0 else { return }
 
-        let format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: sampleRate, channels: 1, interleaved: false)!
+        // Create engine once, reuse for all chunks
+        if playbackEngine == nil {
+            setupSession()
+            pcmFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: sampleRate, channels: 1, interleaved: false)!
+            playbackEngine = AVAudioEngine()
+            pcmPlayerNode = AVAudioPlayerNode()
+            playbackEngine?.attach(pcmPlayerNode!)
+            playbackEngine?.connect(pcmPlayerNode!, to: playbackEngine!.mainMixerNode, format: pcmFormat!)
+            try? playbackEngine?.start()
+            pcmPlayerNode?.play()
+        }
 
-        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(sampleCount)) else { return }
+        guard let format = pcmFormat,
+              let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(sampleCount)) else { return }
         buffer.frameLength = AVAudioFrameCount(sampleCount)
 
         let floatData = buffer.floatChannelData![0]
@@ -104,20 +113,16 @@ class AudioService: NSObject, ObservableObject {
             }
         }
 
-        // Play via AVAudioEngine
-        if playbackEngine == nil {
-            playbackEngine = AVAudioEngine()
-            pcmPlayerNode = AVAudioPlayerNode()
-            playbackEngine?.attach(pcmPlayerNode!)
-            playbackEngine?.connect(pcmPlayerNode!, to: playbackEngine!.mainMixerNode, format: format)
-            try? playbackEngine?.start()
-        }
-        pcmPlayerNode?.scheduleBuffer(buffer) {}
-        pcmPlayerNode?.play()
+        // Schedule buffer (queues automatically for gapless playback)
+        pcmPlayerNode?.scheduleBuffer(buffer)
     }
 
     func stopPCM() {
         pcmPlayerNode?.stop()
+        playbackEngine?.stop()
+        playbackEngine = nil
+        pcmPlayerNode = nil
+        pcmFormat = nil
     }
 
     func stopAll() {

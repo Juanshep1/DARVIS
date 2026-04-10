@@ -7,6 +7,7 @@ class GeminiLiveService: ObservableObject {
     @Published var isConnected = false
     @Published var responseText = ""
     var voiceName = "Kore"
+    private var _pendingText = ""
 
     private var webSocket: URLSessionWebSocketTask?
     private var session: URLSession?
@@ -76,6 +77,7 @@ class GeminiLiveService: ObservableObject {
 
     func sendText(_ text: String) {
         guard let ws = webSocket else { return }
+        _pendingText = ""
         let msg: [String: Any] = [
             "clientContent": [
                 "turns": [["role": "user", "parts": [["text": text]]]],
@@ -143,14 +145,18 @@ class GeminiLiveService: ObservableObject {
                                 if let text = part["text"] as? String {
                                     let clean = text.replacingOccurrences(of: "\\*\\*[^*]+\\*\\*\\n?", with: "", options: .regularExpression)
                                     if !clean.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                        responseText = clean.trimmingCharacters(in: .whitespacesAndNewlines)
+                                        _pendingText += clean.trimmingCharacters(in: .whitespacesAndNewlines) + " "
                                     }
                                 }
                             }
                         }
 
-                        // Turn complete
+                        // Turn complete — publish accumulated text now
                         if sc["turnComplete"] as? Bool == true {
+                            if !_pendingText.isEmpty {
+                                responseText = _pendingText.trimmingCharacters(in: .whitespacesAndNewlines)
+                                _pendingText = ""
+                            }
                             onTurnComplete?()
                         }
                     }

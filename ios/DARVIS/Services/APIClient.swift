@@ -35,30 +35,41 @@ class APIClient {
 
     private init() {
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 60
-        config.timeoutIntervalForResource = 90
+        config.timeoutIntervalForRequest = 90
+        config.timeoutIntervalForResource = 120
         config.waitsForConnectivity = false
         session = URLSession(configuration: config)
     }
 
-    private func request(_ path: String, method: String = "GET", body: Data? = nil) async throws -> Data {
+    private func request(_ path: String, method: String = "GET", body: Data? = nil, retries: Int = 1) async throws -> Data {
         guard let url = URL(string: "\(baseURL)\(path)") else {
             throw URLError(.badURL)
         }
-        var req = URLRequest(url: url)
-        req.httpMethod = method
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = body
-        let (data, response) = try await session.data(for: req)
-        if let http = response as? HTTPURLResponse, http.statusCode >= 400 {
-            throw URLError(.badServerResponse)
+        var lastError: Error?
+        for attempt in 0...retries {
+            do {
+                var req = URLRequest(url: url)
+                req.httpMethod = method
+                req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                req.httpBody = body
+                let (data, response) = try await session.data(for: req)
+                if let http = response as? HTTPURLResponse, http.statusCode >= 400 {
+                    throw URLError(.badServerResponse)
+                }
+                return data
+            } catch {
+                lastError = error
+                if attempt < retries {
+                    try? await Task.sleep(nanoseconds: 2_000_000_000) // 2s before retry
+                }
+            }
         }
-        return data
+        throw lastError ?? URLError(.unknown)
     }
 
     func sendChat(message: String) async throws -> ChatResponse {
         let body = try JSONEncoder().encode(["message": message])
-        let data = try await request("/api/chat", method: "POST", body: body)
+        let data = try await request("/api/chat", method: "POST", body: body, retries: 2)
         return try JSONDecoder().decode(ChatResponse.self, from: data)
     }
 

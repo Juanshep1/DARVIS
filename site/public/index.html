@@ -1906,6 +1906,101 @@ function showAlertToast(message) {
     setTimeout(() => toast.remove(), 8000);
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// PHONE LOCK / BACKGROUND RECOVERY
+// When the phone locks or Safari goes to background, the mic stream dies,
+// AudioContext suspends, WebSocket disconnects, and SpeechRecognition stops.
+// This handler restores everything when the user comes back.
+// ══════════════════════════════════════════════════════════════════════════════
+
+document.addEventListener('visibilitychange', async () => {
+    if (document.visibilityState !== 'visible') return;
+    console.log('Page resumed — checking mic/audio state');
+
+    // Resume suspended AudioContext
+    if (geminiAudioCtx && geminiAudioCtx.state === 'suspended') {
+        try { await geminiAudioCtx.resume(); } catch {}
+    }
+
+    if (!isRecording) return; // User wasn't recording, nothing to restore
+
+    if (audioMode === 'gemini') {
+        // Gemini mode: WebSocket and mic likely dead after phone lock
+        const wsAlive = geminiWs && geminiWs.readyState === WebSocket.OPEN;
+        const micAlive = geminiMicStream && geminiMicStream.getTracks().some(t => t.readyState === 'live');
+
+        if (!wsAlive || !micAlive) {
+            console.log('Gemini session dead after lock — reconnecting');
+            statusBar.textContent = 'RECONNECTING...';
+            orb.className = 'orb thinking';
+
+            // Clean up dead resources
+            stopGeminiMic();
+            stopGeminiPlayback();
+            if (geminiWs) { try { geminiWs.close(); } catch {} geminiWs = null; }
+            geminiSessionActive = false;
+
+            try {
+                const ok = await geminiConnect();
+                if (ok) {
+                    if (cameraActive && recognition) {
+                        try { recognition.start(); } catch {}
+                        statusBar.textContent = 'GEMINI LIVE + CAMERA — SPEAK NATURALLY';
+                    } else {
+                        await startGeminiMic();
+                        statusBar.textContent = 'GEMINI LIVE — SPEAK NATURALLY';
+                    }
+                    orb.className = 'orb listening';
+                } else {
+                    isRecording = false;
+                    micBtn.classList.remove('recording');
+                    orb.className = 'orb';
+                    statusBar.textContent = 'GEMINI DISCONNECTED — TAP MIC';
+                    responseEl.textContent = 'Session lost. Tap the mic to reconnect.';
+                }
+            } catch (err) {
+                console.warn('Gemini reconnect failed:', err);
+                isRecording = false;
+                micBtn.classList.remove('recording');
+                orb.className = 'orb';
+                statusBar.textContent = 'GEMINI DISCONNECTED — TAP MIC';
+                responseEl.textContent = 'Session lost. Tap the mic to reconnect.';
+            }
+        }
+    } else {
+        // Classic mode: SpeechRecognition silently dies when phone locks
+        if (recognition) {
+            try {
+                // Try restarting — if it was already stopped, start() works.
+                // If it's in a bad state, stop() first then start().
+                recognition.stop();
+            } catch {}
+            setTimeout(() => {
+                if (isRecording) {
+                    try {
+                        recognition.start();
+                        orb.className = 'orb listening';
+                    } catch (err) {
+                        console.warn('Recognition restart failed:', err);
+                        isRecording = false;
+                        micBtn.classList.remove('recording');
+                        orb.className = 'orb';
+                        responseEl.textContent = 'Mic lost. Tap to restart.';
+                    }
+                }
+            }, 300);
+        }
+    }
+});
+
+// Also handle pageshow (mobile Safari fires this on back/forward cache restore)
+window.addEventListener('pageshow', (e) => {
+    if (e.persisted && isRecording) {
+        // Page was restored from bfcache — trigger the same recovery
+        document.dispatchEvent(new Event('visibilitychange'));
+    }
+});
+
 // Check every minute if it's briefing time
 let lastBriefingCheck = '';
 setInterval(() => {

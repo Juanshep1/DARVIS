@@ -394,7 +394,7 @@ class SpectraConsoleApp:
         self.window.setStyleMask_(
             NSWindowStyleMaskTitled | NSWindowStyleMaskClosable |
             NSWindowStyleMaskMiniaturizable | NSWindowStyleMaskResizable)
-        self.window.setTitle_("S.P.E.C.T.R.A. Console")
+        self.window.setTitle_("SPECTRA Console")
         self.window.setLevel_(NSNormalWindowLevel)
         self.window.setOpaque_(True)
         self.window.setBackgroundColor_(NSColor.colorWithCalibratedRed_green_blue_alpha_(0.04, 0.04, 0.06, 1))

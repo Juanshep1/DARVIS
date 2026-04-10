@@ -49,7 +49,7 @@ struct AgentView: View {
             VStack(spacing: 0) {
                 // Header
                 HStack {
-                    Text("S.P.E.C.T.R.A. BROWSER")
+                    Text("SPECTRA BROWSER")
                         .font(.system(size: 10, weight: .bold, design: .monospaced))
                         .tracking(2)
                         .foregroundColor(.spectraCyan)

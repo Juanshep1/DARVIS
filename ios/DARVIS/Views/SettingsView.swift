@@ -7,6 +7,8 @@ class SettingsViewModel: ObservableObject {
     @Published var voices: [VoiceOption] = []
     @Published var currentModel = ""
     @Published var currentVoice = ""
+    @Published var customVoiceId = ""
+    @Published var voiceStatus = ""
 
     func load() async {
         do {
@@ -92,6 +94,39 @@ struct SettingsView: View {
                             }
                             .pickerStyle(.menu)
                             .tint(.spectraCyan)
+
+                            // Custom voice ID input
+                            HStack(spacing: 8) {
+                                TextField("Paste ElevenLabs Voice ID...", text: $vm.customVoiceId)
+                                    .textFieldStyle(.plain)
+                                    .font(.system(size: 12, design: .monospaced))
+                                    .foregroundColor(.spectraText)
+                                    .padding(10)
+                                    .background(Color(red: 0.06, green: 0.06, blue: 0.10))
+                                    .cornerRadius(8)
+                                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.spectraCyan.opacity(0.2), lineWidth: 1))
+
+                                Button("Set") {
+                                    let vid = vm.customVoiceId.trimmingCharacters(in: .whitespacesAndNewlines)
+                                    guard !vid.isEmpty else { return }
+                                    vm.settings.voice_id = vid
+                                    Task { await vm.setVoice(vid) }
+                                    vm.voiceStatus = "Voice ID set"
+                                }
+                                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                .foregroundColor(.spectraCyan)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 8)
+                                .background(Color.spectraCyan.opacity(0.1))
+                                .cornerRadius(8)
+                                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.spectraCyan.opacity(0.3), lineWidth: 1))
+                            }
+
+                            if !vm.voiceStatus.isEmpty {
+                                Text(vm.voiceStatus)
+                                    .font(.system(size: 10, design: .monospaced))
+                                    .foregroundColor(.spectraGreen)
+                            }
                         }
                     }
 

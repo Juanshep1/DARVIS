@@ -35,9 +35,9 @@ struct SPECTRAApp: App {
         // Register notification category with reply action
         let replyAction = UNTextInputNotificationAction(
             identifier: "REPLY_ACTION",
-            title: "Reply to SPECTRA",
+            title: "Reply to Spectra",
             textInputButtonTitle: "Send",
-            textInputPlaceholder: "Talk to SPECTRA..."
+            textInputPlaceholder: "Talk to Spectra..."
         )
         let category = UNNotificationCategory(
             identifier: "SPECTRA_RESPONSE",

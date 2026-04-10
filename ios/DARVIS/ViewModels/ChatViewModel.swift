@@ -80,7 +80,7 @@ class ChatViewModel: ObservableObject {
 
                         // Push notification (works even when app is in background)
                         let content = UNMutableNotificationContent()
-                        content.title = "S.P.E.C.T.R.A. Alert"
+                        content.title = "SPECTRA Alert"
                         content.body = alert.message
                         content.sound = .default
                         let request = UNNotificationRequest(
@@ -284,7 +284,7 @@ class ChatViewModel: ObservableObject {
                         }
                         if action.action == "scheduled" {
                             let content = UNMutableNotificationContent()
-                            content.title = "S.P.E.C.T.R.A. Reminder"
+                            content.title = "SPECTRA Reminder"
                             content.body = action.task ?? action.goal ?? "Reminder"
                             content.sound = .default
 
@@ -489,7 +489,7 @@ class ChatViewModel: ObservableObject {
         guard state != .active else { return }
 
         let content = UNMutableNotificationContent()
-        content.title = "S.P.E.C.T.R.A."
+        content.title = "SPECTRA"
         // iOS supports up to 4KB in notification body — show the full response
         content.body = text.count > 4000 ? String(text.prefix(3997)) + "..." : text
         content.sound = .default

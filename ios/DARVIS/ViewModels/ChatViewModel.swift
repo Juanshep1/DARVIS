@@ -2,6 +2,7 @@ import SwiftUI
 import AVFoundation
 import Speech
 import UserNotifications
+import UIKit
 
 @MainActor
 class ChatViewModel: ObservableObject {
@@ -214,11 +215,27 @@ class ChatViewModel: ObservableObject {
         orbState = .thinking
         responseText = ""
 
+        // Background task keeps the request alive even if user leaves the app
+        let app = UIApplication.shared
+        var bgTask: UIBackgroundTaskIdentifier = .invalid
+        bgTask = app.beginBackgroundTask(withName: "DarvisChat") {
+            app.endBackgroundTask(bgTask)
+            bgTask = .invalid
+        }
+
         Task {
+            defer {
+                if bgTask != .invalid {
+                    app.endBackgroundTask(bgTask)
+                    bgTask = .invalid
+                }
+            }
+
             if useOnDevice {
                 if let response = await onDeviceLLM.generate(prompt: text) {
                     responseText = response
                     messages.append(ChatMessage(role: "assistant", content: response))
+                    await sendResponseNotificationIfBackgrounded(response)
                     await playTTS(response)
                 } else {
                     responseText = "No response — check your connection, sir."
@@ -252,6 +269,9 @@ class ChatViewModel: ObservableObject {
                 responseText = reply
                 messages.append(ChatMessage(role: "assistant", content: reply))
 
+                // Send notification if app is backgrounded
+                await sendResponseNotificationIfBackgrounded(reply)
+
                 // Handle actions
                 if let actions = response.actions {
                     for action in actions {
@@ -283,7 +303,7 @@ class ChatViewModel: ObservableObject {
                     }
                 }
 
-                // Save history in background (don't block response)
+                // Save history in background
                 Task.detached {
                     try? await APIClient.shared.appendHistory(messages: [
                         ChatMessage(role: "user", content: text),
@@ -291,13 +311,14 @@ class ChatViewModel: ObservableObject {
                     ])
                 }
 
-                // Play TTS (non-blocking — set idle after)
                 await playTTS(reply)
             } catch let error as URLError where error.code == .timedOut {
                 responseText = "Request timed out, sir. Try again."
+                await sendResponseNotificationIfBackgrounded("Request timed out. Try again.")
                 orbState = .idle
             } catch {
                 responseText = "Connection error, sir. (\(error.localizedDescription))"
+                await sendResponseNotificationIfBackgrounded("Connection error: \(error.localizedDescription)")
                 orbState = .idle
             }
         }
@@ -458,6 +479,26 @@ class ChatViewModel: ObservableObject {
                 self.orbState = .idle
             }
         }
+    }
+
+    // MARK: - Background Notifications
+
+    private func sendResponseNotificationIfBackgrounded(_ text: String) async {
+        let state = await UIApplication.shared.applicationState
+        guard state != .active else { return }
+
+        let content = UNMutableNotificationContent()
+        content.title = "D.A.R.V.I.S."
+        // Truncate for notification but keep it useful
+        content.body = text.count > 300 ? String(text.prefix(297)) + "..." : text
+        content.sound = .default
+
+        let request = UNNotificationRequest(
+            identifier: "darvis-response-\(UUID().uuidString.prefix(8))",
+            content: content,
+            trigger: nil  // Deliver immediately
+        )
+        try? await UNUserNotificationCenter.current().add(request)
     }
 
     // MARK: - TTS

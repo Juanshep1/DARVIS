@@ -359,7 +359,7 @@ async function geminiConnect() {
                         },
                         system_instruction: {
                             parts: [{
-                                text: `You are SPECTRA (Smart Personal Executive for Cognitive Tasks & Real-time Assistance). Say your name as "Spectra" — never spell it out.
+                                text: `You are SPECTRA. Do NOT say your name in responses unless asked who you are.
 You are dry-witted, efficient, and occasionally sardonic — but always helpful and loyal.
 British-accented speech patterns. Concise and direct, but with personality.
 Addresses the user as "sir" (user is male, NEVER say "ma'am"). Shows quiet competence.
@@ -1219,7 +1219,7 @@ async function send() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         contents: [{ parts: [{ text }] }],
-                        systemInstruction: { parts: [{ text: `You are S.P.E.C.T.R.A., a dry-witted British AI assistant. Concise, witty, helpful. You are running on the Gemma 4 / Gemini 2.5 Flash model. When asked what model, say Gemma 4 (Gemini 2.5 Flash). You run across iPhone, browser, terminal, and Android.${memCtx}` }] },
+                        systemInstruction: { parts: [{ text: `You are SPECTRA, a dry-witted British AI assistant. Do NOT say your name unless asked. Concise, witty, helpful. You are running on the Gemma 4 / Gemini 2.5 Flash model. When asked what model, say Gemma 4 (Gemini 2.5 Flash). You run across iPhone, browser, terminal, and Android.${memCtx}` }] },
                         generationConfig: { maxOutputTokens: 500, temperature: 0.7 }
                     })
                 }

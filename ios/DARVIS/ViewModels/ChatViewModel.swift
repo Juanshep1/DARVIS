@@ -485,7 +485,7 @@ class ChatViewModel: ObservableObject {
     // MARK: - Background Notifications
 
     private func sendResponseNotificationIfBackgrounded(_ text: String) async {
-        let state = await UIApplication.shared.applicationState
+        let state = UIApplication.shared.applicationState
         guard state != .active else { return }
 
         let content = UNMutableNotificationContent()

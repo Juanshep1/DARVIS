@@ -360,16 +360,40 @@ Use when the user says "in X minutes", "at X o'clock", "later do", "remind me in
       await historyStore.setJSON("conversation", history);
     } catch {}
 
-    // If reply is empty but we executed actions, generate a confirmation
+    // If we have command results (search, fetch), ask LLM to summarize them naturally
+    if (!reply && cmdResults.length > 0) {
+      try {
+        const summaryRes = await fetch("https://ollama.com/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${OLLAMA_KEY}` },
+          body: JSON.stringify({
+            model: MODEL,
+            messages: [
+              { role: "system", content: "You are DARVIS. Summarize these results concisely and naturally. Be helpful and specific." },
+              { role: "user", content: `Here are results from commands I ran:\n${cmdResults.join("\n")}\n\nSummarize these results for me in a natural, helpful way.` },
+            ],
+            stream: false,
+          }),
+          signal: AbortSignal.timeout(30000),
+        });
+        if (summaryRes.ok) {
+          const sData = await summaryRes.json();
+          reply = (sData.message?.content || "").replace(/```command[\s\S]*?```/g, "").trim();
+        }
+      } catch {}
+    }
+
+    // If still empty, build confirmation from actions
     if (!reply && (clientActions.length > 0 || cmdResults.length > 0)) {
       const confirmParts = [];
+      if (cmdResults.length > 0) confirmParts.push(cmdResults.join("\n").substring(0, 500));
       for (const a of clientActions) {
         if (a.action === "scheduled") confirmParts.push(`Scheduled: ${a.task}`);
         else if (a.action === "queued") confirmParts.push(a.message);
         else if (a.action === "open_url") confirmParts.push(`Opening ${a.url}`);
         else if (a.action === "agent_started") confirmParts.push(`Browser agent launched: ${a.goal}`);
       }
-      reply = confirmParts.join(". ") || "Done.";
+      reply = confirmParts.join("\n") || "Done.";
     }
 
     const response = { reply };

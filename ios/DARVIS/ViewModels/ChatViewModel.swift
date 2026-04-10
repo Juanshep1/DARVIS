@@ -55,6 +55,7 @@ class ChatViewModel: ObservableObject {
 
     init() {
         setupGeminiCallbacks()
+        setupNotificationReply()
         Task { await loadSettings() }
         startBriefingSchedule()
         startAlertPolling()
@@ -489,16 +490,24 @@ class ChatViewModel: ObservableObject {
 
         let content = UNMutableNotificationContent()
         content.title = "D.A.R.V.I.S."
-        // Truncate for notification but keep it useful
         content.body = text.count > 300 ? String(text.prefix(297)) + "..." : text
         content.sound = .default
+        content.categoryIdentifier = "DARVIS_RESPONSE"  // Enables reply action
 
         let request = UNNotificationRequest(
             identifier: "darvis-response-\(UUID().uuidString.prefix(8))",
             content: content,
-            trigger: nil  // Deliver immediately
+            trigger: nil
         )
         try? await UNUserNotificationCenter.current().add(request)
+    }
+
+    func setupNotificationReply() {
+        NotificationDelegate.shared.onReply = { [weak self] reply in
+            guard let self = self else { return }
+            self.inputText = reply
+            self.send()
+        }
     }
 
     // MARK: - TTS

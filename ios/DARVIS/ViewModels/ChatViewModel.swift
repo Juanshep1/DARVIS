@@ -490,7 +490,8 @@ class ChatViewModel: ObservableObject {
 
         let content = UNMutableNotificationContent()
         content.title = "D.A.R.V.I.S."
-        content.body = text.count > 300 ? String(text.prefix(297)) + "..." : text
+        // iOS supports up to 4KB in notification body — show the full response
+        content.body = text.count > 4000 ? String(text.prefix(3997)) + "..." : text
         content.sound = .default
         content.categoryIdentifier = "DARVIS_RESPONSE"  // Enables reply action
 

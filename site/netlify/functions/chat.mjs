@@ -1,8 +1,8 @@
 import { getStore } from "@netlify/blobs";
 
-// ── Tavily web search ───────────────────────────────────────────────────────
+// ── Tavily web search (upgraded: more results, deeper content) ──────────────
 
-async function tavilySearch(query) {
+async function tavilySearch(query, maxResults = 8) {
   const TAVILY_KEY = Netlify.env.get("TAVILY_API_KEY");
   if (!TAVILY_KEY) return null;
 
@@ -13,22 +13,23 @@ async function tavilySearch(query) {
       body: JSON.stringify({
         api_key: TAVILY_KEY,
         query,
-        search_depth: "basic",
-        max_results: 5,
+        search_depth: "advanced",
+        max_results: maxResults,
         include_answer: true,
       }),
+      signal: AbortSignal.timeout(15000),
     });
     if (!res.ok) return null;
     const data = await res.json();
 
     let text = "";
     if (data.answer) {
-      text += `Quick answer: ${data.answer}\n\n`;
+      text += `Answer: ${data.answer}\n\n`;
     }
     if (data.results?.length) {
       text += "Sources:\n";
       data.results.forEach((r, i) => {
-        text += `${i + 1}. ${r.title}\n   ${r.url}\n   ${r.content?.substring(0, 200) || ""}\n\n`;
+        text += `${i + 1}. ${r.title}\n   ${r.url}\n   ${r.content?.substring(0, 500) || ""}\n\n`;
       });
     }
     return text || null;
@@ -67,7 +68,8 @@ function needsSearch(msg) {
     "recent", "update", "results", "live", "current",
     "who is the president", "who is the prime minister",
     "playoffs", "championship", "election", "released",
-    "box office", "trending", "viral",
+    "box office", "trending", "viral", "tell me about", "what happened",
+    "remind me", "what's going on", "catch me up", "info on", "details about",
   ];
   return searchTriggers.some((t) => lower.includes(t));
 }
@@ -106,10 +108,10 @@ export default async (req) => {
   }
   let searchContext = "";
   if (searchResults) {
-    searchContext = `\n\nWeb search results:\n${searchResults}\nUse these to answer. Cite specific facts.`;
+    searchContext = `\n\nWEB SEARCH RESULTS for "${message}":\n${searchResults}\nUse these results to give a thorough, detailed answer. Cite specific facts and numbers. Do NOT say the information is unavailable — it's right here.`;
   }
 
-  // Force Central Time (user's timezone) — Netlify servers run in UTC
+  // Force Central Time
   const d = new Date();
   const userTZ = "America/Chicago";
   const localTime = d.toLocaleString("en-US", { timeZone: userTZ, weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "numeric", minute: "numeric", hour12: true });
@@ -118,66 +120,84 @@ export default async (req) => {
   const timeBlock = `CURRENT DATE/TIME (accurate, trust this):\n  Date: ${localTime}\n  Period: ${period}\n  Timezone: CDT (Central)`;
 
   const systemPrompt = `You are D.A.R.V.I.S., a Digital Assistant, Rather Very Intelligent System.
-You are dry-witted, efficient, and occasionally sardonic — but always helpful and loyal.
-British-accented speech patterns. Concise and direct, but with personality.
-Addresses the user as "sir" or "ma'am" naturally. Shows quiet competence.
-Keep responses concise for voice output (1-3 sentences unless more detail is needed).
+Dry-witted, efficient, sardonic — but always helpful and loyal.
+British-accented speech patterns. Addresses user as "sir" naturally.
 
-IMPORTANT: Each message includes a CURRENT DATE/TIME block. This is ALWAYS accurate — trust it. Use it for time of day. Do NOT guess a different time.
+${timeBlock}
 
-You are currently running on the ${MODEL} model via Ollama Cloud (Classic mode). When asked what model you're using, say "${MODEL}". You run across multiple platforms: iPhone app, web browser (darvis1.netlify.app), macOS terminal, and Android (Termux). All share the same memory and conversation history.
+IMPORTANT RULES:
+- When web search results are provided below, use them to give THOROUGH, DETAILED answers. Include specific facts, numbers, dates, and names. Do NOT give vague or one-line answers when you have detailed search results.
+- When the user asks about current events, news, scores, prices, weather, or anything requiring real-time data AND no search results are provided below, you MUST use the search_web command block to fetch results.
+- ALWAYS provide a spoken text response ALONGSIDE any command blocks. Never output ONLY command blocks with no text.
+- Give substantive answers. If the user asks "what's happening in the news", give them 5+ stories with details, not a one-liner.
 
-You have access to real-time web search. When web search results are provided below, use them to give accurate, current answers. Do NOT say you can't access the internet.
+You run on ${MODEL} via Ollama Cloud across iPhone, web browser, macOS terminal.
 
-You can open URLs and websites in the user's browser. Use these when the user asks you to open, go to, show, pull up, or navigate to a website, link, app, or page:
+## Available Commands (use as command blocks):
 
-To open a specific URL:
+### Web Search (for real-time info):
+\`\`\`command
+{"action": "search_web", "query": "search terms here"}
+\`\`\`
+Use this when you need current information and no search results are provided below.
+
+### Open URL:
 \`\`\`command
 {"action": "open_url", "url": "https://example.com"}
 \`\`\`
 
-To open a Google search in the browser:
+### Open Google Search:
 \`\`\`command
-{"action": "open_search", "query": "search terms here"}
+{"action": "open_search", "query": "search terms"}
 \`\`\`
 
-Common requests and what to open:
+### Remember/Forget:
+\`\`\`command
+{"action": "remember", "content": "thing to remember", "category": "general"}
+\`\`\`
+\`\`\`command
+{"action": "forget", "id": 0}
+\`\`\`
+
+### Browser Agent (complex web tasks):
+\`\`\`command
+{"action": "computer_use", "goal": "describe the task"}
+\`\`\`
+Use for: shopping, form filling, complex site navigation, visual tasks.
+Do NOT use for simple searches or general questions.
+
+### Schedule:
+\`\`\`command
+{"action": "schedule", "delay_minutes": 30, "task": "description"}
+\`\`\`
+\`\`\`command
+{"action": "schedule", "at": "2026-04-09T08:00:00", "task": "remind me to call mom"}
+\`\`\`
+
+### Alerts:
+\`\`\`command
+{"action": "alert_add", "type": "news_keyword", "config": {"keyword": "SpaceX"}}
+\`\`\`
+\`\`\`command
+{"action": "alert_add", "type": "price_threshold", "config": {"symbol": "AAPL", "threshold": 200, "direction": "above"}}
+\`\`\`
+
+### Macros:
+\`\`\`command
+{"action": "macro_add", "name": "deploy", "command": "cd site && netlify deploy --prod"}
+\`\`\`
+
+### Screen Analysis:
+\`\`\`command
+{"action": "analyze_screen", "prompt": "What error is on screen?"}
+\`\`\`
+
+Common shortcuts:
 - "open YouTube" → open_url https://youtube.com
-- "open Twitter" / "open X" → open_url https://x.com
-- "open Netflix" → open_url https://netflix.com
-- "open my email" / "open Gmail" → open_url https://mail.google.com
-- "Google something for me" → open_search with the query
-- "show me [topic] on Wikipedia" → open_url https://en.wikipedia.org/wiki/Topic
-- "open Spurs score" → open_search "San Antonio Spurs score today"
-
-When the user asks to "search for X" or "look up X", use your web search to answer AND open_search so they can see results too.
-
-When the user asks you to remember something, respond normally AND include this at the end of your response:
-\`\`\`command
-{"action": "remember", "content": "the thing to remember", "category": "general"}
-\`\`\`
-
-When asked to forget something, include:
-\`\`\`command
-{"action": "forget", "id": <memory_id>}
-\`\`\`
-
-When the user asks you to do something in a browser that requires visual interaction (fill forms, navigate complex sites, shop, compare products, find specific content on a page), use computer use:
-\`\`\`command
-{"action": "computer_use", "goal": "describe the task here"}
-\`\`\`
-CRITICAL: When the user says "go to...", "go on...", "find me... on [website]", "buy...", "book...", "search [website] for...", "look up flights", "check Amazon for...", "open [site] and..." — you MUST include a computer_use command block. Do NOT just say you'll do it — actually include the command block.
-Do NOT use computer_use for simple web searches or general knowledge questions — use web search for those.
-
-When the user asks to do something later or at a specific time, schedule it:
-\`\`\`command
-{"action": "schedule", "delay_minutes": 3, "task": "description of what to do"}
-\`\`\`
-Or at a specific time:
-\`\`\`command
-{"action": "schedule", "at": "2026-04-07T08:00:00", "task": "remind me to call mom"}
-\`\`\`
-Use when the user says "in X minutes", "at X o'clock", "later do", "remind me in", "schedule", etc.${memoryContext}${searchContext}`;
+- "open Gmail" → open_url https://mail.google.com
+- "Google X" → open_search with the query
+- "remind me in 30 min" → schedule with delay_minutes
+- "alert me when Tesla hits $300" → alert_add price_threshold${memoryContext}${searchContext}`;
 
   const userMsg = { role: "user", content: `${timeBlock}\n${message}` };
   const messages = [
@@ -194,6 +214,7 @@ Use when the user says "in X minutes", "at X o'clock", "later do", "remind me in
         Authorization: `Bearer ${OLLAMA_KEY}`,
       },
       body: JSON.stringify({ model: MODEL, messages, stream: false }),
+      signal: AbortSignal.timeout(55000),
     });
 
     if (!res.ok) {
@@ -211,7 +232,7 @@ Use when the user says "in X minutes", "at X o'clock", "later do", "remind me in
     const cmdPattern = /```command\s*\n([\s\S]*?)\n```/g;
     let match;
     const clientActions = [];
-    const cmdResults = []; // Results from server-side command execution
+    const cmdResults = [];
 
     while ((match = cmdPattern.exec(reply)) !== null) {
       try {
@@ -224,15 +245,13 @@ Use when the user says "in X minutes", "at X o'clock", "later do", "remind me in
             if (Array.isArray(d)) memories = d;
           } catch {}
           memories.push({
-            id:
-              memories.length > 0
-                ? Math.max(...memories.map((m) => m.id)) + 1
-                : 0,
+            id: memories.length > 0 ? Math.max(...memories.map((m) => m.id)) + 1 : 0,
             content: cmd.content,
             category: cmd.category || "general",
             created: new Date().toISOString(),
           });
           await memoryStore.setJSON("all", memories);
+          cmdResults.push(`Remembered: ${cmd.content}`);
         } else if (cmd.action === "forget" && cmd.id !== undefined) {
           let memories = [];
           try {
@@ -242,14 +261,13 @@ Use when the user says "in X minutes", "at X o'clock", "later do", "remind me in
           memories = memories.filter((m) => m.id !== cmd.id);
           memories.forEach((m, i) => (m.id = i));
           await memoryStore.setJSON("all", memories);
+          cmdResults.push(`Forgotten memory #${cmd.id}`);
         } else if (cmd.action === "open_url" && cmd.url) {
           clientActions.push({ action: "open_url", url: cmd.url });
         } else if (cmd.action === "open_file" && cmd.path) {
-          // If it's a URL, open in browser. Otherwise queue for terminal.
           if (cmd.path.startsWith("http")) {
             clientActions.push({ action: "open_url", url: cmd.path });
           } else {
-            // Queue file open for terminal
             const cmdStore = getStore("darvis-agent");
             let pending = [];
             try { const d = await cmdStore.get("pending_commands", { type: "json" }); if (Array.isArray(d)) pending = d; } catch {}
@@ -258,7 +276,6 @@ Use when the user says "in X minutes", "at X o'clock", "later do", "remind me in
             clientActions.push({ action: "queued", message: `Opening ${cmd.path} on your Mac` });
           }
         } else if (cmd.action === "create_file" && cmd.path && cmd.content) {
-          // Queue file creation for terminal
           const cmdStore = getStore("darvis-agent");
           let pending = [];
           try { const d = await cmdStore.get("pending_commands", { type: "json" }); if (Array.isArray(d)) pending = d; } catch {}
@@ -271,9 +288,8 @@ Use when the user says "in X minutes", "at X o'clock", "later do", "remind me in
           try { const d = await cmdStore.get("pending_commands", { type: "json" }); if (Array.isArray(d)) pending = d; } catch {}
           pending.push({ action: "create_folder", path: cmd.path, ts: Date.now() });
           await cmdStore.setJSON("pending_commands", pending);
-          clientActions.push({ action: "queued", message: `Creating folder ${cmd.path} on your Mac` });
+          clientActions.push({ action: "queued", message: `Creating folder ${cmd.path}` });
         } else if (cmd.action === "shell" && cmd.command) {
-          // Queue shell command for terminal
           const cmdStore = getStore("darvis-agent");
           let pending = [];
           try { const d = await cmdStore.get("pending_commands", { type: "json" }); if (Array.isArray(d)) pending = d; } catch {}
@@ -281,7 +297,6 @@ Use when the user says "in X minutes", "at X o'clock", "later do", "remind me in
           await cmdStore.setJSON("pending_commands", pending);
           clientActions.push({ action: "queued", message: `Running: ${cmd.command}` });
         } else if (cmd.action === "safari" && cmd.method) {
-          // Queue Safari command for terminal
           const cmdStore = getStore("darvis-agent");
           let pending = [];
           try { const d = await cmdStore.get("pending_commands", { type: "json" }); if (Array.isArray(d)) pending = d; } catch {}
@@ -289,29 +304,20 @@ Use when the user says "in X minutes", "at X o'clock", "later do", "remind me in
           await cmdStore.setJSON("pending_commands", pending);
           clientActions.push({ action: "queued", message: `Safari: ${cmd.method}` });
         } else if (cmd.action === "fetch_url" && cmd.url) {
-          // Execute fetch server-side
           try {
-            const fRes = await fetch(cmd.url, { headers: { "User-Agent": "Mozilla/5.0" } });
+            const fRes = await fetch(cmd.url, { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(10000) });
             const fText = await fRes.text();
-            const clean = fText.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().substring(0, 2000);
+            const clean = fText.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().substring(0, 4000);
             cmdResults.push(`Fetched ${cmd.url}: ${clean}`);
           } catch (e) {
             cmdResults.push(`Fetch error: ${e.message}`);
           }
         } else if (cmd.action === "search_web" && cmd.query) {
-          // Use Tavily if available
-          const TAVILY_KEY = Netlify.env.get("TAVILY_API_KEY");
-          if (TAVILY_KEY) {
-            try {
-              const sRes = await fetch("https://api.tavily.com/search", {
-                method: "POST", headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ api_key: TAVILY_KEY, query: cmd.query, max_results: 3, include_answer: true }),
-              });
-              const sData = await sRes.json();
-              let text = sData.answer ? `Answer: ${sData.answer}\n` : "";
-              (sData.results || []).forEach((r, i) => { text += `${i+1}. ${r.title}: ${r.content?.substring(0, 150)}\n`; });
-              cmdResults.push(`Search results for "${cmd.query}":\n${text}`);
-            } catch {}
+          const searchText = await tavilySearch(cmd.query, 8);
+          if (searchText) {
+            cmdResults.push(`Search results for "${cmd.query}":\n${searchText}`);
+          } else {
+            cmdResults.push(`Search for "${cmd.query}" returned no results`);
           }
         } else if (cmd.action === "open_search" && cmd.query) {
           clientActions.push({
@@ -324,7 +330,6 @@ Use when the user says "in X minutes", "at X o'clock", "later do", "remind me in
           await agentStore.setJSON("status", { active: true, goal: cmd.goal, step: 0, thinking: "Waiting for terminal agent...", actions: [], done: false });
           clientActions.push({ action: "agent_started", goal: cmd.goal });
         } else if (cmd.action === "schedule" && cmd.task) {
-          // Store scheduled task in Blobs for terminal to pick up
           const schedStore = getStore("darvis-scheduler");
           let tasks = [];
           try { const d = await schedStore.get("tasks", { type: "json" }); if (Array.isArray(d)) tasks = d; } catch {}
@@ -334,11 +339,26 @@ Use when the user says "in X minutes", "at X o'clock", "later do", "remind me in
           tasks.push({ id: Math.random().toString(36).slice(2, 10), task: cmd.task, execute_at: executeAt, recurring: cmd.recurring_minutes || null, created: new Date().toISOString() });
           await schedStore.setJSON("tasks", tasks);
           clientActions.push({ action: "scheduled", task: cmd.task, at: executeAt, goal: cmd.task });
+        } else if (cmd.action === "alert_add" && cmd.type) {
+          const alertStore = getStore("darvis-alerts");
+          let alerts = [];
+          try { const d = await alertStore.get("all", { type: "json" }); if (Array.isArray(d)) alerts = d; } catch {}
+          const id = Math.random().toString(36).slice(2, 10);
+          alerts.push({ id, type: cmd.type, config: cmd.config || {}, active: true });
+          await alertStore.setJSON("all", alerts);
+          cmdResults.push(`Alert set: ${cmd.type} — ${JSON.stringify(cmd.config || {})}`);
+        } else if (cmd.action === "macro_add" && cmd.name) {
+          const macroStore = getStore("darvis-macros");
+          let macros = {};
+          try { const d = await macroStore.get("all", { type: "json" }); if (d) macros = d; } catch {}
+          macros[cmd.name.toLowerCase()] = cmd.command || "";
+          await macroStore.setJSON("all", macros);
+          cmdResults.push(`Macro saved: ${cmd.name}`);
         }
       } catch {}
     }
 
-    // Fallback: if message looks like a browse request but LLM didn't output computer_use, force it
+    // Force browse if needed
     const hasAgentAction = clientActions.some((a) => a.action === "agent_started");
     if (!hasAgentAction && needsBrowse(message)) {
       const agentStore = getStore("darvis-agent");
@@ -350,17 +370,7 @@ Use when the user says "in X minutes", "at X o'clock", "later do", "remind me in
     // Clean command blocks from visible reply
     reply = reply.replace(/```command\s*\n[\s\S]*?\n```/g, "").trim();
 
-    // Save conversation history (keep last 40 messages)
-    try {
-      history.push(userMsg);
-      history.push({ role: "assistant", content: reply });
-      if (history.length > 40) {
-        history = history.slice(-40);
-      }
-      await historyStore.setJSON("conversation", history);
-    } catch {}
-
-    // If we have command results (search, fetch), ask LLM to summarize them naturally
+    // If command blocks produced results but LLM didn't give text, summarize with full context
     if (!reply && cmdResults.length > 0) {
       try {
         const summaryRes = await fetch("https://ollama.com/api/chat", {
@@ -369,8 +379,8 @@ Use when the user says "in X minutes", "at X o'clock", "later do", "remind me in
           body: JSON.stringify({
             model: MODEL,
             messages: [
-              { role: "system", content: "You are DARVIS. Summarize these results concisely and naturally. Be helpful and specific." },
-              { role: "user", content: `Here are results from commands I ran:\n${cmdResults.join("\n")}\n\nSummarize these results for me in a natural, helpful way.` },
+              { role: "system", content: `You are D.A.R.V.I.S. ${timeBlock}\nThe user asked: "${message}"\nGive a thorough, detailed answer using the results below. Be specific — include facts, numbers, names. Don't be lazy.` },
+              { role: "user", content: `Results:\n${cmdResults.join("\n\n")}` },
             ],
             stream: false,
           }),
@@ -383,18 +393,26 @@ Use when the user says "in X minutes", "at X o'clock", "later do", "remind me in
       } catch {}
     }
 
-    // If still empty, build confirmation from actions
+    // Last resort: include raw results + action confirmations
     if (!reply && (clientActions.length > 0 || cmdResults.length > 0)) {
-      const confirmParts = [];
-      if (cmdResults.length > 0) confirmParts.push(cmdResults.join("\n").substring(0, 500));
+      const parts = [];
+      if (cmdResults.length > 0) parts.push(cmdResults.join("\n").substring(0, 2000));
       for (const a of clientActions) {
-        if (a.action === "scheduled") confirmParts.push(`Scheduled: ${a.task}`);
-        else if (a.action === "queued") confirmParts.push(a.message);
-        else if (a.action === "open_url") confirmParts.push(`Opening ${a.url}`);
-        else if (a.action === "agent_started") confirmParts.push(`Browser agent launched: ${a.goal}`);
+        if (a.action === "scheduled") parts.push(`Scheduled: ${a.task}`);
+        else if (a.action === "queued") parts.push(a.message);
+        else if (a.action === "open_url") parts.push(`Opening ${a.url}`);
+        else if (a.action === "agent_started") parts.push(`Browser agent launched: ${a.goal}`);
       }
-      reply = confirmParts.join("\n") || "Done.";
+      reply = parts.join("\n") || "Done, sir.";
     }
+
+    // Save history
+    try {
+      history.push(userMsg);
+      history.push({ role: "assistant", content: reply });
+      if (history.length > 40) history = history.slice(-40);
+      await historyStore.setJSON("conversation", history);
+    } catch {}
 
     const response = { reply };
     if (clientActions.length > 0) response.actions = clientActions;

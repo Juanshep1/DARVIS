@@ -42,6 +42,9 @@ async function tavilySearch(query, maxResults = 8) {
 
 function needsBrowse(msg) {
   const lower = msg.toLowerCase();
+  // Don't trigger browse for file/folder/desktop operations
+  const fileKeywords = ["file", "folder", "document", "desktop", "create a", "write a", "save to", "make a", "text"];
+  if (fileKeywords.some((k) => lower.includes(k))) return false;
   const browseTriggers = [
     "go to ", "go on ", "open amazon", "open youtube", "open ebay",
     "open walmart", "open netflix", "open espn", "open reddit",

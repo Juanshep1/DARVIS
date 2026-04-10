@@ -14,9 +14,11 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.spectra.app
         DEVELOPMENT_TEAM: ""
         CODE_SIGN_STYLE: Automatic
+        PRODUCT_NAME: SPECTRA
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         SWIFT_VERSION: "5.9"
         GENERATE_INFOPLIST_FILE: "YES"
+        INFOPLIST_KEY_CFBundleDisplayName: SPECTRA
         INFOPLIST_KEY_NSMicrophoneUsageDescription: "SPECTRA needs microphone access for voice commands"
         INFOPLIST_KEY_NSCameraUsageDescription: "SPECTRA uses the camera for visual analysis"
         INFOPLIST_KEY_NSLocalNetworkUsageDescription: "SPECTRA connects to local AI servers on your network"

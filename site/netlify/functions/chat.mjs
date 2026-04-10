@@ -424,32 +424,42 @@ Common shortcuts:
     }
 
     // Clean command blocks from visible reply
-    reply = reply.replace(/```command\s*\n[\s\S]*?\n```/g, "").trim();
+    reply = reply.replace(/```command\s*\n?[\s\S]*?\n?```/g, "").trim();
 
-    // If command blocks produced results but LLM didn't give text, summarize with full context
-    if (!reply && cmdResults.length > 0) {
+    // If commands produced results, make a follow-up LLM call with the data
+    let followUp = null;
+    if (cmdResults.length > 0) {
       try {
-        const summaryRes = await fetch("https://ollama.com/api/chat", {
+        const followUpRes = await fetch("https://ollama.com/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${OLLAMA_KEY}` },
           body: JSON.stringify({
             model: MODEL,
             messages: [
-              { role: "system", content: `You are the user's personal AI assistant. NEVER say "Spectra" or your name. NEVER describe your personality. ${timeBlock}\nThe user asked: "${message}"\nGive a thorough, detailed answer using the results below. Be specific — include facts, numbers, names. Don't be lazy.` },
+              { role: "system", content: `You are the user's personal AI assistant. NEVER say "Spectra" or your name. NEVER describe your personality. Address the user as "sir". ${timeBlock}\nThe user asked: "${message}"\nYou already told them: "${reply || 'Looking into it'}"\nNow give the ACTUAL answer using the results below. Be thorough — include specific facts, numbers, names, dates. Do not repeat what you already said. Just deliver the information.` },
               { role: "user", content: `Results:\n${cmdResults.join("\n\n")}` },
             ],
             stream: false,
           }),
-          signal: AbortSignal.timeout(30000),
+          signal: AbortSignal.timeout(60000),
         });
-        if (summaryRes.ok) {
-          const sData = await summaryRes.json();
-          reply = (sData.message?.content || "").replace(/```command[\s\S]*?```/g, "").trim();
+        if (followUpRes.ok) {
+          const fData = await followUpRes.json();
+          const fText = (fData.message?.content || "").replace(/```command[\s\S]*?```/g, "").trim();
+          if (fText) {
+            if (!reply) {
+              // LLM gave no initial text, just use the follow-up as the reply
+              reply = fText;
+            } else {
+              // LLM gave initial text ("Looking that up...") — send follow-up as second message
+              followUp = fText;
+            }
+          }
         }
       } catch {}
     }
 
-    // Last resort: include raw results + action confirmations
+    // If still no reply, build from actions
     if (!reply && (clientActions.length > 0 || cmdResults.length > 0)) {
       const parts = [];
       if (cmdResults.length > 0) parts.push(cmdResults.join("\n").substring(0, 2000));
@@ -462,15 +472,18 @@ Common shortcuts:
       reply = parts.join("\n") || "Done, sir.";
     }
 
-    // Save history
+    if (!reply) reply = "Done, sir.";
+
+    // Save history (include follow-up as the substantive answer)
     try {
       history.push(userMsg);
-      history.push({ role: "assistant", content: reply });
+      history.push({ role: "assistant", content: followUp ? `${reply}\n\n${followUp}` : reply });
       if (history.length > 40) history = history.slice(-40);
       await historyStore.setJSON("conversation", history);
     } catch {}
 
     const response = { reply };
+    if (followUp) response.followUp = followUp;
     if (clientActions.length > 0) response.actions = clientActions;
     return Response.json(response);
   } catch (err) {

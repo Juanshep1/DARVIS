@@ -1132,8 +1132,8 @@ async function send() {
                     });
                     const classicData = await classicRes.json();
                     responseEl.textContent = classicData.reply || 'No results.';
-                    // Speak it via Gemini native voice
-                    if (classicData.reply) {
+                    // Speak initial reply via Gemini native voice
+                    if (classicData.reply && geminiWs && geminiWs.readyState === WebSocket.OPEN) {
                         geminiWs.send(JSON.stringify({
                             clientContent: {
                                 turns: [{ role: 'user', parts: [{ text: 'Say this exactly to the user, do not add anything: ' + classicData.reply }] }],
@@ -1147,7 +1147,20 @@ async function send() {
                             if (act.action === 'open_url' && act.url) window.open(act.url, '_blank');
                         });
                     }
-                    fetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: [{ role: 'user', content: text }, { role: 'assistant', content: classicData.reply }] }) }).catch(() => {});
+                    // If there's a follow-up, show and speak it after a delay
+                    if (classicData.followUp) {
+                        setTimeout(() => {
+                            responseEl.textContent = classicData.followUp;
+                            if (geminiWs && geminiWs.readyState === WebSocket.OPEN) {
+                                geminiWs.send(JSON.stringify({
+                                    clientContent: {
+                                        turns: [{ role: 'user', parts: [{ text: 'Say this exactly to the user, do not add anything: ' + classicData.followUp }] }],
+                                        turnComplete: true
+                                    }
+                                }));
+                            }
+                        }, 3000); // Wait for first message to be spoken
+                    }
                     return;
                 }
 
@@ -1315,32 +1328,48 @@ async function send() {
             pendingTab = null;
         }
 
-        // Classic TTS
-        try {
-            const ttsRes = await fetch('/api/tts', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text: data.reply }),
-            });
-            const contentType = ttsRes.headers.get('content-type') || '';
-            if (ttsRes.ok && contentType.includes('audio')) {
-                const audioBlob = await ttsRes.blob();
-                if (audioBlob.size > 100) {
-                    if (currentAudio && currentAudio._blobUrl) URL.revokeObjectURL(currentAudio._blobUrl);
-                    const audioUrl = URL.createObjectURL(audioBlob);
-                    persistentAudio.pause();
-                    persistentAudio.currentTime = 0;
-                    persistentAudio._blobUrl = audioUrl;
-                    persistentAudio.src = audioUrl;
-                    persistentAudio.onended = () => { orb.className = 'orb'; URL.revokeObjectURL(audioUrl); currentAudio = null; };
-                    persistentAudio.onerror = () => { orb.className = 'orb'; };
-                    currentAudio = persistentAudio;
-                    orb.className = 'orb speaking';
-                    await persistentAudio.play();
-                    return;
+        // Classic TTS — speak the reply, then follow-up if present
+        async function speakText(text) {
+            try {
+                const ttsRes = await fetch('/api/tts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text }),
+                });
+                const contentType = ttsRes.headers.get('content-type') || '';
+                if (ttsRes.ok && contentType.includes('audio')) {
+                    const audioBlob = await ttsRes.blob();
+                    if (audioBlob.size > 100) {
+                        if (currentAudio && currentAudio._blobUrl) URL.revokeObjectURL(currentAudio._blobUrl);
+                        const audioUrl = URL.createObjectURL(audioBlob);
+                        persistentAudio.pause();
+                        persistentAudio.currentTime = 0;
+                        persistentAudio._blobUrl = audioUrl;
+                        persistentAudio.src = audioUrl;
+                        orb.className = 'orb speaking';
+                        await new Promise((resolve) => {
+                            persistentAudio.onended = () => { URL.revokeObjectURL(audioUrl); currentAudio = null; resolve(); };
+                            persistentAudio.onerror = () => { resolve(); };
+                            currentAudio = persistentAudio;
+                            persistentAudio.play();
+                        });
+                        return true;
+                    }
                 }
-            }
-        } catch (ttsErr) { console.warn('TTS error:', ttsErr); }
+            } catch (ttsErr) { console.warn('TTS error:', ttsErr); }
+            return false;
+        }
+
+        // Speak initial reply
+        const spoke = await speakText(data.reply);
+
+        // If there's a follow-up (search results, etc.), show and speak it
+        if (data.followUp) {
+            responseEl.textContent = data.followUp;
+            orb.className = 'orb speaking';
+            await speakText(data.followUp);
+        }
+
         orb.className = 'orb';
     } catch (err) {
         responseEl.textContent = 'Connection error: ' + err.message;

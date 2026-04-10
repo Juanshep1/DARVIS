@@ -27,7 +27,9 @@ class ChatViewModel: ObservableObject {
     private var recognitionTask: SFSpeechRecognitionTask?
     private var speechEngine: AVAudioEngine?
     private var silenceTimer: Timer?
-    private let silenceDelay: TimeInterval = 4.0  // Longer silence = less false triggers
+    private let silenceDelay: TimeInterval = 5.0
+    private var lastTranscript = ""
+    private var stableCount = 0  // How many times the same transcript was seen
 
     // Cached regex
     private static let saveRegex = try? NSRegularExpression(pattern: "(?:remember|don'?t forget|save|note|memorize)\\s+(?:that\\s+)?(.+)", options: .caseInsensitive)
@@ -427,27 +429,48 @@ class ChatViewModel: ObservableObject {
         engine.prepare()
         do { try engine.start() } catch { statusMessage = "Mic error"; isRecording = false; orbState = .idle; return }
 
+        lastTranscript = ""
+        stableCount = 0
+
         recognitionTask = speechRecognizer?.recognitionTask(with: request) { [weak self] result, error in
-            guard let self = self else { return }
-            // Ignore results if we're not actively recording (prevents stale callbacks)
-            guard self.isRecording else { return }
+            guard let self = self, self.isRecording else { return }
 
             if let result = result {
-                let transcript = result.bestTranscription.formattedString
-                // Ignore very short noise artifacts
-                guard transcript.count >= 3 else { return }
+                let transcript = result.bestTranscription.formattedString.trimmingCharacters(in: .whitespacesAndNewlines)
+
+                // Ignore noise: must be 4+ chars and 2+ words
+                let words = transcript.split(separator: " ")
+                guard transcript.count >= 4 && words.count >= 2 else { return }
 
                 DispatchQueue.main.async {
                     guard self.isRecording else { return }
                     self.inputText = transcript
+
+                    // Track if transcript has stabilized (same text seen multiple times = user stopped)
+                    if transcript == self.lastTranscript {
+                        self.stableCount += 1
+                    } else {
+                        self.lastTranscript = transcript
+                        self.stableCount = 0
+                    }
+
+                    // Reset silence timer on every new result
                     self.silenceTimer?.invalidate()
                     self.silenceTimer = Timer.scheduledTimer(withTimeInterval: self.silenceDelay, repeats: false) { _ in
                         DispatchQueue.main.async {
                             guard self.isRecording else { return }
-                            self.stopVoice()
+                            // Only auto-send if transcript is stable (not still changing)
+                            let text = self.inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+                            let finalWords = text.split(separator: " ").count
+                            if finalWords >= 2 && self.stableCount >= 1 {
+                                self.stopVoice()
+                            }
+                            // Otherwise just keep listening
                         }
                     }
                 }
+
+                // Apple says user finished speaking
                 if result.isFinal {
                     DispatchQueue.main.async {
                         guard self.isRecording else { return }
@@ -458,8 +481,7 @@ class ChatViewModel: ObservableObject {
             }
             if error != nil {
                 DispatchQueue.main.async {
-                    guard self.isRecording else { return }
-                    self.stopVoice()
+                    if self.isRecording { self.stopVoice() }
                 }
             }
         }

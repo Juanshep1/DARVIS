@@ -435,20 +435,38 @@ class ChatViewModel: ObservableObject {
 
         recognitionTask = speechRecognizer?.recognitionTask(with: request) { [weak self] result, error in
             guard let self = self else { return }
+            // Ignore results if we're not actively recording (prevents stale callbacks)
+            guard self.isRecording else { return }
+
             if let result = result {
+                let transcript = result.bestTranscription.formattedString
+                // Ignore very short noise artifacts
+                guard transcript.count >= 3 else { return }
+
                 DispatchQueue.main.async {
-                    self.inputText = result.bestTranscription.formattedString
+                    guard self.isRecording else { return }
+                    self.inputText = transcript
                     self.silenceTimer?.invalidate()
                     self.silenceTimer = Timer.scheduledTimer(withTimeInterval: self.silenceDelay, repeats: false) { _ in
-                        DispatchQueue.main.async { if self.isRecording { self.stopVoice() } }
+                        DispatchQueue.main.async {
+                            guard self.isRecording else { return }
+                            self.stopVoice()
+                        }
                     }
                 }
                 if result.isFinal {
-                    DispatchQueue.main.async { self.silenceTimer?.invalidate(); if self.isRecording { self.stopVoice() } }
+                    DispatchQueue.main.async {
+                        guard self.isRecording else { return }
+                        self.silenceTimer?.invalidate()
+                        self.stopVoice()
+                    }
                 }
             }
             if error != nil {
-                DispatchQueue.main.async { if self.isRecording { self.stopVoice() } }
+                DispatchQueue.main.async {
+                    guard self.isRecording else { return }
+                    self.stopVoice()
+                }
             }
         }
     }
@@ -544,18 +562,21 @@ class ChatViewModel: ObservableObject {
     func playTTS(_ text: String) async {
         guard !text.isEmpty else { orbState = .idle; return }
 
-        // Stop mic during TTS to prevent feedback loop
+        // Always stop mic before TTS — prevents feedback loop
         let wasRecording = isRecording
-        if wasRecording {
+        if wasRecording || speechEngine != nil {
+            isRecording = false
             stopSpeechRecognition()
         }
+        silenceTimer?.invalidate()
+        silenceTimer = nil
 
         orbState = .speaking
         do {
             let data = try await APIClient.shared.fetchTTS(text: text)
             guard data.count > 100 else { orbState = .idle; return }
 
-            // Switch audio session to playback (stops mic picking up speaker)
+            // Playback mode (no mic input)
             let session = AVAudioSession.sharedInstance()
             try? session.setCategory(.playback, mode: .default)
             try? session.setActive(true)
@@ -565,17 +586,12 @@ class ChatViewModel: ObservableObject {
                 try await Task.sleep(nanoseconds: 200_000_000)
                 if !audioService.isPlayingMP3 { break }
             }
-
-            // Restore record mode if mic was on
-            if wasRecording {
-                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s buffer after TTS
-                try? session.setCategory(.record, mode: .measurement, options: .duckOthers)
-                try? session.setActive(true)
-                startSpeechRecognition()
-                isRecording = true
-            }
         } catch {}
-        if orbState == .speaking { orbState = .idle }
+
+        // After TTS: go to idle. Do NOT auto-restart mic.
+        // User must tap mic button again to start listening.
+        orbState = .idle
+        inputText = ""
     }
 
     // MARK: - Fix Yourself

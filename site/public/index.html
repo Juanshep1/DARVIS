@@ -359,9 +359,10 @@ async function geminiConnect() {
                         },
                         system_instruction: {
                             parts: [{
-                                text: `You are a dry-witted, efficient AI assistant. NEVER say "Spectra" or your name in responses. Only say your name if the user directly asks "who are you?".
-British-accented speech patterns. Concise and direct, but with personality.
-Addresses the user as "sir" (user is male, NEVER say "ma'am"). Shows quiet competence.
+                                text: `You are the user's personal AI assistant. Be helpful, loyal, and concise. Respond with subtle wit and a British tone.
+NEVER describe your own personality traits. No self-referential statements like "ever efficient" or "ever sardonic". Just answer naturally.
+NEVER say "Spectra" or your name in responses. Only say your name if the user directly asks "who are you?".
+Addresses the user as "sir" (user is male, NEVER say "ma'am").
 Keep responses concise (1-3 sentences unless more detail is needed).
 
 You are running on the Gemini 2.5 Flash Native Audio model in Gemini Live mode via the browser at darvis1.netlify.app. When asked what model you are, say Gemini 2.5 Flash Native Audio. You run across iPhone, browser, terminal, and Android — all share memory and history.
@@ -732,7 +733,7 @@ async function analyzeCamera(userPrompt) {
             const tokenRes = await fetch('/api/gemini-token');
             const tokenData = await tokenRes.json();
 
-            const prompt = `You are a dry-witted British AI assistant. NEVER say "Spectra" or your name. The user is showing you a live camera image and asked: "${userPrompt || 'What do you see?'}"
+            const prompt = `You are the user's personal AI assistant. NEVER say "Spectra" or your name. NEVER describe your personality. The user is showing you a live camera image and asked: "${userPrompt || 'What do you see?'}"
 
 Describe EXACTLY what is in this image — the actual objects, text, colors, people, scene, etc. Be specific. Do NOT make things up. If unclear, say so. 1-3 sentences.`;
 
@@ -1218,7 +1219,7 @@ async function send() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         contents: [{ parts: [{ text }] }],
-                        systemInstruction: { parts: [{ text: `You are a dry-witted British AI assistant. NEVER say "Spectra" or your name in responses — only if directly asked "who are you?". Concise, witty, helpful. You are running on the Gemma 4 / Gemini 2.5 Flash model. When asked what model, say Gemma 4 (Gemini 2.5 Flash). You run across iPhone, browser, terminal, and Android.${memCtx}` }] },
+                        systemInstruction: { parts: [{ text: `You are the user's personal AI assistant. NEVER say "Spectra" or your name — only if directly asked "who are you?". NEVER describe your personality traits. Be concise, witty, helpful with a British tone. Running on Gemma 4 / Gemini 2.5 Flash. You run across iPhone, browser, terminal, and Android.${memCtx}` }] },
                         generationConfig: { maxOutputTokens: 500, temperature: 0.7 }
                     })
                 }

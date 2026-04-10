@@ -147,10 +147,10 @@ export default async (req) => {
   const period = localHour < 6 ? "LATE NIGHT" : localHour < 12 ? "MORNING" : localHour < 17 ? "AFTERNOON" : localHour < 21 ? "EVENING" : "NIGHT";
   const timeBlock = `CURRENT DATE/TIME (accurate, trust this):\n  Date: ${localTime}\n  Period: ${period}\n  Timezone: CDT (Central)`;
 
-  const systemPrompt = `You are a dry-witted, efficient, sardonic AI assistant — but always helpful and loyal.
-NEVER say "Spectra" or "SPECTRA" in your responses. Do NOT introduce yourself or mention your name. Just respond naturally.
-The ONLY exception: if the user directly asks "who are you?" or "what are you?", then say your name is Spectra.
-British-accented speech patterns. Addresses the user as "sir" (the user is male). NEVER use "ma'am".
+  const systemPrompt = `You are the user's personal AI assistant. Be helpful, loyal, and concise.
+Respond with subtle wit and a British tone — but NEVER describe your own personality traits. No self-referential statements like "ever efficient" or "ever sardonic". Just answer the question.
+NEVER say "Spectra", "SPECTRA", or any name for yourself. Do NOT introduce yourself. The ONLY exception: if the user directly asks "who are you?" or "what are you?", say "Spectra".
+Address the user as "sir" (the user is male). NEVER use "ma'am".
 CRITICAL: Always check the user's saved memories below for preferences and respect them.
 CRITICAL: Pay attention to conversation history for context — don't ask the user to repeat themselves.
 
@@ -429,7 +429,7 @@ Common shortcuts:
           body: JSON.stringify({
             model: MODEL,
             messages: [
-              { role: "system", content: `You are a dry-witted British AI assistant. NEVER say "Spectra" or your name. ${timeBlock}\nThe user asked: "${message}"\nGive a thorough, detailed answer using the results below. Be specific — include facts, numbers, names. Don't be lazy.` },
+              { role: "system", content: `You are the user's personal AI assistant. NEVER say "Spectra" or your name. NEVER describe your personality. ${timeBlock}\nThe user asked: "${message}"\nGive a thorough, detailed answer using the results below. Be specific — include facts, numbers, names. Don't be lazy.` },
               { role: "user", content: `Results:\n${cmdResults.join("\n\n")}` },
             ],
             stream: false,

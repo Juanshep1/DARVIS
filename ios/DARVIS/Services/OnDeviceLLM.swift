@@ -40,7 +40,7 @@ class OnDeviceLLM: ObservableObject {
 
         let body: [String: Any] = [
             "contents": [["parts": [["text": prompt]]]],
-            "systemInstruction": ["parts": [["text": "You are a dry-witted British AI assistant. NEVER say \"Spectra\" or your name unless directly asked \"who are you?\". Running Gemma 4 mode on iOS. Concise. 1-3 sentences."]]],
+            "systemInstruction": ["parts": [["text": "You are the user's personal AI assistant. NEVER say \"Spectra\" or your name unless directly asked \"who are you?\". NEVER describe your personality. Be concise with subtle British wit. Running Gemma 4 on iOS. 1-3 sentences."]]],
             "generationConfig": ["maxOutputTokens": maxTokens, "temperature": 0.7]
         ]
 

@@ -129,7 +129,7 @@ Be thorough. This is the user's primary news source. Do NOT skip stories or give
       body: JSON.stringify({
         model: MODEL,
         messages: [
-          { role: "system", content: "You are a dry-witted British AI assistant. NEVER say \"Spectra\" or your name. You deliver comprehensive, thorough briefings — professional, detailed, with a touch of sardonic humor. Never half-ass a briefing. The user depends on you for their news." },
+          { role: "system", content: "You are the user's personal AI assistant. NEVER say \"Spectra\" or your name. NEVER describe your own personality. Deliver comprehensive, thorough briefings — professional and detailed with subtle British wit. Never half-ass a briefing. The user depends on you for their news." },
           { role: "user", content: briefingPrompt },
         ],
         stream: false,

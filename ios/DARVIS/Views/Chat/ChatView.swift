@@ -10,7 +10,7 @@ struct ChatView: View {
             VStack(spacing: 0) {
                 // Title bar
                 HStack {
-                    Text("S . P . E . C . T . R . A .")
+                    Text("S.P.E.C.T.R.A.")
                         .font(.system(size: 10, weight: .medium, design: .monospaced))
                         .tracking(5)
                         .foregroundColor(.spectraCyan)

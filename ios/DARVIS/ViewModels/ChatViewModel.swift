@@ -151,7 +151,10 @@ class ChatViewModel: ObservableObject {
     private func setupGeminiCallbacks() {
         geminiLive.onAudioChunk = { [weak self] data in
             self?.audioService.playPCM(data)
-            Task { @MainActor in self?.orbState = .speaking }
+            // Only update orbState once (not on every chunk)
+            Task { @MainActor in
+                if self?.orbState != .speaking { self?.orbState = .speaking }
+            }
         }
         geminiLive.onTurnComplete = { [weak self] in
             Task { @MainActor in
@@ -159,6 +162,7 @@ class ChatViewModel: ObservableObject {
                 self.orbState = self.isRecording ? .listening : .idle
                 if !self.geminiLive.responseText.isEmpty {
                     self.responseText = self.geminiLive.responseText
+                    self.messages.append(ChatMessage(role: "assistant", content: self.geminiLive.responseText))
                 }
             }
         }
@@ -246,15 +250,32 @@ class ChatViewModel: ObservableObject {
             }
 
             if audioMode == "gemini" {
-                if !geminiLive.isConnected { _ = await geminiLive.connect() }
+                if !geminiLive.isConnected {
+                    statusMessage = "Connecting to Gemini..."
+                    let connected = await geminiLive.connect()
+                    if !connected {
+                        audioMode = "classic"
+                        statusMessage = "Gemini unavailable — using Classic"
+                        // Fall through to classic mode below
+                    }
+                }
                 if geminiLive.isConnected {
                     geminiLive.responseText = ""
                     geminiLive.sendText(text)
-                    try? await APIClient.shared.appendHistory(messages: [ChatMessage(role: "user", content: text)])
+                    // Save history in background (non-blocking)
+                    Task.detached {
+                        try? await APIClient.shared.appendHistory(messages: [ChatMessage(role: "user", content: text)])
+                    }
+                    // Set timeout — if no response in 30s, reset state
+                    Task {
+                        try? await Task.sleep(nanoseconds: 30_000_000_000)
+                        if self.orbState == .thinking {
+                            self.orbState = .idle
+                            self.responseText = "Gemini didn't respond. Try again."
+                        }
+                    }
                     return
                 }
-                audioMode = "classic"
-                statusMessage = "Gemini unavailable — using Classic"
             }
 
             do {

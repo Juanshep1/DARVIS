@@ -44,6 +44,10 @@ class SettingsViewModel: ObservableObject {
     func setVoice(_ voiceId: String) async {
         settings.voice_id = voiceId
         do { try await APIClient.shared.updateSettings(settings) } catch {}
+        // If custom ID not in voice list, add it
+        if !voices.contains(where: { $0.id == voiceId }) {
+            voices.append(VoiceOption(id: voiceId, name: "Custom (\(String(voiceId.prefix(8)))...)", category: "custom"))
+        }
     }
 
     func setAudioMode(_ mode: String) async {

@@ -909,8 +909,11 @@ function captureFrame() {
 // CLASSIC MODE — Web Speech API + Ollama + ElevenLabs
 // ══════════════════════════════════════════════════════════════════════════════
 
-if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+function createRecognition() {
+    if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) return;
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    // Stop old instance if it exists
+    if (recognition) { try { recognition.abort(); } catch {} }
     recognition = new SR();
     recognition.continuous = true;
     recognition.interimResults = true;
@@ -932,20 +935,18 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
     };
     recognition.onend = () => {
         clearTimeout(silenceTimer);
+        // If page is hidden (phone locked), don't change state — recovery handler will deal with it
+        if (document.visibilityState === 'hidden') return;
         const hadText = inputEl.value.trim().length > 0;
         if (audioMode === 'gemini' && cameraActive) {
-            // In Gemini+camera mode, don't stop recording — restart recognition
-            // and route the transcribed text through send()
             if (hadText) {
-                send(); // send() will detect camera requests and route accordingly
-                // Restart recognition for continuous listening
+                send();
                 setTimeout(() => {
                     if (isRecording && audioMode === 'gemini' && cameraActive) {
                         try { recognition.start(); } catch {}
                     }
                 }, 500);
             } else {
-                // No text — restart recognition silently
                 if (isRecording) {
                     try { recognition.start(); } catch {}
                 }
@@ -961,11 +962,14 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
     recognition.onerror = (e) => {
         clearTimeout(silenceTimer);
         if (e.error === 'no-speech') return;
+        // If page is hidden, don't change state
+        if (document.visibilityState === 'hidden') return;
         isRecording = false;
         micBtn.classList.remove('recording');
         orb.className = 'orb';
     };
 }
+createRecognition();
 
 // ══════════════════════════════════════════════════════════════════════════════
 // MIC TOGGLE (routes to correct mode)
@@ -1939,40 +1943,57 @@ function showAlertToast(message) {
 // PHONE LOCK / BACKGROUND RECOVERY
 // When the phone locks or Safari goes to background, the mic stream dies,
 // AudioContext suspends, WebSocket disconnects, and SpeechRecognition stops.
-// This handler restores everything when the user comes back.
+// The onend/onerror callbacks fire and set isRecording=false BEFORE we come back.
+// So we track the "was active" state separately on hide, and restore on visible.
 // ══════════════════════════════════════════════════════════════════════════════
 
-document.addEventListener('visibilitychange', async () => {
-    if (document.visibilityState !== 'visible') return;
-    console.log('Page resumed — checking mic/audio state');
+let wasActiveBeforeHide = false;
+let activeAudioModeBeforeHide = null;
 
-    // Resume suspended AudioContext
+document.addEventListener('visibilitychange', async () => {
+    if (document.visibilityState === 'hidden') {
+        // Page going away — snapshot the current state
+        wasActiveBeforeHide = isRecording || (audioMode === 'gemini' && geminiSessionActive);
+        activeAudioModeBeforeHide = audioMode;
+        return;
+    }
+
+    // Page is visible again
+    console.log('Page resumed — wasActive:', wasActiveBeforeHide, 'mode:', activeAudioModeBeforeHide);
+
+    // Always try to resume AudioContext
     if (geminiAudioCtx && geminiAudioCtx.state === 'suspended') {
         try { await geminiAudioCtx.resume(); } catch {}
     }
 
-    if (!isRecording) return; // User wasn't recording, nothing to restore
-
-    if (audioMode === 'gemini') {
-        // Gemini mode: WebSocket and mic likely dead after phone lock
+    // Always recover dead Gemini sessions if we were in Gemini mode
+    if (activeAudioModeBeforeHide === 'gemini' && wasActiveBeforeHide) {
         const wsAlive = geminiWs && geminiWs.readyState === WebSocket.OPEN;
         const micAlive = geminiMicStream && geminiMicStream.getTracks().some(t => t.readyState === 'live');
 
         if (!wsAlive || !micAlive) {
-            console.log('Gemini session dead after lock — reconnecting');
+            console.log('Gemini session dead after lock — full reconnect');
             statusBar.textContent = 'RECONNECTING...';
             orb.className = 'orb thinking';
 
-            // Clean up dead resources
+            // Tear down everything
             stopGeminiMic();
             stopGeminiPlayback();
             if (geminiWs) { try { geminiWs.close(); } catch {} geminiWs = null; }
             geminiSessionActive = false;
+            isRecording = false;
+
+            // Small delay to let Safari fully wake up
+            await new Promise(r => setTimeout(r, 500));
 
             try {
                 const ok = await geminiConnect();
                 if (ok) {
+                    isRecording = true;
+                    micBtn.classList.add('recording');
                     if (cameraActive && recognition) {
+                        // Recreate recognition in case it's dead
+                        createRecognition();
                         try { recognition.start(); } catch {}
                         statusBar.textContent = 'GEMINI LIVE + CAMERA — SPEAK NATURALLY';
                     } else {
@@ -1984,48 +2005,53 @@ document.addEventListener('visibilitychange', async () => {
                     isRecording = false;
                     micBtn.classList.remove('recording');
                     orb.className = 'orb';
-                    statusBar.textContent = 'GEMINI DISCONNECTED — TAP MIC';
-                    responseEl.textContent = 'Session lost. Tap the mic to reconnect.';
+                    statusBar.textContent = 'SESSION LOST — TAP MIC';
                 }
             } catch (err) {
                 console.warn('Gemini reconnect failed:', err);
                 isRecording = false;
                 micBtn.classList.remove('recording');
                 orb.className = 'orb';
-                statusBar.textContent = 'GEMINI DISCONNECTED — TAP MIC';
-                responseEl.textContent = 'Session lost. Tap the mic to reconnect.';
+                statusBar.textContent = 'SESSION LOST — TAP MIC';
             }
         }
-    } else {
-        // Classic mode: SpeechRecognition silently dies when phone locks
-        if (recognition) {
-            try {
-                // Try restarting — if it was already stopped, start() works.
-                // If it's in a bad state, stop() first then start().
-                recognition.stop();
-            } catch {}
-            setTimeout(() => {
-                if (isRecording) {
-                    try {
-                        recognition.start();
-                        orb.className = 'orb listening';
-                    } catch (err) {
-                        console.warn('Recognition restart failed:', err);
-                        isRecording = false;
-                        micBtn.classList.remove('recording');
-                        orb.className = 'orb';
-                        responseEl.textContent = 'Mic lost. Tap to restart.';
-                    }
-                }
-            }, 300);
-        }
+        wasActiveBeforeHide = false;
+        return;
     }
+
+    // Classic mode recovery
+    if (wasActiveBeforeHide && activeAudioModeBeforeHide === 'classic') {
+        console.log('Classic mode — restarting speech recognition');
+        // Recreate recognition fresh — the old one is likely dead on mobile Safari
+        createRecognition();
+        if (recognition) {
+            // Small delay for Safari to re-enable mic
+            await new Promise(r => setTimeout(r, 500));
+            try {
+                isRecording = true;
+                micBtn.classList.add('recording');
+                inputEl.value = '';
+                recognition.start();
+                orb.className = 'orb listening';
+            } catch (err) {
+                console.warn('Recognition restart failed:', err);
+                isRecording = false;
+                micBtn.classList.remove('recording');
+                orb.className = 'orb';
+            }
+        }
+        wasActiveBeforeHide = false;
+        return;
+    }
+
+    wasActiveBeforeHide = false;
 });
 
 // Also handle pageshow (mobile Safari fires this on back/forward cache restore)
 window.addEventListener('pageshow', (e) => {
-    if (e.persisted && isRecording) {
-        // Page was restored from bfcache — trigger the same recovery
+    if (e.persisted) {
+        wasActiveBeforeHide = true;
+        activeAudioModeBeforeHide = audioMode;
         document.dispatchEvent(new Event('visibilitychange'));
     }
 });

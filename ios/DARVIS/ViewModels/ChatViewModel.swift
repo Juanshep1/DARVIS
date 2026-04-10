@@ -241,9 +241,18 @@ class ChatViewModel: ObservableObject {
 
             do {
                 let response = try await APIClient.shared.sendChat(message: text)
-                responseText = response.reply
-                messages.append(ChatMessage(role: "assistant", content: response.reply))
+                let reply = response.reply
 
+                if reply.isEmpty {
+                    responseText = "No response received."
+                    orbState = .idle
+                    return
+                }
+
+                responseText = reply
+                messages.append(ChatMessage(role: "assistant", content: reply))
+
+                // Handle actions
                 if let actions = response.actions {
                     for action in actions {
                         if action.action == "open_url", let urlStr = action.url {
@@ -274,13 +283,21 @@ class ChatViewModel: ObservableObject {
                     }
                 }
 
-                try? await APIClient.shared.appendHistory(messages: [
-                    ChatMessage(role: "user", content: text),
-                    ChatMessage(role: "assistant", content: response.reply),
-                ])
-                await playTTS(response.reply)
+                // Save history in background (don't block response)
+                Task.detached {
+                    try? await APIClient.shared.appendHistory(messages: [
+                        ChatMessage(role: "user", content: text),
+                        ChatMessage(role: "assistant", content: reply),
+                    ])
+                }
+
+                // Play TTS (non-blocking — set idle after)
+                await playTTS(reply)
+            } catch let error as URLError where error.code == .timedOut {
+                responseText = "Request timed out, sir. Try again."
+                orbState = .idle
             } catch {
-                responseText = "Connection error, sir."
+                responseText = "Connection error, sir. (\(error.localizedDescription))"
                 orbState = .idle
             }
         }
@@ -446,11 +463,17 @@ class ChatViewModel: ObservableObject {
     // MARK: - TTS
 
     func playTTS(_ text: String) async {
+        guard !text.isEmpty else { orbState = .idle; return }
         orbState = .speaking
         do {
             let data = try await APIClient.shared.fetchTTS(text: text)
+            guard data.count > 100 else { orbState = .idle; return }
             audioService.playMP3(data)
-            while audioService.isPlayingMP3 { try await Task.sleep(nanoseconds: 200_000_000) }
+            // Poll with timeout (max 30s to avoid infinite hang)
+            for _ in 0..<150 {
+                try await Task.sleep(nanoseconds: 200_000_000)
+                if !audioService.isPlayingMP3 { break }
+            }
         } catch {}
         if orbState == .speaking { orbState = .idle }
     }

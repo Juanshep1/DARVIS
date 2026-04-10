@@ -27,7 +27,7 @@ class ChatViewModel: ObservableObject {
     private var recognitionTask: SFSpeechRecognitionTask?
     private var speechEngine: AVAudioEngine?
     private var silenceTimer: Timer?
-    private let silenceDelay: TimeInterval = 2.5
+    private let silenceDelay: TimeInterval = 4.0  // Longer silence = less false triggers
 
     // Cached regex
     private static let saveRegex = try? NSRegularExpression(pattern: "(?:remember|don'?t forget|save|note|memorize)\\s+(?:that\\s+)?(.+)", options: .caseInsensitive)
@@ -385,7 +385,14 @@ class ChatViewModel: ObservableObject {
         } else {
             stopSpeechRecognition()
             let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !text.isEmpty { send(); return }
+            // Only send if we have a real sentence (3+ words, not noise)
+            let wordCount = text.split(separator: " ").count
+            if wordCount >= 2 && text.count >= 5 {
+                send()
+                return
+            } else {
+                inputText = ""  // Clear garbage
+            }
         }
         orbState = .idle
     }
@@ -536,15 +543,36 @@ class ChatViewModel: ObservableObject {
 
     func playTTS(_ text: String) async {
         guard !text.isEmpty else { orbState = .idle; return }
+
+        // Stop mic during TTS to prevent feedback loop
+        let wasRecording = isRecording
+        if wasRecording {
+            stopSpeechRecognition()
+        }
+
         orbState = .speaking
         do {
             let data = try await APIClient.shared.fetchTTS(text: text)
             guard data.count > 100 else { orbState = .idle; return }
+
+            // Switch audio session to playback (stops mic picking up speaker)
+            let session = AVAudioSession.sharedInstance()
+            try? session.setCategory(.playback, mode: .default)
+            try? session.setActive(true)
+
             audioService.playMP3(data)
-            // Poll with timeout (max 30s to avoid infinite hang)
             for _ in 0..<150 {
                 try await Task.sleep(nanoseconds: 200_000_000)
                 if !audioService.isPlayingMP3 { break }
+            }
+
+            // Restore record mode if mic was on
+            if wasRecording {
+                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s buffer after TTS
+                try? session.setCategory(.record, mode: .measurement, options: .duckOthers)
+                try? session.setActive(true)
+                startSpeechRecognition()
+                isRecording = true
             }
         } catch {}
         if orbState == .speaking { orbState = .idle }

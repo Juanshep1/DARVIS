@@ -1085,9 +1085,8 @@ async function send() {
         return;
     }
 
-    // Gemini text mode — send via WebSocket
+    // Gemini text mode — send via WebSocket (with Tavily search for real-time info)
     if (audioMode === 'gemini') {
-        // If camera is active and user is asking about what they see, use camera vision
         if (cameraActive && looksLikeCameraRequest(text)) {
             await analyzeCamera(text);
             return;
@@ -1096,9 +1095,58 @@ async function send() {
         orb.className = 'orb thinking';
         responseEl.textContent = '';
         try {
+            // Pre-fetch search results for real-time queries
+            let searchCtx = '';
+            if (needsSearchLocal(text)) {
+                try {
+                    const sRes = await fetch('/api/chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ message: '__SEARCH_ONLY__:' + text }),
+                    });
+                    // Actually just use the classic endpoint for search queries in Gemini mode
+                } catch {}
+                // Better approach: fetch Tavily directly via a lightweight endpoint
+                try {
+                    const searchRes = await fetch('/api/situation', { signal: AbortSignal.timeout(5000) });
+                    // Use situation data as context if relevant
+                } catch {}
+            }
+
             const ok = await geminiConnect();
             if (ok && geminiWs && geminiWs.readyState === WebSocket.OPEN) {
-                // Send the user's text turn
+                // If query needs real-time data, route through classic API instead
+                if (needsSearchLocal(text)) {
+                    // Use classic mode for this query (has Tavily search)
+                    responseEl.textContent = 'Searching...';
+                    const classicRes = await fetch('/api/chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ message: text }),
+                        signal: AbortSignal.timeout(90000),
+                    });
+                    const classicData = await classicRes.json();
+                    responseEl.textContent = classicData.reply || 'No results.';
+                    // Speak it via Gemini native voice
+                    if (classicData.reply) {
+                        geminiWs.send(JSON.stringify({
+                            clientContent: {
+                                turns: [{ role: 'user', parts: [{ text: 'Say this exactly to the user, do not add anything: ' + classicData.reply }] }],
+                                turnComplete: true
+                            }
+                        }));
+                    }
+                    // Handle actions
+                    if (classicData.actions) {
+                        classicData.actions.forEach(act => {
+                            if (act.action === 'open_url' && act.url) window.open(act.url, '_blank');
+                        });
+                    }
+                    fetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: [{ role: 'user', content: text }, { role: 'assistant', content: classicData.reply }] }) }).catch(() => {});
+                    return;
+                }
+
+                // Regular Gemini conversation (no search needed)
                 geminiWs.send(JSON.stringify({
                     clientContent: {
                         turns: [{ role: 'user', parts: [{ text: text }] }],
@@ -1129,13 +1177,34 @@ async function send() {
     if (audioMode === 'gemma') {
         if (cameraActive && looksLikeCameraRequest(text)) { await analyzeCamera(text); return; }
 
+        // Route search queries through classic API (has Tavily)
+        if (needsSearchLocal(text)) {
+            orb.className = 'orb thinking';
+            responseEl.textContent = 'Searching...';
+            try {
+                const res = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: text }),
+                    signal: AbortSignal.timeout(90000),
+                });
+                const data = await res.json();
+                responseEl.textContent = data.reply || 'No results.';
+                if (data.actions) data.actions.forEach(a => { if (a.action === 'open_url' && a.url) window.open(a.url, '_blank'); });
+                orb.className = 'orb';
+            } catch (err) {
+                responseEl.textContent = 'Search error: ' + err.message;
+                orb.className = 'orb';
+            }
+            return;
+        }
+
         orb.className = 'orb thinking';
         responseEl.textContent = '';
         try {
             const tokenRes = await fetch('/api/gemini-token');
             const tokenData = await tokenRes.json();
 
-            // Fetch memories for context
             let memCtx = '';
             try {
                 const memRes = await fetch('/api/memory');
@@ -1720,6 +1789,17 @@ async function fixYourself() {
 // AMBIENT MODE
 // ══════════════════════════════════════════════════════════════════════════════
 let ambientMode = false;
+
+// Client-side search detection (mirrors server needsSearch)
+function needsSearchLocal(msg) {
+    const lower = msg.toLowerCase();
+    const triggers = ['search','look up','google','find out','latest','today','tonight',
+        'yesterday','this week','score','scores','standings','weather','forecast','news',
+        'price','stock','who won','who lost','how much','how many','when is','where is',
+        'recent','update','results','live','current','tell me about','what happened',
+        'details about','info on','what is the','what\'s the','catch me up'];
+    return triggers.some(t => lower.includes(t));
+}
 
 function toggleAmbient() {
     ambientMode = !ambientMode;

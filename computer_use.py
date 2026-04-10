@@ -1,5 +1,5 @@
 """
-D.A.R.V.I.S. Computer Use Agent — Gemini-powered browser automation.
+S.P.E.C.T.R.A. Computer Use Agent — Gemini-powered browser automation.
 Uses Playwright for headless browser control and Gemini Computer Use API
 for visual understanding and action planning.
 Screenshots stream to Netlify Blobs for cross-device viewing.

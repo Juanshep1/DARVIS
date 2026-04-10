@@ -1,5 +1,5 @@
 """
-D.A.R.V.I.S. Gemini Live Audio — real-time speech-to-speech via WebSocket.
+S.P.E.C.T.R.A. Gemini Live Audio — real-time speech-to-speech via WebSocket.
 Handles bidirectional audio streaming with Gemini's native audio model.
 Falls back gracefully if connection fails.
 """

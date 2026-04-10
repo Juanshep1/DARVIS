@@ -5,15 +5,15 @@ struct ChatView: View {
 
     var body: some View {
         ZStack {
-            Color.darvisBackground.ignoresSafeArea()
+            Color.spectraBackground.ignoresSafeArea()
 
             VStack(spacing: 0) {
                 // Title bar
                 HStack {
-                    Text("D . A . R . V . I . S .")
+                    Text("S . P . E . C . T . R . A .")
                         .font(.system(size: 10, weight: .medium, design: .monospaced))
                         .tracking(5)
-                        .foregroundColor(.darvisCyan)
+                        .foregroundColor(.spectraCyan)
                         .textCase(.uppercase)
 
                     Spacer()
@@ -28,7 +28,7 @@ struct ChatView: View {
                         .foregroundColor(vm.modeColor)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .background(Color.darvisBackground)
+                        .background(Color.spectraBackground)
                         .cornerRadius(4)
                         .overlay(RoundedRectangle(cornerRadius: 4).stroke(vm.modeColor.opacity(0.3), lineWidth: 0.5))
                     }
@@ -90,12 +90,12 @@ struct ChatView: View {
                             CameraPreviewView(session: vm.cameraService.captureSession)
                                 .frame(width: 130, height: 175)
                                 .clipShape(RoundedRectangle(cornerRadius: 12))
-                                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.darvisGreen.opacity(0.5), lineWidth: 2))
-                                .shadow(color: .darvisGreen.opacity(0.2), radius: 10)
+                                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.spectraGreen.opacity(0.5), lineWidth: 2))
+                                .shadow(color: .spectraGreen.opacity(0.2), radius: 10)
 
                             Text("LIVE")
                                 .font(.system(size: 7, weight: .bold, design: .monospaced))
-                                .foregroundColor(.darvisGreen)
+                                .foregroundColor(.spectraGreen)
                                 .padding(.horizontal, 5)
                                 .padding(.vertical, 2)
                                 .background(Color.black.opacity(0.7))
@@ -114,7 +114,7 @@ struct ChatView: View {
                 VStack {
                     Text(vm.statusMessage)
                         .font(.system(size: 10, design: .monospaced))
-                        .foregroundColor(.darvisOrange)
+                        .foregroundColor(.spectraOrange)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
                         .background(Color.black.opacity(0.8))

@@ -1,0 +1,12 @@
+{
+  "": {
+    "swift-dependencies": "/Users/juanshephard/darvis/.build/index-build/arm64-apple-macosx/debug/test_llamaPackageTests.build/primary.swiftdeps"
+  },
+  "/Users/juanshephard/darvis/.build/index-build/arm64-apple-macosx/debug/test_llamaPackageTests.derived/runner.swift": {
+    "dependencies": "/Users/juanshephard/darvis/.build/index-build/arm64-apple-macosx/debug/test_llamaPackageTests.build/runner.d",
+    "object": "/Users/juanshephard/darvis/.build/index-build/arm64-apple-macosx/debug/test_llamaPackageTests.build/runner.swift.o",
+    "swiftmodule": "/Users/juanshephard/darvis/.build/index-build/arm64-apple-macosx/debug/test_llamaPackageTests.build/runner~partial.swiftmodule",
+    "swift-dependencies": "/Users/juanshephard/darvis/.build/index-build/arm64-apple-macosx/debug/test_llamaPackageTests.build/runner.swiftdeps",
+    "diagnostics": "/Users/juanshephard/darvis/.build/index-build/arm64-apple-macosx/debug/test_llamaPackageTests.build/runner.dia"
+  }
+}

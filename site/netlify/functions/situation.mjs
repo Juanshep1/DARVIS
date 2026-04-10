@@ -10,7 +10,7 @@ export default async (req) => {
   // Fetch all data in parallel
   const [weather, settings, memories, alerts, tasks, agentStatus] = await Promise.allSettled([
     // Weather
-    fetch("https://wttr.in/?format=j1", { headers: { "User-Agent": "darvis" }, signal: AbortSignal.timeout(5000) })
+    fetch("https://wttr.in/?format=j1", { headers: { "User-Agent": "spectra" }, signal: AbortSignal.timeout(5000) })
       .then((r) => r.json())
       .catch(() => null),
     // Settings

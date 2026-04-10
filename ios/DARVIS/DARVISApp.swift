@@ -23,7 +23,7 @@ class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
 }
 
 @main
-struct DARVISApp: App {
+struct SPECTRAApp: App {
     init() {
         // Dark tab bar
         let tabBarAppearance = UITabBarAppearance()
@@ -35,12 +35,12 @@ struct DARVISApp: App {
         // Register notification category with reply action
         let replyAction = UNTextInputNotificationAction(
             identifier: "REPLY_ACTION",
-            title: "Reply to DARVIS",
+            title: "Reply to SPECTRA",
             textInputButtonTitle: "Send",
-            textInputPlaceholder: "Talk to DARVIS..."
+            textInputPlaceholder: "Talk to SPECTRA..."
         )
         let category = UNNotificationCategory(
-            identifier: "DARVIS_RESPONSE",
+            identifier: "SPECTRA_RESPONSE",
             actions: [replyAction],
             intentIdentifiers: []
         )

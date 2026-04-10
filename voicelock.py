@@ -1,5 +1,5 @@
 """
-D.A.R.V.I.S. Voice Biometric Lock — only respond to owner's voice.
+S.P.E.C.T.R.A. Voice Biometric Lock — only respond to owner's voice.
 Uses MFCC feature extraction + cosine similarity for speaker verification.
 """
 

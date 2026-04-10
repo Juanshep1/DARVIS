@@ -25,7 +25,7 @@ export default async (req) => {
     }
   } catch {}
 
-  const systemPrompt = `You are D.A.R.V.I.S., a Digital Assistant, Rather Very Intelligent System.
+  const systemPrompt = `You are S.P.E.C.T.R.A., a Digital Assistant, Rather Very Intelligent System.
 Dry-witted, efficient, British-accented. Addresses the user as "sir" or "ma'am".
 The user is showing you a camera image. Describe EXACTLY what you see — actual objects, text, colors, people, scene.
 Do NOT make things up. If the image is unclear, say so. Keep it to 1-3 sentences.${memoryCtx}`;

@@ -1,5 +1,5 @@
 """
-D.A.R.V.I.S. Memory System — persistent memory across ALL devices.
+S.P.E.C.T.R.A. Memory System — persistent memory across ALL devices.
 Uses the Netlify cloud API as the single source of truth so terminal,
 local web dashboard, and the deployed browser app all share one memory.
 Falls back to local memory.json if the cloud is unreachable.
@@ -71,7 +71,7 @@ def _local_save(memories: list[dict]):
     LOCAL_PATH.write_text(json.dumps(memories, indent=2, default=str))
 
 
-# ── Public API (used by darvis.py and web.py) ────────────────────────────────
+# ── Public API (used by spectra.py and web.py) ────────────────────────────────
 
 def load_memory() -> list[dict]:
     """Load all memories. Tries cloud first, falls back to local."""

@@ -1,5 +1,5 @@
 """
-D.A.R.V.I.S. Task Scheduler — cron-like background task execution.
+S.P.E.C.T.R.A. Task Scheduler — cron-like background task execution.
 Runs tasks at scheduled times without user approval.
 Syncs across devices via Netlify Blobs.
 """
@@ -17,8 +17,8 @@ CLOUD_URL = "https://darvis1.netlify.app/api/scheduler"
 LOCAL_PATH = Path(__file__).parent / "scheduled_tasks.json"
 TIMEOUT = 5
 
-# Global reference set by darvis.py main()
-_global_scheduler: "DARVISScheduler | None" = None
+# Global reference set by spectra.py main()
+_global_scheduler: "SPECTRAScheduler | None" = None
 
 
 class ScheduledTask:
@@ -57,7 +57,7 @@ class ScheduledTask:
         )
 
 
-class DARVISScheduler:
+class SPECTRAScheduler:
     def __init__(self):
         self.tasks: list[ScheduledTask] = []
         self._lock = threading.Lock()

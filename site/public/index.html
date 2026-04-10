@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#050508">
-<title>D.A.R.V.I.S.</title>
+<title>S.P.E.C.T.R.A.</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔵</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;400;600&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
@@ -73,11 +73,11 @@ body::after{content:'';position:fixed;top:-50%;left:-50%;width:200%;height:200%;
 </style>
 </head>
 <body>
-<div class="header"><div class="header-brand">D.A.R.V.I.S.</div><div class="header-actions"><button class="header-btn" id="ambientBtn" onclick="toggleAmbient()" title="Ambient Mode">&#x1F4A4;</button><button class="header-btn" id="situationBtn" onclick="toggleSituation()" title="Situation Room">&#x1F4CA;</button><button class="header-btn" id="fixBtn" onclick="fixYourself()" title="Fix Yourself">&#x1F527;</button><button class="header-btn" id="agentToggle" onclick="toggleAgentView()">&#x1F441;</button><button class="header-btn" onclick="toggleSettings()">&#9881;</button></div></div>
+<div class="header"><div class="header-brand">S.P.E.C.T.R.A.</div><div class="header-actions"><button class="header-btn" id="ambientBtn" onclick="toggleAmbient()" title="Ambient Mode">&#x1F4A4;</button><button class="header-btn" id="situationBtn" onclick="toggleSituation()" title="Situation Room">&#x1F4CA;</button><button class="header-btn" id="fixBtn" onclick="fixYourself()" title="Fix Yourself">&#x1F527;</button><button class="header-btn" id="agentToggle" onclick="toggleAgentView()">&#x1F441;</button><button class="header-btn" onclick="toggleSettings()">&#9881;</button></div></div>
 <div class="settings-panel" id="settingsPanel"><label>Audio Mode</label><select id="audioModeSelect" onchange="setAudioMode(this.value)"><option value="classic">Classic (Ollama + ElevenLabs)</option><option value="gemini">Gemini Live Audio</option><option value="gemma">Gemma 4 (Fast, Free)</option></select><div id="classicSettings"><label>Model</label><select id="modelSelect" onchange="setModel(this.value)"></select><label>Voice</label><select id="voiceSelect" onchange="setVoice(this.value)"></select></div><div class="settings-status" id="settingsStatus"></div></div>
-<div class="agent-panel" id="agentPanel"><div class="agent-header"><span class="agent-title">Agent Browser</span><button class="agent-close" onclick="toggleAgentView()">&times;</button></div><div class="agent-screen-wrap"><img id="agentScreen" style="display:none" alt="Agent browser view"><div class="agent-no-feed" id="agentNoFeed">No active session<br>Ask DARVIS to browse something</div></div><div class="agent-footer"><div class="agent-status" id="agentStatus">Idle</div><div class="agent-step" id="agentStep"></div></div></div>
+<div class="agent-panel" id="agentPanel"><div class="agent-header"><span class="agent-title">Agent Browser</span><button class="agent-close" onclick="toggleAgentView()">&times;</button></div><div class="agent-screen-wrap"><img id="agentScreen" style="display:none" alt="Agent browser view"><div class="agent-no-feed" id="agentNoFeed">No active session<br>Ask SPECTRA to browse something</div></div><div class="agent-footer"><div class="agent-status" id="agentStatus">Idle</div><div class="agent-step" id="agentStep"></div></div></div>
 <div class="orb-area"><div class="orb-wrap" id="orbWrap"><canvas id="orbCanvas" width="600" height="600" onclick="if(!orb.classList.contains('speaking'))toggleMic()"></canvas><div class="orb" id="orb"></div></div><div class="response-area"><div id="response"></div></div></div>
-<div class="input-area"><input type="text" id="input" placeholder="Ask DARVIS anything..." autocomplete="off" onkeydown="if(event.key==='Enter')send()"><button class="mic-btn" id="micBtn" onclick="toggleMic()">&#x1F3A4;</button><button class="cam-btn" id="camBtn" onclick="toggleCamera()">&#x1F4F7;</button></div>
+<div class="input-area"><input type="text" id="input" placeholder="Ask SPECTRA anything..." autocomplete="off" onkeydown="if(event.key==='Enter')send()"><button class="mic-btn" id="micBtn" onclick="toggleMic()">&#x1F3A4;</button><button class="cam-btn" id="camBtn" onclick="toggleCamera()">&#x1F4F7;</button></div>
 <div class="situation-panel" id="situationPanel"><div class="agent-header"><span class="agent-title">Situation Room</span><button class="agent-close" onclick="toggleSituation()">&times;</button></div><div id="situationGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px;max-height:70vh;overflow-y:auto"></div></div>
 <video class="cam-preview" id="camPreview" autoplay playsinline muted></video>
 <div id="statusBar">Ollama Cloud + ElevenLabs</div>
@@ -359,7 +359,7 @@ async function geminiConnect() {
                         },
                         system_instruction: {
                             parts: [{
-                                text: `You are D.A.R.V.I.S., a Digital Assistant, Rather Very Intelligent System.
+                                text: `You are S.P.E.C.T.R.A., a Digital Assistant, Rather Very Intelligent System.
 You are dry-witted, efficient, and occasionally sardonic — but always helpful and loyal.
 British-accented speech patterns. Concise and direct, but with personality.
 Addresses the user as "sir" or "ma'am" naturally. Shows quiet competence.
@@ -733,7 +733,7 @@ async function analyzeCamera(userPrompt) {
             const tokenRes = await fetch('/api/gemini-token');
             const tokenData = await tokenRes.json();
 
-            const prompt = `You are DARVIS, a dry-witted British AI assistant. The user is showing you a live camera image and asked: "${userPrompt || 'What do you see?'}"
+            const prompt = `You are SPECTRA, a dry-witted British AI assistant. The user is showing you a live camera image and asked: "${userPrompt || 'What do you see?'}"
 
 Describe EXACTLY what is in this image — the actual objects, text, colors, people, scene, etc. Be specific. Do NOT make things up. If unclear, say so. 1-3 sentences.`;
 
@@ -776,7 +776,7 @@ Describe EXACTLY what is in this image — the actual objects, text, colors, peo
                 clientContent: {
                     turns: [{
                         role: 'user',
-                        parts: [{ text: `[Camera description: "${description}"] Say this to the user naturally as DARVIS. Keep it brief.` }]
+                        parts: [{ text: `[Camera description: "${description}"] Say this to the user naturally as SPECTRA. Keep it brief.` }]
                     }],
                     turnComplete: true
                 }
@@ -1068,7 +1068,7 @@ async function send() {
     inputEl.value = '';
 
     // Ambient mode: only process if "darvis" is in the text
-    if (ambientMode && !text.toLowerCase().includes('darvis')) {
+    if (ambientMode && !text.toLowerCase().includes('spectra')) {
         return; // Silently ignore non-wake-word input in ambient mode
     }
 
@@ -1150,7 +1150,7 @@ async function send() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         contents: [{ parts: [{ text }] }],
-                        systemInstruction: { parts: [{ text: `You are D.A.R.V.I.S., a dry-witted British AI assistant. Concise, witty, helpful. You are running on the Gemma 4 / Gemini 2.5 Flash model. When asked what model, say Gemma 4 (Gemini 2.5 Flash). You run across iPhone, browser, terminal, and Android.${memCtx}` }] },
+                        systemInstruction: { parts: [{ text: `You are S.P.E.C.T.R.A., a dry-witted British AI assistant. Concise, witty, helpful. You are running on the Gemma 4 / Gemini 2.5 Flash model. When asked what model, say Gemma 4 (Gemini 2.5 Flash). You run across iPhone, browser, terminal, and Android.${memCtx}` }] },
                         generationConfig: { maxOutputTokens: 500, temperature: 0.7 }
                     })
                 }
@@ -1689,7 +1689,7 @@ function toggleAmbient() {
     const btn = document.getElementById('ambientBtn');
     if (ambientMode) {
         btn.classList.add('ambient-on');
-        statusBar.textContent = 'AMBIENT MODE — SAY "DARVIS" TO WAKE';
+        statusBar.textContent = 'AMBIENT MODE — SAY "SPECTRA" TO WAKE';
         // Start continuous listening if not already
         if (!isRecording) toggleMic();
     } else {

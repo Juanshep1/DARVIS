@@ -33,7 +33,7 @@ struct MainTabView: View {
                 }
                 .tag(3)
         }
-        .tint(.darvisCyan)
+        .tint(.spectraCyan)
         .onReceive(NotificationCenter.default.publisher(for: .agentStarted)) { _ in
             selectedTab = 1 // Switch to Agent tab
         }

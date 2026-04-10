@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-D.A.R.V.I.S. Floating Orb — Always-on macOS widget.
+S.P.E.C.T.R.A. Floating Orb — Always-on macOS widget.
 Uses native macOS APIs via PyObjC for true transparency.
 """
 
@@ -30,8 +30,8 @@ except ImportError:
 if not HAS_OBJC:
     print("PyObjC not installed. Install with: pip3 install pyobjc-framework-Cocoa pyobjc-framework-Quartz")
     print("Falling back to simple mode...")
-    # Fallback: just run darvis.py
-    os.execvp("python3", ["python3", os.path.join(os.path.dirname(__file__), "darvis.py")])
+    # Fallback: just run spectra.py
+    os.execvp("python3", ["python3", os.path.join(os.path.dirname(__file__), "spectra.py")])
 
 ORB_RADIUS = 80
 WINDOW_SIZE = 200
@@ -180,7 +180,7 @@ class OrbView(NSView):
         return True
 
 
-class DarvisOrbApp:
+class SpectraOrbApp:
     def __init__(self):
         self.app = NSApplication.sharedApplication()
         self.state = 'idle'
@@ -258,7 +258,7 @@ class DarvisOrbApp:
 
         # Title
         title = NSTextField.alloc().initWithFrame_(NSMakeRect(10, dh - 30, dw - 20, 20))
-        title.setStringValue_("D.A.R.V.I.S.")
+        title.setStringValue_("S.P.E.C.T.R.A.")
         title.setTextColor_(NSColor.colorWithCalibratedRed_green_blue_alpha_(0.29, 0.56, 0.85, 1))
         title.setFont_(NSFont.fontWithName_size_("Menlo", 11))
         title.setBezeled_(False)
@@ -269,7 +269,7 @@ class DarvisOrbApp:
 
         # Input field
         self.input_field = NSTextField.alloc().initWithFrame_(NSMakeRect(10, dh - 65, dw - 20, 28))
-        self.input_field.setPlaceholderString_("Ask DARVIS...")
+        self.input_field.setPlaceholderString_("Ask SPECTRA...")
         self.input_field.setTextColor_(NSColor.whiteColor())
         self.input_field.setBackgroundColor_(NSColor.colorWithCalibratedRed_green_blue_alpha_(0.08, 0.08, 0.12, 1))
         self.input_field.setFont_(NSFont.fontWithName_size_("Menlo", 12))
@@ -301,5 +301,5 @@ class DarvisOrbApp:
 
 
 if __name__ == "__main__":
-    app = DarvisOrbApp()
+    app = SpectraOrbApp()
     app.run()

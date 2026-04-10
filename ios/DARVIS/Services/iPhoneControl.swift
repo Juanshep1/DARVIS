@@ -3,7 +3,7 @@ import UIKit
 import AVFoundation
 import MediaPlayer
 
-// iPhone control actions DARVIS can perform
+// iPhone control actions SPECTRA can perform
 class iPhoneControl {
     static let shared = iPhoneControl()
 
@@ -77,7 +77,7 @@ class iPhoneControl {
         ]
     }
 
-    // MARK: - Execute control command from DARVIS
+    // MARK: - Execute control command from SPECTRA
     func execute(_ command: String) -> String {
         let lower = command.lowercased()
 

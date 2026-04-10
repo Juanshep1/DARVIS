@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-D.A.R.V.I.S. Console — macOS desktop app with holographic orb.
+S.P.E.C.T.R.A. Console — macOS desktop app with holographic orb.
 Compact mode: floating orb + status. Double-click to expand.
-Expanded mode: full console with ALL terminal darvis.py features.
+Expanded mode: full console with ALL terminal spectra.py features.
 """
 
 import os
@@ -69,7 +69,7 @@ def init_backend():
     global brain, tts, ear, ollama_key, elevenlabs_key, gemini_key
     global audio_mode, gemini_available, backend_ready, settings, scheduler
     try:
-        from darvis import (
+        from spectra import (
             Brain, Ear, ElevenLabsVoice, load_env, load_settings, save_settings,
             check_ollama_cloud, list_cloud_models, select_initial_voice,
         )
@@ -98,8 +98,8 @@ def init_backend():
 
         # Scheduler
         try:
-            from scheduler import DARVISScheduler
-            scheduler = DARVISScheduler()
+            from scheduler import SPECTRAScheduler
+            scheduler = SPECTRAScheduler()
             scheduler.sync_from_cloud()
         except Exception:
             pass
@@ -283,11 +283,11 @@ def _make_styled_btn(frame, title, color, ctrl, action):
 class AppController(NSView):
     """NSObject subclass so NSTimer/actions target an ObjC-compatible object."""
 
-    def initWithApp_(self, darvis_app):
+    def initWithApp_(self, spectra_app):
         self = objc.super(AppController, self).initWithFrame_(NSMakeRect(0, 0, 0, 0))
         if self is None:
             return None
-        self.d = darvis_app
+        self.d = spectra_app
         return self
 
     def tick_(self, timer):
@@ -315,7 +315,7 @@ class AppController(NSView):
         self.d.showHelp_(sender)
 
 
-class DarvisConsoleApp:
+class SpectraConsoleApp:
     def __init__(self):
         self.app = NSApplication.sharedApplication()
         self.app.setActivationPolicy_(0)
@@ -366,7 +366,7 @@ class DarvisConsoleApp:
 
         content = NSView.alloc().initWithFrame_(NSMakeRect(0, 0, COMPACT_W, COMPACT_H))
         content.addSubview_(self._lbl(NSMakeRect(0, COMPACT_H-25, COMPACT_W, 18),
-                                       "D . A . R . V . I . S .", 8, BLUE, 1))
+                                       "S . P . E . C . T . R . A .", 8, BLUE, 1))
         orb_sz = 200
         self.orb_view = ClickableOrbView.alloc().initWithFrame_(
             NSMakeRect((COMPACT_W-orb_sz)/2, 55, orb_sz, orb_sz))
@@ -394,7 +394,7 @@ class DarvisConsoleApp:
         self.window.setStyleMask_(
             NSWindowStyleMaskTitled | NSWindowStyleMaskClosable |
             NSWindowStyleMaskMiniaturizable | NSWindowStyleMaskResizable)
-        self.window.setTitle_("D.A.R.V.I.S. Console")
+        self.window.setTitle_("S.P.E.C.T.R.A. Console")
         self.window.setLevel_(NSNormalWindowLevel)
         self.window.setOpaque_(True)
         self.window.setBackgroundColor_(NSColor.colorWithCalibratedRed_green_blue_alpha_(0.04, 0.04, 0.06, 1))
@@ -470,7 +470,7 @@ class DarvisConsoleApp:
 
         self.input_field = NSTextField.alloc().initWithFrame_(
             NSMakeRect(p + 6, iy + 3, inp_w - 12, 26))
-        self.input_field.setPlaceholderString_("Talk to DARVIS...")
+        self.input_field.setPlaceholderString_("Talk to SPECTRA...")
         self.input_field.setTextColor_(NSColor.whiteColor())
         self.input_field.setBackgroundColor_(NSColor.clearColor())
         self.input_field.setFont_(NSFont.fontWithName_size_(FONT, 13))
@@ -514,7 +514,7 @@ class DarvisConsoleApp:
 
         content = NSView.alloc().initWithFrame_(NSMakeRect(0, 0, COMPACT_W, COMPACT_H))
         content.addSubview_(self._lbl(NSMakeRect(0, COMPACT_H-25, COMPACT_W, 18),
-                                       "D . A . R . V . I . S .", 8, BLUE, 1))
+                                       "S . P . E . C . T . R . A .", 8, BLUE, 1))
         orb_sz = 200
         self.orb_view = ClickableOrbView.alloc().initWithFrame_(
             NSMakeRect((COMPACT_W-orb_sz)/2, 55, orb_sz, orb_sz))
@@ -545,7 +545,7 @@ class DarvisConsoleApp:
                 if k == 'ui' and callable(d):
                     d()
                 elif k == 'response':
-                    self._chat("DARVIS", d, TEXT)
+                    self._chat("SPECTRA", d, TEXT)
                 elif k == 'user':
                     self._chat("You", d, CYAN)
                 elif k == 'system':
@@ -564,7 +564,7 @@ class DarvisConsoleApp:
         threading.Thread(target=self._run_scheduler, daemon=True).start()
 
     def _run_scheduler(self):
-        from darvis import extract_and_run_commands
+        from spectra import extract_and_run_commands
         try:
             scheduler.check_and_run(brain, extract_and_run_commands, None, tts)
         except Exception:
@@ -640,10 +640,10 @@ class DarvisConsoleApp:
 
         lower = text.lower().strip()
 
-        # ── Slash commands (matching terminal darvis.py exactly) ──
+        # ── Slash commands (matching terminal spectra.py exactly) ──
 
         if lower in ("goodbye", "exit", "quit"):
-            self._chat("DARVIS", "Goodbye, sir. I'll be here if you need me.", TEXT)
+            self._chat("SPECTRA", "Goodbye, sir. I'll be here if you need me.", TEXT)
             if tts:
                 threading.Thread(target=lambda: (tts.speak("Goodbye, sir."), time.sleep(2), os._exit(0)), daemon=True).start()
             else:
@@ -698,7 +698,7 @@ class DarvisConsoleApp:
         if lower == "/voices" or lower.startswith("/voice "):
             if lower.startswith("/voice ") and len(lower) > 7:
                 arg = text.split(None, 1)[1]
-                from darvis import ElevenLabsVoice as ELV
+                from spectra import ElevenLabsVoice as ELV
                 matched = False
                 for name, info in ELV.PRESET_VOICES.items():
                     if arg.lower() == name:
@@ -707,14 +707,14 @@ class DarvisConsoleApp:
                         break
                 if not matched:
                     tts.set_voice(arg)
-                from darvis import save_settings as ss
+                from spectra import save_settings as ss
                 settings["voice_id"] = tts.voice_id
                 ss(settings)
                 self._chat("System", f"Voice: {tts.voice_name}", GREEN)
                 self._update_header()
                 threading.Thread(target=lambda: tts.speak("Voice updated. How do I sound, sir?"), daemon=True).start()
             else:
-                from darvis import ElevenLabsVoice as ELV
+                from spectra import ElevenLabsVoice as ELV
                 names = ", ".join(f"{n} ({v['desc']})" for n, v in ELV.PRESET_VOICES.items())
                 self._chat("System", f"Available voices: {names}\n\nUse /voice NAME to switch.", DIM)
             return
@@ -723,12 +723,12 @@ class DarvisConsoleApp:
             if lower.startswith("/model ") and len(lower) > 7:
                 new_model = text.split(None, 1)[1]
             else:
-                from darvis import list_cloud_models
+                from spectra import list_cloud_models
                 models = list_cloud_models(ollama_key)
                 self._chat("System", f"Available models: {', '.join(models[:15])}\n\nUse /model NAME to switch.", DIM)
                 return
             brain.model = new_model
-            from darvis import save_settings as ss
+            from spectra import save_settings as ss
             settings["model"] = new_model
             ss(settings)
             self._chat("System", f"Model: {new_model}", GREEN)
@@ -761,7 +761,7 @@ class DarvisConsoleApp:
 
     def _think_thread(self, user_input):
         try:
-            from darvis import extract_and_run_commands
+            from spectra import extract_and_run_commands
             response = brain.think(user_input)
 
             cmd_results = extract_and_run_commands(response)
@@ -785,7 +785,7 @@ class DarvisConsoleApp:
                     run_gemini_text_turn(
                         api_key=gemini_key,
                         text=f"Say this exactly: {display}",
-                        system_instruction="You are DARVIS. Speak naturally in a British accent.",
+                        system_instruction="You are SPECTRA. Speak naturally in a British accent.",
                     )
                 except Exception:
                     if tts:
@@ -840,7 +840,7 @@ class DarvisConsoleApp:
     def _briefing_thread(self):
         self.mq.put(('state', 'thinking'))
         try:
-            from darvis import extract_and_run_commands
+            from spectra import extract_and_run_commands
             import datetime
 
             self.mq.put(('system', "Gathering weather, global news, local news..."))
@@ -852,7 +852,7 @@ class DarvisConsoleApp:
 2. search_web for "top breaking news today world headlines"
 3. search_web for "Springfield Illinois local news today"
 4. search_web for "technology science news today"
-5. Create a DETAILED briefing file on the Desktop called DARVIS_Briefing_{datetime.datetime.now().strftime('%Y-%m-%d')}.txt with:
+5. Create a DETAILED briefing file on the Desktop called SPECTRA_Briefing_{datetime.datetime.now().strftime('%Y-%m-%d')}.txt with:
    - Date and time at the top
    - Full weather report for Springfield
    - GLOBAL NEWS section with at least 8 stories, each with a 2-3 sentence summary
@@ -908,7 +908,7 @@ class DarvisConsoleApp:
         threading.Thread(target=self._fix_thread, daemon=True).start()
 
     def _fix_thread(self):
-        from darvis import check_ollama_cloud, list_cloud_models
+        from spectra import check_ollama_cloud, list_cloud_models
         results = []
         fixed = []
 
@@ -980,5 +980,5 @@ class DarvisConsoleApp:
 
 
 if __name__ == "__main__":
-    app = DarvisConsoleApp()
+    app = SpectraConsoleApp()
     app.run()

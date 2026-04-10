@@ -44,22 +44,22 @@ struct AgentView: View {
 
     var body: some View {
         ZStack {
-            Color.darvisBackground.ignoresSafeArea()
+            Color.spectraBackground.ignoresSafeArea()
 
             VStack(spacing: 0) {
                 // Header
                 HStack {
-                    Text("D.A.R.V.I.S. BROWSER")
+                    Text("S.P.E.C.T.R.A. BROWSER")
                         .font(.system(size: 10, weight: .bold, design: .monospaced))
                         .tracking(2)
-                        .foregroundColor(.darvisCyan)
+                        .foregroundColor(.spectraCyan)
                     Spacer()
                     Circle()
-                        .fill(vm.status.active ? Color.darvisGreen : Color.darvisDim)
+                        .fill(vm.status.active ? Color.spectraGreen : Color.spectraDim)
                         .frame(width: 8, height: 8)
                     Text(vm.status.active ? "LIVE" : "IDLE")
                         .font(.system(size: 9, weight: .bold, design: .monospaced))
-                        .foregroundColor(vm.status.active ? .darvisGreen : .darvisDim)
+                        .foregroundColor(vm.status.active ? .spectraGreen : .spectraDim)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
@@ -70,18 +70,18 @@ struct AgentView: View {
                     Image(uiImage: img)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .border(Color.darvisCyan.opacity(0.15), width: 1)
+                        .border(Color.spectraCyan.opacity(0.15), width: 1)
                 } else {
                     VStack(spacing: 12) {
                         Image(systemName: "globe")
                             .font(.system(size: 40))
-                            .foregroundColor(.darvisDim)
+                            .foregroundColor(.spectraDim)
                         Text("No active session")
                             .font(.system(size: 13, design: .monospaced))
-                            .foregroundColor(.darvisDim)
-                        Text("Ask DARVIS to browse a website")
+                            .foregroundColor(.spectraDim)
+                        Text("Ask SPECTRA to browse a website")
                             .font(.system(size: 11, design: .monospaced))
-                            .foregroundColor(Color.darvisDim.opacity(0.6))
+                            .foregroundColor(Color.spectraDim.opacity(0.6))
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Color.black)
@@ -92,18 +92,18 @@ struct AgentView: View {
                     if !vm.status.goal.isEmpty {
                         Text(vm.status.goal)
                             .font(.system(size: 11, design: .monospaced))
-                            .foregroundColor(.darvisText)
+                            .foregroundColor(.spectraText)
                             .lineLimit(2)
                     }
                     if vm.status.active {
                         Text("Step \(vm.status.step) — \(vm.status.thinking)")
                             .font(.system(size: 9, design: .monospaced))
-                            .foregroundColor(.darvisDim)
+                            .foregroundColor(.spectraDim)
                             .lineLimit(1)
                     } else if vm.status.done {
                         Text(vm.status.thinking)
                             .font(.system(size: 9, design: .monospaced))
-                            .foregroundColor(.darvisGreen)
+                            .foregroundColor(.spectraGreen)
                             .lineLimit(2)
                     }
                 }

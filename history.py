@@ -1,5 +1,5 @@
 """
-D.A.R.V.I.S. Conversation History — shared across all devices.
+S.P.E.C.T.R.A. Conversation History — shared across all devices.
 Uses the Netlify cloud API as the single source of truth.
 Falls back to local history.json if the cloud is unreachable.
 """

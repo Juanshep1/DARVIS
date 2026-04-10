@@ -36,7 +36,7 @@ class ChatViewModel: ObservableObject {
     // Mode cycling
     var modeLabel: String { useOnDevice ? "ON-DEVICE" : audioMode == "gemini" ? "GEMINI" : "CLOUD" }
     var modeIcon: String { useOnDevice ? "cpu.fill" : audioMode == "gemini" ? "bolt.fill" : "cloud.fill" }
-    var modeColor: Color { useOnDevice ? .darvisOrange : audioMode == "gemini" ? .darvisGreen : .darvisCyan }
+    var modeColor: Color { useOnDevice ? .spectraOrange : audioMode == "gemini" ? .spectraGreen : .spectraCyan }
 
     func cycleMode() {
         phoneControl.haptic(.light)
@@ -80,11 +80,11 @@ class ChatViewModel: ObservableObject {
 
                         // Push notification (works even when app is in background)
                         let content = UNMutableNotificationContent()
-                        content.title = "D.A.R.V.I.S. Alert"
+                        content.title = "S.P.E.C.T.R.A. Alert"
                         content.body = alert.message
                         content.sound = .default
                         let request = UNNotificationRequest(
-                            identifier: "darvis-alert-\(alert.id)",
+                            identifier: "spectra-alert-\(alert.id)",
                             content: content,
                             trigger: nil  // Deliver immediately
                         )
@@ -186,8 +186,8 @@ class ChatViewModel: ObservableObject {
         dismissKeyboard()
         phoneControl.haptic(.light)
 
-        // Ambient mode: only process if "darvis" is in the text
-        if ambientMode && !text.lowercased().contains("darvis") {
+        // Ambient mode: only process if "spectra" is in the text
+        if ambientMode && !text.lowercased().contains("spectra") {
             return
         }
 
@@ -219,7 +219,7 @@ class ChatViewModel: ObservableObject {
         // Background task keeps the request alive even if user leaves the app
         let app = UIApplication.shared
         var bgTask: UIBackgroundTaskIdentifier = .invalid
-        bgTask = app.beginBackgroundTask(withName: "DarvisChat") {
+        bgTask = app.beginBackgroundTask(withName: "SpectraChat") {
             app.endBackgroundTask(bgTask)
             bgTask = .invalid
         }
@@ -284,7 +284,7 @@ class ChatViewModel: ObservableObject {
                         }
                         if action.action == "scheduled" {
                             let content = UNMutableNotificationContent()
-                            content.title = "D.A.R.V.I.S. Reminder"
+                            content.title = "S.P.E.C.T.R.A. Reminder"
                             content.body = action.task ?? action.goal ?? "Reminder"
                             content.sound = .default
 
@@ -295,7 +295,7 @@ class ChatViewModel: ObservableObject {
                                 if let date = date {
                                     let interval = max(date.timeIntervalSinceNow, 1)
                                     let trigger = UNTimeIntervalNotificationTrigger(timeInterval: interval, repeats: false)
-                                    let req = UNNotificationRequest(identifier: "darvis-reminder-\(UUID().uuidString.prefix(8))", content: content, trigger: trigger)
+                                    let req = UNNotificationRequest(identifier: "spectra-reminder-\(UUID().uuidString.prefix(8))", content: content, trigger: trigger)
                                     Task { try? await UNUserNotificationCenter.current().add(req) }
                                     statusMessage = "Reminder set for \(date.formatted(date: .omitted, time: .shortened))"
                                 }
@@ -489,14 +489,14 @@ class ChatViewModel: ObservableObject {
         guard state != .active else { return }
 
         let content = UNMutableNotificationContent()
-        content.title = "D.A.R.V.I.S."
+        content.title = "S.P.E.C.T.R.A."
         // iOS supports up to 4KB in notification body — show the full response
         content.body = text.count > 4000 ? String(text.prefix(3997)) + "..." : text
         content.sound = .default
-        content.categoryIdentifier = "DARVIS_RESPONSE"  // Enables reply action
+        content.categoryIdentifier = "SPECTRA_RESPONSE"  // Enables reply action
 
         let request = UNNotificationRequest(
-            identifier: "darvis-response-\(UUID().uuidString.prefix(8))",
+            identifier: "spectra-response-\(UUID().uuidString.prefix(8))",
             content: content,
             trigger: nil
         )

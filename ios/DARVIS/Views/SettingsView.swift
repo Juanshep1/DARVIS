@@ -41,14 +41,14 @@ struct SettingsView: View {
 
     var body: some View {
         ZStack {
-            Color.darvisBackground.ignoresSafeArea()
+            Color.spectraBackground.ignoresSafeArea()
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     Text("SETTINGS")
                         .font(.system(size: 10, weight: .bold, design: .monospaced))
                         .tracking(3)
-                        .foregroundColor(.darvisCyan)
+                        .foregroundColor(.spectraCyan)
                         .frame(maxWidth: .infinity)
                         .padding(.top, 16)
 
@@ -62,7 +62,7 @@ struct SettingsView: View {
                             Text("Gemini Live Audio").tag("gemini")
                         }
                         .pickerStyle(.segmented)
-                        .tint(.darvisCyan)
+                        .tint(.spectraCyan)
                     }
 
                     // Model
@@ -76,7 +76,7 @@ struct SettingsView: View {
                             }
                         }
                         .pickerStyle(.menu)
-                        .tint(.darvisCyan)
+                        .tint(.spectraCyan)
                     }
 
                     // Voice
@@ -91,7 +91,7 @@ struct SettingsView: View {
                                 }
                             }
                             .pickerStyle(.menu)
-                            .tint(.darvisCyan)
+                            .tint(.spectraCyan)
                         }
                     }
 
@@ -119,7 +119,7 @@ struct SettingsView: View {
             Text(title)
                 .font(.system(size: 9, weight: .bold, design: .monospaced))
                 .tracking(2)
-                .foregroundColor(.darvisCyan.opacity(0.7))
+                .foregroundColor(.spectraCyan.opacity(0.7))
             content()
                 .padding(12)
                 .hudCard()
@@ -130,11 +130,11 @@ struct SettingsView: View {
         HStack {
             Text(label)
                 .font(.system(size: 12, design: .monospaced))
-                .foregroundColor(.darvisDim)
+                .foregroundColor(.spectraDim)
             Spacer()
             Text(value)
                 .font(.system(size: 12, design: .monospaced))
-                .foregroundColor(.darvisText)
+                .foregroundColor(.spectraText)
         }
     }
 }

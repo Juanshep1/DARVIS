@@ -1,13 +1,13 @@
-# DARVIS — Claude Code Project Guide
+# SPECTRA — Claude Code Project Guide
 
 ## What this is
-D.A.R.V.I.S. (Digital Assistant, Rather Very Intelligent System) — a voice-activated AI assistant with:
-- **Terminal app** (`darvis.py`) — macOS/Linux/Android, uses Safari control on Mac
+S.P.E.C.T.R.A. (Smart Personal Executive for Cognitive Tasks & Real-time Assistance) — a voice-activated AI assistant with:
+- **Terminal app** (`spectra.py`) — macOS/Linux/Android, uses Safari control on Mac
 - **Local web dashboard** (`web.py`) — runs on localhost:2414
 - **Browser app** (`site/`) — deployed to https://darvis1.netlify.app via Netlify
 
 ## Key files
-- `darvis.py` — Main terminal assistant (Brain, Ear, ElevenLabsVoice classes, command execution)
+- `spectra.py` — Main terminal assistant (Brain, Ear, ElevenLabsVoice classes, command execution)
 - `web.py` — Local web dashboard server
 - `memory.py` — Persistent memory (syncs to Netlify Blobs cloud API)
 - `history.py` — Conversation history (syncs to Netlify Blobs cloud API)

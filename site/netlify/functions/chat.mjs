@@ -119,7 +119,7 @@ export default async (req) => {
   const period = localHour < 6 ? "LATE NIGHT" : localHour < 12 ? "MORNING" : localHour < 17 ? "AFTERNOON" : localHour < 21 ? "EVENING" : "NIGHT";
   const timeBlock = `CURRENT DATE/TIME (accurate, trust this):\n  Date: ${localTime}\n  Period: ${period}\n  Timezone: CDT (Central)`;
 
-  const systemPrompt = `You are D.A.R.V.I.S., a Digital Assistant, Rather Very Intelligent System.
+  const systemPrompt = `You are S.P.E.C.T.R.A., a Digital Assistant, Rather Very Intelligent System.
 Dry-witted, efficient, sardonic — but always helpful and loyal.
 British-accented speech patterns. Addresses user as "sir" naturally.
 
@@ -379,7 +379,7 @@ Common shortcuts:
           body: JSON.stringify({
             model: MODEL,
             messages: [
-              { role: "system", content: `You are D.A.R.V.I.S. ${timeBlock}\nThe user asked: "${message}"\nGive a thorough, detailed answer using the results below. Be specific — include facts, numbers, names. Don't be lazy.` },
+              { role: "system", content: `You are S.P.E.C.T.R.A. ${timeBlock}\nThe user asked: "${message}"\nGive a thorough, detailed answer using the results below. Be specific — include facts, numbers, names. Don't be lazy.` },
               { role: "user", content: `Results:\n${cmdResults.join("\n\n")}` },
             ],
             stream: false,

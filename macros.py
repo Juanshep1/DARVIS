@@ -1,5 +1,5 @@
 """
-D.A.R.V.I.S. Voice Macros — custom shortcuts that expand into actions.
+S.P.E.C.T.R.A. Voice Macros — custom shortcuts that expand into actions.
 Cloud-synced via Netlify Blobs. Local fallback to macros.json.
 """
 

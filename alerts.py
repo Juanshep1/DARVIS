@@ -1,5 +1,5 @@
 """
-D.A.R.V.I.S. Proactive Alerts — background monitors that trigger notifications.
+S.P.E.C.T.R.A. Proactive Alerts — background monitors that trigger notifications.
 Supports: weather_change, price_threshold, news_keyword, url_change.
 """
 
@@ -138,7 +138,7 @@ class AlertMonitor:
 
     def _check_weather(self, alert):
         url = "https://wttr.in/?format=%C+%t"
-        req = urllib.request.Request(url, headers={"User-Agent": "darvis"})
+        req = urllib.request.Request(url, headers={"User-Agent": "spectra"})
         with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
             weather = resp.read().decode().strip()
         if alert.last_value and weather != alert.last_value:
@@ -153,7 +153,7 @@ class AlertMonitor:
         threshold = float(alert.config.get("threshold", 0))
         direction = alert.config.get("direction", "above")
         url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=1d"
-        req = urllib.request.Request(url, headers={"User-Agent": "darvis"})
+        req = urllib.request.Request(url, headers={"User-Agent": "spectra"})
         with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
             data = json.loads(resp.read().decode())
         price = data["chart"]["result"][0]["meta"]["regularMarketPrice"]
@@ -182,7 +182,7 @@ class AlertMonitor:
 
     def _check_url(self, alert):
         url = alert.config.get("url", "")
-        req = urllib.request.Request(url, headers={"User-Agent": "darvis"})
+        req = urllib.request.Request(url, headers={"User-Agent": "spectra"})
         with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
             content = resp.read().decode(errors="replace")
         content_hash = hashlib.md5(content[:5000].encode()).hexdigest()

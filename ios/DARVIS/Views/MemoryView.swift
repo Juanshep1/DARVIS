@@ -32,14 +32,14 @@ struct MemoryView: View {
 
     var body: some View {
         ZStack {
-            Color.darvisBackground.ignoresSafeArea()
+            Color.spectraBackground.ignoresSafeArea()
 
             VStack(spacing: 0) {
                 // Header
                 Text("MEMORY")
                     .font(.system(size: 10, weight: .bold, design: .monospaced))
                     .tracking(3)
-                    .foregroundColor(.darvisCyan)
+                    .foregroundColor(.spectraCyan)
                     .padding(.top, 16)
 
                 // Add memory
@@ -50,15 +50,15 @@ struct MemoryView: View {
                         .padding(.vertical, 10)
                         .background(Color(red: 0.06, green: 0.06, blue: 0.10))
                         .cornerRadius(10)
-                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.darvisCyan.opacity(0.2), lineWidth: 1))
-                        .foregroundColor(.darvisText)
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.spectraCyan.opacity(0.2), lineWidth: 1))
+                        .foregroundColor(.spectraText)
                         .font(.system(size: 13, design: .monospaced))
                         .onSubmit { Task { await vm.add() } }
 
                     Button(action: { Task { await vm.add() } }) {
                         Image(systemName: "plus.circle.fill")
                             .font(.system(size: 24))
-                            .foregroundColor(.darvisCyan)
+                            .foregroundColor(.spectraCyan)
                     }
                 }
                 .padding(.horizontal, 16)
@@ -70,13 +70,13 @@ struct MemoryView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(mem.content)
                                 .font(.system(size: 13, design: .monospaced))
-                                .foregroundColor(.darvisText)
+                                .foregroundColor(.spectraText)
                             Text(mem.category.uppercased())
                                 .font(.system(size: 9, weight: .bold, design: .monospaced))
-                                .foregroundColor(.darvisCyan)
+                                .foregroundColor(.spectraCyan)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
-                                .background(Color.darvisCyan.opacity(0.1))
+                                .background(Color.spectraCyan.opacity(0.1))
                                 .cornerRadius(4)
                         }
                         .listRowBackground(Color(red: 0.06, green: 0.06, blue: 0.10))

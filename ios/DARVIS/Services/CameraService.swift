@@ -7,7 +7,7 @@ class CameraService: NSObject, ObservableObject {
     @Published var isActive = false
 
     let captureSession = AVCaptureSession()
-    private let sessionQueue = DispatchQueue(label: "com.darvis.camera")
+    private let sessionQueue = DispatchQueue(label: "com.spectra.camera")
     private var photoOutput = AVCapturePhotoOutput()
     private var lastImage: UIImage?
 
@@ -49,7 +49,7 @@ class CameraService: NSObject, ObservableObject {
         // Video output for frame grab
         let videoOutput = AVCaptureVideoDataOutput()
         videoOutput.alwaysDiscardsLateVideoFrames = true
-        videoOutput.setSampleBufferDelegate(self, queue: DispatchQueue(label: "com.darvis.camera.frames", qos: .utility))
+        videoOutput.setSampleBufferDelegate(self, queue: DispatchQueue(label: "com.spectra.camera.frames", qos: .utility))
         if captureSession.canAddOutput(videoOutput) {
             captureSession.addOutput(videoOutput)
             if let conn = videoOutput.connection(with: .video) {

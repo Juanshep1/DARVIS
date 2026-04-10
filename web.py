@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-D.A.R.V.I.S. Web Dashboard — browser-based orb interface.
+S.P.E.C.T.R.A. Web Dashboard — browser-based orb interface.
 Run alongside or instead of the terminal version.
 """
 
@@ -62,7 +62,7 @@ VOICE_ID = SETTINGS.get("voice_id", "kPtEHAvRnjUJFv7SK9WI")
 
 # ── Brain ─────────────────────────────────────────────────────────────────────
 
-SYSTEM_PROMPT = f"""You are D.A.R.V.I.S., a Digital Assistant, Rather Very Intelligent System.
+SYSTEM_PROMPT = f"""You are S.P.E.C.T.R.A., a Smart Personal Executive for Cognitive Tasks & Real-time Assistance.
 You are dry-witted, efficient, and occasionally sardonic — but always helpful and loyal.
 British-accented speech patterns. Concise and direct, but with personality.
 Addresses the user as "sir" or "ma'am" naturally. Shows quiet competence.
@@ -159,7 +159,7 @@ HTML = """<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>D.A.R.V.I.S.</title>
+<title>S.P.E.C.T.R.A.</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
@@ -379,7 +379,7 @@ body {
     <div class="settings-status" id="settingsStatus"></div>
 </div>
 
-<div class="title">D . A . R . V . I . S .</div>
+<div class="title">S . P . E . C . T . R . A .</div>
 
 <div class="orb-container">
     <div class="orb" id="orb" onclick="toggleMic()"></div>
@@ -387,7 +387,7 @@ body {
 </div>
 
 <div class="input-area">
-    <input type="text" id="input" placeholder="Talk to DARVIS..." autocomplete="off"
+    <input type="text" id="input" placeholder="Talk to SPECTRA..." autocomplete="off"
            onkeydown="if(event.key==='Enter')send()">
     <button class="mic-btn" id="micBtn" onclick="toggleMic()">&#x1F3A4;</button>
 </div>
@@ -567,7 +567,7 @@ inputEl.focus();
 </html>"""
 
 
-class DarvisHandler(BaseHTTPRequestHandler):
+class SpectraHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         pass  # Suppress request logs
 
@@ -715,7 +715,7 @@ def main():
         allow_reuse_address = True
         allow_reuse_port = True
 
-    server = ReusableHTTPServer(('0.0.0.0', PORT), DarvisHandler)
+    server = ReusableHTTPServer(('0.0.0.0', PORT), SpectraHandler)
 
     # Auto-open browser
     url = f"http://127.0.0.1:{PORT}"

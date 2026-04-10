@@ -93,7 +93,7 @@ export default async (req) => {
   const alerts = alertsResult.status === "fulfilled" && Array.isArray(alertsResult.value) ? alertsResult.value.filter(a => a.active) : [];
   const tasks = tasksResult.status === "fulfilled" && Array.isArray(tasksResult.value) ? tasksResult.value.filter(t => !t.completed) : [];
 
-  const briefingPrompt = `You are SPECTRA. delivering a comprehensive ${period} briefing. Here is ALL the data you have:
+  const briefingPrompt = `You are delivering a comprehensive ${period} briefing. Do NOT say "Spectra" or your name. Here is ALL the data you have:
 
 TIME: ${timeStr} (${period})
 
@@ -129,7 +129,7 @@ Be thorough. This is the user's primary news source. Do NOT skip stories or give
       body: JSON.stringify({
         model: MODEL,
         messages: [
-          { role: "system", content: "You are SPECTRA. (Smart Personal Executive for Cognitive Tasks & Real-time Assistance), a dry-witted British AI assistant. You deliver comprehensive, thorough briefings like JARVIS from Iron Man — professional, detailed, with a touch of sardonic humor. Never half-ass a briefing. The user depends on you for their news." },
+          { role: "system", content: "You are a dry-witted British AI assistant. NEVER say \"Spectra\" or your name. You deliver comprehensive, thorough briefings — professional, detailed, with a touch of sardonic humor. Never half-ass a briefing. The user depends on you for their news." },
           { role: "user", content: briefingPrompt },
         ],
         stream: false,

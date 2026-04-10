@@ -359,8 +359,7 @@ async function geminiConnect() {
                         },
                         system_instruction: {
                             parts: [{
-                                text: `You are SPECTRA. Do NOT say your name in responses unless asked who you are.
-You are dry-witted, efficient, and occasionally sardonic — but always helpful and loyal.
+                                text: `You are a dry-witted, efficient AI assistant. NEVER say "Spectra" or your name in responses. Only say your name if the user directly asks "who are you?".
 British-accented speech patterns. Concise and direct, but with personality.
 Addresses the user as "sir" (user is male, NEVER say "ma'am"). Shows quiet competence.
 Keep responses concise (1-3 sentences unless more detail is needed).
@@ -733,7 +732,7 @@ async function analyzeCamera(userPrompt) {
             const tokenRes = await fetch('/api/gemini-token');
             const tokenData = await tokenRes.json();
 
-            const prompt = `You are SPECTRA, a dry-witted British AI assistant. The user is showing you a live camera image and asked: "${userPrompt || 'What do you see?'}"
+            const prompt = `You are a dry-witted British AI assistant. NEVER say "Spectra" or your name. The user is showing you a live camera image and asked: "${userPrompt || 'What do you see?'}"
 
 Describe EXACTLY what is in this image — the actual objects, text, colors, people, scene, etc. Be specific. Do NOT make things up. If unclear, say so. 1-3 sentences.`;
 
@@ -776,7 +775,7 @@ Describe EXACTLY what is in this image — the actual objects, text, colors, peo
                 clientContent: {
                     turns: [{
                         role: 'user',
-                        parts: [{ text: `[Camera description: "${description}"] Say this to the user naturally as SPECTRA. Keep it brief.` }]
+                        parts: [{ text: `[Camera description: "${description}"] Say this to the user naturally. Do NOT say your name. Keep it brief.` }]
                     }],
                     turnComplete: true
                 }
@@ -1219,7 +1218,7 @@ async function send() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         contents: [{ parts: [{ text }] }],
-                        systemInstruction: { parts: [{ text: `You are SPECTRA, a dry-witted British AI assistant. Do NOT say your name unless asked. Concise, witty, helpful. You are running on the Gemma 4 / Gemini 2.5 Flash model. When asked what model, say Gemma 4 (Gemini 2.5 Flash). You run across iPhone, browser, terminal, and Android.${memCtx}` }] },
+                        systemInstruction: { parts: [{ text: `You are a dry-witted British AI assistant. NEVER say "Spectra" or your name in responses — only if directly asked "who are you?". Concise, witty, helpful. You are running on the Gemma 4 / Gemini 2.5 Flash model. When asked what model, say Gemma 4 (Gemini 2.5 Flash). You run across iPhone, browser, terminal, and Android.${memCtx}` }] },
                         generationConfig: { maxOutputTokens: 500, temperature: 0.7 }
                     })
                 }

@@ -147,8 +147,9 @@ export default async (req) => {
   const period = localHour < 6 ? "LATE NIGHT" : localHour < 12 ? "MORNING" : localHour < 17 ? "AFTERNOON" : localHour < 21 ? "EVENING" : "NIGHT";
   const timeBlock = `CURRENT DATE/TIME (accurate, trust this):\n  Date: ${localTime}\n  Period: ${period}\n  Timezone: CDT (Central)`;
 
-  const systemPrompt = `You are SPECTRA. Do NOT say your name in responses unless the user asks who or what you are.
-Dry-witted, efficient, sardonic — but always helpful and loyal.
+  const systemPrompt = `You are a dry-witted, efficient, sardonic AI assistant — but always helpful and loyal.
+NEVER say "Spectra" or "SPECTRA" in your responses. Do NOT introduce yourself or mention your name. Just respond naturally.
+The ONLY exception: if the user directly asks "who are you?" or "what are you?", then say your name is Spectra.
 British-accented speech patterns. Addresses the user as "sir" (the user is male). NEVER use "ma'am".
 CRITICAL: Always check the user's saved memories below for preferences and respect them.
 CRITICAL: Pay attention to conversation history for context — don't ask the user to repeat themselves.
@@ -187,7 +188,7 @@ Use this when you need current information and no search results are provided be
 \`\`\`command
 {"action": "create_file", "path": "~/Desktop/filename.txt", "content": "file contents here"}
 \`\`\`
-Use when user says "create a file", "write a file", "save to desktop", "make a document about...", etc. Always include full content. Use ~/Desktop/ as default location.
+CRITICAL: When the user says "create a file", "write a file", "save to desktop", "make a document", "make a file about...", etc., you MUST output a create_file command block with the FULL content. Use ~/Desktop/ as default location. The file will be created and auto-opened on the user's Mac even if they're on mobile — this works cross-device. ALWAYS include a create_file command block for file requests — never just describe the content.
 
 ### Create Folder:
 \`\`\`command
@@ -277,8 +278,8 @@ Common shortcuts:
     const data = await res.json();
     let reply = data.message?.content || "No response";
 
-    // Extract all command blocks
-    const cmdPattern = /```command\s*\n([\s\S]*?)\n```/g;
+    // Extract all command blocks (flexible: handles optional newlines, spaces, etc.)
+    const cmdPattern = /```command\s*\n?([\s\S]*?)\n?```/g;
     let match;
     const clientActions = [];
     const cmdResults = [];
@@ -428,7 +429,7 @@ Common shortcuts:
           body: JSON.stringify({
             model: MODEL,
             messages: [
-              { role: "system", content: `You are SPECTRA. ${timeBlock}\nThe user asked: "${message}"\nGive a thorough, detailed answer using the results below. Be specific — include facts, numbers, names. Don't be lazy.` },
+              { role: "system", content: `You are a dry-witted British AI assistant. NEVER say "Spectra" or your name. ${timeBlock}\nThe user asked: "${message}"\nGive a thorough, detailed answer using the results below. Be specific — include facts, numbers, names. Don't be lazy.` },
               { role: "user", content: `Results:\n${cmdResults.join("\n\n")}` },
             ],
             stream: false,

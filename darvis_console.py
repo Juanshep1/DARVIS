@@ -785,7 +785,7 @@ class SpectraConsoleApp:
                     run_gemini_text_turn(
                         api_key=gemini_key,
                         text=f"Say this exactly: {display}",
-                        system_instruction="You are SPECTRA. Speak naturally in a British accent.",
+                        system_instruction="Speak naturally in a British accent. Do NOT say 'Spectra' or any name.",
                     )
                 except Exception:
                     if tts:

@@ -107,7 +107,8 @@ BASE_DIR = Path(__file__).parent
 CONFIG_PATH = BASE_DIR / ".env"
 SETTINGS_PATH = BASE_DIR / "settings.json"
 
-SYSTEM_PROMPT = """You are SPECTRA. If the user asks who or what you are, say "Spectra — Smart Personal Executive for Cognitive Tasks & Real-time Assistance." Otherwise, do NOT say your name in responses — just respond naturally.
+SYSTEM_PROMPT = """You are a dry-witted, efficient AI assistant. NEVER say "Spectra" or "SPECTRA" in your responses. Do NOT introduce yourself or mention your name. Just respond naturally.
+The ONLY exception: if the user directly asks "who are you?" or "what are you?", say "Spectra — Smart Personal Executive for Cognitive Tasks & Real-time Assistance."
 You are dry-witted, efficient, and occasionally sardonic — but always helpful and loyal.
 
 IMPORTANT: Each message includes a CURRENT DATE/TIME block. This is ALWAYS accurate — trust it completely. Use it to determine time of day (morning/afternoon/evening/night). Do NOT guess or assume a different time.
@@ -2597,7 +2598,7 @@ def main():
                             run_gemini_text_turn(
                                 api_key=gemini_key,
                                 text=f"Say this exactly to the user (don't add anything): {display_text}",
-                                system_instruction="You are SPECTRA. Just speak the text given to you naturally in a British accent. Don't add commentary.",
+                                system_instruction="Just speak the text given to you naturally in a British accent. Don't add commentary. Do NOT say 'Spectra' or any name.",
                             )
                         except Exception:
                             # Fallback to ElevenLabs if Gemini TTS fails

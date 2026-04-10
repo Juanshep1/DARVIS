@@ -116,7 +116,7 @@ Personality traits:
 - British-accented speech patterns (use British English spellings and idioms)
 - Concise and direct, but with personality
 - Occasionally makes subtle quips or observations
-- Addresses the user as "sir" or "ma'am" naturally (not excessively)
+- Addresses the user as "sir" (the user is male). NEVER use "ma'am".
 - When delivering bad news, does so with understated calm
 - Shows quiet competence — never brags, just delivers
 
@@ -295,6 +295,9 @@ PLATFORM_BROWSER_SECTION
 IMPORTANT RULES:
 - You MUST use MULTIPLE command blocks in a single response when the task requires multiple steps. Do NOT describe steps without command blocks. Every action you describe MUST have a corresponding command block.
 - When the user asks a question that requires current/real-time information (news, weather, prices, sports scores, recent events, etc.), ALWAYS use search_web or fetch_url. Do NOT say you don't have access to the internet — you DO.
+- When search_web returns results, use ONLY those results for factual claims. Do NOT mix in your training data which may be outdated. The search results are live and accurate — your training data is NOT. Quote specific numbers, records, standings EXACTLY as shown in results.
+- Pay attention to conversation history. If the user says "their record" or "what about them", look at previous messages to understand context. Don't ask the user to repeat themselves.
+- ALWAYS check user memories for preferences (e.g. how to address them, their name, interests).
 - When creating files, show the full content in the create_file block.
 - For weather, use: fetch_url with https://wttr.in/CITY?format=3
 - Keep spoken responses concise (1-3 sentences) but be thorough in file contents.
@@ -916,10 +919,34 @@ def copy_path(src: str, dst: str) -> str:
 
 
 def search_web(query: str) -> str:
+    """Search web — uses Tavily API if available, falls back to DuckDuckGo."""
+    # Try Tavily first (much better results)
+    env = load_env()
+    tavily_key = env.get("TAVILY_API_KEY", os.environ.get("TAVILY_API_KEY", ""))
+    if tavily_key:
+        try:
+            payload = json.dumps({
+                "api_key": tavily_key, "query": query,
+                "search_depth": "advanced", "max_results": 10, "include_answer": True,
+            }).encode()
+            req = urllib.request.Request(
+                "https://api.tavily.com/search", data=payload, method="POST",
+                headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                data = json.loads(resp.read().decode())
+            text = ""
+            if data.get("answer"):
+                text += f"Answer: {data['answer']}\n\n"
+            for i, r in enumerate(data.get("results", [])[:10], 1):
+                text += f"{i}. {r.get('title', '')}\n   {r.get('url', '')}\n   {r.get('content', '')[:500]}\n\n"
+            if text:
+                return f"Search results for '{query}':\n\n{text}"
+        except Exception:
+            pass  # Fall through to DuckDuckGo
+
+    # Fallback: DuckDuckGo scraping
     try:
         encoded_q = urllib.parse.quote(query)
-        # Don't open Safari — just return text results. Use computer_use for browsing.
-
         ddg_url = f"https://html.duckduckgo.com/html/?q={encoded_q}"
         req = urllib.request.Request(ddg_url, headers={
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"

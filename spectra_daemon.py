@@ -76,6 +76,55 @@ def safari_control(data):
     return f"Safari {method}"
 
 
+def play_music(query):
+    """Search and play a song in Apple Music via AppleScript."""
+    safe_query = query.replace('"', '\\"').replace("'", "\\'")
+    # Open Apple Music, search, and play
+    script = f'''
+    tell application "Music"
+        activate
+        delay 1
+    end tell
+    tell application "System Events"
+        tell process "Music"
+            -- Open search (Cmd+F) and type query
+            keystroke "f" using {{command down, option down}}
+            delay 0.5
+            keystroke "{safe_query}"
+            delay 1.5
+            -- Press Enter to search, then Enter again to play first result
+            key code 36
+            delay 1
+            key code 36
+        end tell
+    end tell
+    '''
+    try:
+        subprocess.run(["osascript", "-e", script], timeout=15)
+        return f"Playing: {query}"
+    except Exception as e:
+        return f"Music error: {e}"
+
+
+def music_control(command):
+    """Control Apple Music playback via AppleScript."""
+    cmd_map = {
+        "pause": 'tell application "Music" to pause',
+        "play": 'tell application "Music" to play',
+        "stop": 'tell application "Music" to stop',
+        "next": 'tell application "Music" to next track',
+        "previous": 'tell application "Music" to previous track',
+    }
+    script = cmd_map.get(command.lower())
+    if not script:
+        return f"Unknown music command: {command}"
+    try:
+        subprocess.run(["osascript", "-e", script], timeout=5)
+        return f"Music: {command}"
+    except Exception as e:
+        return f"Music control error: {e}"
+
+
 def poll_and_execute():
     try:
         req = urllib.request.Request(COMMANDS_URL, method="GET")
@@ -100,6 +149,10 @@ def poll_and_execute():
                     log(f"Shell: {execute_shell(cmd['command'])}")
                 elif action == "safari" and cmd.get("method"):
                     log(f"Safari: {safari_control(cmd)}")
+                elif action == "play_music" and cmd.get("query"):
+                    log(play_music(cmd["query"]))
+                elif action == "music_control" and cmd.get("command"):
+                    log(music_control(cmd["command"]))
                 else:
                     log(f"Unknown action: {action}")
             except Exception as e:

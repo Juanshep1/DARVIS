@@ -142,7 +142,43 @@ class iPhoneControl {
         if lower.contains("open phone") { openURL("tel://"); return "Opening Phone" }
         if lower.contains("open mail") { openURL("mailto://"); return "Opening Mail" }
         if lower.contains("open camera") { openURL("camera://"); return "Opening Camera" }
-        if lower.contains("open music") { openURL("music://"); return "Opening Music" }
+        if lower.contains("open music") && !lower.contains("play ") { openURL("music://"); return "Opening Music" }
+
+        // Play music — search and play in Apple Music
+        if lower.contains("play ") && (lower.contains("music") || lower.contains("song") || lower.contains(" by ") || !lower.contains("video")) {
+            let query = command
+                .replacingOccurrences(of: "play ", with: "", options: .caseInsensitive)
+                .replacingOccurrences(of: "on apple music", with: "", options: .caseInsensitive)
+                .replacingOccurrences(of: "in apple music", with: "", options: .caseInsensitive)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if !query.isEmpty {
+                let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
+                openURL("music://music.apple.com/search?term=\(encoded)")
+                return "Playing \(query) on Apple Music"
+            }
+        }
+
+        // Music controls
+        if lower.contains("pause music") || lower.contains("stop music") {
+            let player = MPMusicPlayerController.systemMusicPlayer
+            player.pause()
+            return "Music paused"
+        }
+        if lower.contains("resume music") || (lower == "play" || lower == "resume") {
+            let player = MPMusicPlayerController.systemMusicPlayer
+            player.play()
+            return "Music resumed"
+        }
+        if lower.contains("next song") || lower.contains("skip") {
+            let player = MPMusicPlayerController.systemMusicPlayer
+            player.skipToNextItem()
+            return "Skipped to next song"
+        }
+        if lower.contains("previous song") || lower.contains("go back") {
+            let player = MPMusicPlayerController.systemMusicPlayer
+            player.skipToPreviousItem()
+            return "Back to previous song"
+        }
         if lower.contains("open photos") { openURL("photos-redirect://"); return "Opening Photos" }
 
         // Device info

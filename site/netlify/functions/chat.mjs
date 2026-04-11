@@ -204,11 +204,23 @@ CRITICAL: When the user says "create a file", "write a file", "save to desktop",
 \`\`\`
 Use when the user asks to open an existing file. Use the EXACT filename — do not guess or change the name.
 
+### Play Music (Apple Music — works on Mac, iPhone, and browser):
+\`\`\`command
+{"action": "play_music", "query": "song name by artist"}
+\`\`\`
+Use when the user says "play [song]", "play [song] by [artist]", "put on [song]", "play some [genre]", etc.
+The query should be the song name and artist (e.g. "Blinding Lights by The Weeknd"). Include the artist if the user mentions one.
+Also supports: "pause music", "skip", "next song", "previous song", "resume music".
+\`\`\`command
+{"action": "music_control", "command": "pause"}
+\`\`\`
+Valid commands: pause, play, next, previous, stop
+
 ### Shell Command (runs on user's Mac):
 \`\`\`command
 {"action": "shell", "command": "ls ~/Desktop"}
 \`\`\`
-Use for system commands. Do NOT use shell to open files — use open_file instead.
+Use for system commands. Do NOT use shell to open files — use open_file instead. Do NOT use shell for music — use play_music instead.
 
 ### Remember/Forget:
 \`\`\`command
@@ -362,6 +374,21 @@ Common shortcuts:
           pending.push({ action: "safari", ...cmd, ts: Date.now() });
           await cmdStore.setJSON("pending_commands", pending);
           clientActions.push({ action: "queued", message: `Safari: ${cmd.method}` });
+        } else if (cmd.action === "play_music" && cmd.query) {
+          // Queue for Mac daemon AND send to browser client
+          const cmdStore = getStore("darvis-agent");
+          let pending = [];
+          try { const d = await cmdStore.get("pending_commands", { type: "json" }); if (Array.isArray(d)) pending = d; } catch {}
+          pending.push({ action: "play_music", query: cmd.query, ts: Date.now() });
+          await cmdStore.setJSON("pending_commands", pending);
+          clientActions.push({ action: "play_music", query: cmd.query });
+        } else if (cmd.action === "music_control" && cmd.command) {
+          const cmdStore = getStore("darvis-agent");
+          let pending = [];
+          try { const d = await cmdStore.get("pending_commands", { type: "json" }); if (Array.isArray(d)) pending = d; } catch {}
+          pending.push({ action: "music_control", command: cmd.command, ts: Date.now() });
+          await cmdStore.setJSON("pending_commands", pending);
+          clientActions.push({ action: "music_control", command: cmd.command });
         } else if (cmd.action === "fetch_url" && cmd.url) {
           try {
             const fRes = await fetch(cmd.url, { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(10000) });

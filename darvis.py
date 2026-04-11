@@ -144,7 +144,9 @@ Examples of things you can do with shell:
 - Screenshot: `screencapture ~/Desktop/screenshot.png`
 - System info: `system_profiler SPHardwareDataType`
 - Open URL in browser: `open "https://youtube.com"`
-- Play/pause music: `osascript -e 'tell application "Spotify" to playpause'`
+- Play music in Apple Music: `osascript -e 'tell application "Music" to play'`
+- Search & play in Apple Music: Use the play_music action instead of shell
+- Pause/skip/previous: `osascript -e 'tell application "Music" to pause'`, `next track`, `previous track`
 - Read clipboard: `pbpaste`
 - Copy to clipboard: `echo "text" | pbcopy`
 - Open Terminal: `open -a Terminal`
@@ -840,6 +842,7 @@ SAFE_PREFIXES = [
     "mdls ", "mdfind ", "diskutil list", "sysctl ", "mkdir ",
     "touch ", "cp ", "mv ", "chmod ", "find ", "grep ", "pip",
     "node ", "npm ", "git ", "zip ", "unzip ", "tar ",
+    "killall ",
 ]
 
 BLOCKED_PATTERNS = ["rm -rf /", "sudo rm -rf", "mkfs", "> /dev", "dd if=", ":(){ :", "fork bomb"]

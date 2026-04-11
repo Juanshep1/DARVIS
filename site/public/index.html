@@ -1071,6 +1071,52 @@ function looksLikeCameraRequest(text) {
     return triggers.some(t => lower.includes(t));
 }
 
+function needsClassicRoute(text) {
+    const lower = text.toLowerCase();
+    const triggers = [
+        'play ', 'pause music', 'stop music', 'resume music', 'skip',
+        'next song', 'previous song', 'create a file', 'create file',
+        'make a file', 'write a file', 'save to desktop', 'open file',
+        'close safari', 'close app', 'kill ', 'killall',
+    ];
+    return triggers.some(t => lower.includes(t));
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// APPLE MUSIC PLAYBACK
+// On iOS/Mac: opens Apple Music app with search. On browser: opens Apple Music web.
+// The daemon also receives the command and plays via AppleScript on Mac.
+// ══════════════════════════════════════════════════════════════════════════════
+
+function handlePlayMusic(query) {
+    const encoded = encodeURIComponent(query);
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const isMac = /Macintosh/.test(navigator.userAgent);
+
+    if (isIOS) {
+        // iOS: open Apple Music app directly with search
+        window.location.href = `music://music.apple.com/search?term=${encoded}`;
+    } else if (isMac) {
+        // Mac browser: daemon handles it via AppleScript, but also open Apple Music web as fallback
+        // (daemon already received the command via pending_commands)
+        responseEl.textContent += '\n🎵 Playing on Apple Music...';
+    } else {
+        // Other: open Apple Music web
+        window.open(`https://music.apple.com/search?term=${encoded}`, '_blank');
+    }
+}
+
+function handleMusicControl(command) {
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    if (isIOS) {
+        // iOS: no direct control from browser, daemon/app handles it
+        responseEl.textContent += '\n🎵 ' + command.charAt(0).toUpperCase() + command.slice(1) + 'd music';
+    } else {
+        // Mac: daemon handles it via AppleScript
+        responseEl.textContent += '\n🎵 ' + command.charAt(0).toUpperCase() + command.slice(1) + 'd music';
+    }
+}
+
 async function send() {
     const text = inputEl.value.trim();
     if (!text) return;
@@ -1124,10 +1170,9 @@ async function send() {
 
             const ok = await geminiConnect();
             if (ok && geminiWs && geminiWs.readyState === WebSocket.OPEN) {
-                // If query needs real-time data, route through classic API instead
-                if (needsSearchLocal(text)) {
-                    // Use classic mode for this query (has Tavily search)
-                    responseEl.textContent = 'Searching...';
+                // If query needs real-time data or commands, route through classic API
+                if (needsSearchLocal(text) || needsClassicRoute(text)) {
+                    responseEl.textContent = needsClassicRoute(text) ? '' : 'Searching...';
                     const classicRes = await fetch('/api/chat', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -1149,6 +1194,8 @@ async function send() {
                     if (classicData.actions) {
                         classicData.actions.forEach(act => {
                             if (act.action === 'open_url' && act.url) window.open(act.url, '_blank');
+                            else if (act.action === 'play_music' && act.query) handlePlayMusic(act.query);
+                            else if (act.action === 'music_control' && act.command) handleMusicControl(act.command);
                         });
                     }
                     // If there's a follow-up, show and speak it after a delay
@@ -1319,6 +1366,10 @@ async function send() {
                 } else if (act.action === 'agent_started') {
                     document.getElementById('agentPanel').classList.add('open');
                     startAgentPolling();
+                } else if (act.action === 'play_music' && act.query) {
+                    handlePlayMusic(act.query);
+                } else if (act.action === 'music_control' && act.command) {
+                    handleMusicControl(act.command);
                 } else if (act.action === 'queued' && act.message) {
                     responseEl.textContent += '\n⏳ ' + act.message;
                 } else if (act.action === 'scheduled') {

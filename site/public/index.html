@@ -1195,9 +1195,10 @@ async function send() {
 
             const ok = await geminiConnect();
             if (ok && geminiWs && geminiWs.readyState === WebSocket.OPEN) {
-                // If query needs real-time data or commands, route through classic API
-                if (needsSearchLocal(text) || needsClassicRoute(text)) {
-                    responseEl.textContent = needsClassicRoute(text) ? '' : 'Searching...';
+                // Route ALL text queries through classic API (has wiki + memory + search context)
+                // Gemini just handles the voice output
+                {
+                    responseEl.textContent = needsSearchLocal(text) ? 'Searching...' : '';
                     const classicRes = await fetch('/api/chat', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -1240,20 +1241,6 @@ async function send() {
                     }
                     return;
                 }
-
-                // Regular Gemini conversation (no search needed)
-                geminiWs.send(JSON.stringify({
-                    clientContent: {
-                        turns: [{ role: 'user', parts: [{ text: text }] }],
-                        turnComplete: true
-                    }
-                }));
-                // Save user message to history
-                fetch('/api/history', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ messages: [{ role: 'user', content: text }] }),
-                }).catch(() => {});
             } else {
                 fallbackToClassic();
                 inputEl.value = text;

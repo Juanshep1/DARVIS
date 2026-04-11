@@ -18,8 +18,8 @@
         "person",
         "owner"
       ],
-      "summary": "28-year-old from Springfield, IL. Into AI, coding, and music production. Creator of Spectra.",
-      "updated": "2026-04-11T16:41:18.139Z"
+      "summary": "28-year-old from Springfield, IL. Into AI, coding, and music production. Creator of Spectra. Works at the Melo Cream Factory.",
+      "updated": "2026-04-11T17:11:57.011Z"
     },
     "entity-azula": {
       "title": "Azula",
@@ -176,6 +176,17 @@
       ],
       "summary": "African religion with creator deity Roog and Sirius star (Yoonir) as universe symbol",
       "updated": "2026-04-11T17:04:06.822Z"
+    },
+    "entity-melo-cream-factory": {
+      "title": "Melo Cream Factory",
+      "type": "entity",
+      "tags": [
+        "workplace",
+        "factory",
+        "employer"
+      ],
+      "summary": "Workplace of Juan, a cream factory",
+      "updated": "2026-04-11T17:11:57.011Z"
     }
   },
   "sources": {
@@ -251,6 +262,19 @@
         "concept-gnosticism",
         "entity-serer-religion"
       ]
+    },
+    "src-1775927491824": {
+      "title": "I work at the melo cream factory",
+      "ingested": "2026-04-11T17:11:31.824Z",
+      "pages_updated": [
+        "entity-juan",
+        "entity-melo-cream-factory"
+      ]
+    },
+    "src-1775928647102": {
+      "title": "my favorite food is cookout food",
+      "ingested": "2026-04-11T17:30:47.102Z",
+      "pages_updated": []
     }
   }
 }

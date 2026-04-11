@@ -771,9 +771,16 @@ class Ear:
             return False
 
         try:
-            devnull = os.open(os.devnull, os.O_WRONLY)
-            old_stderr = os.dup(2)
-            os.dup2(devnull, 2)
+            # Suppress PortAudio stderr noise
+            devnull = None
+            old_stderr = None
+            try:
+                devnull = os.open(os.devnull, os.O_WRONLY)
+                old_stderr = os.dup(2)
+                os.dup2(devnull, 2)
+            except Exception:
+                pass
+
             try:
                 mic = sr.Microphone()
                 with mic as source:
@@ -781,12 +788,18 @@ class Ear:
                     self.recognizer.adjust_for_ambient_noise(source, duration=1.5)
                 self._mic_available = True
             finally:
-                os.dup2(old_stderr, 2)
-                os.close(devnull)
-                os.close(old_stderr)
+                try:
+                    if old_stderr is not None:
+                        os.dup2(old_stderr, 2)
+                        os.close(old_stderr)
+                    if devnull is not None:
+                        os.close(devnull)
+                except Exception:
+                    pass
+
             console.print("  [green]✓[/green] Microphone ready")
             return True
-        except (OSError, AttributeError) as e:
+        except (OSError, AttributeError, Exception) as e:
             console.print(f"  [red]✗[/red] Microphone error: {e}")
             console.print("  [dim]Falling back to text input mode[/dim]")
             return False
@@ -2141,6 +2154,7 @@ def main():
             # Wiki ingest helper (runs in background thread)
             def _remote_wiki_ingest(cmd):
                 try:
+                    import re as _re
                     from wiki import get_index, get_schema, ingest_source, bulk_upsert, build_ingest_prompt
                     raw = cmd["content"].strip()
                     title = cmd.get("title", raw[:60])
@@ -2150,10 +2164,10 @@ def main():
                             url_req = urllib.request.Request(raw, headers={"User-Agent": "Mozilla/5.0"})
                             with urllib.request.urlopen(url_req, timeout=15) as url_resp:
                                 html = url_resp.read().decode(errors="replace")
-                            tm = re.search(r'<title[^>]*>([^<]+)</title>', html, re.IGNORECASE)
+                            tm = _re.search(r'<title[^>]*>([^<]+)</title>', html, _re.IGNORECASE)
                             if tm: title = tm.group(1).strip()
-                            raw = re.sub(r'<[^>]+>', ' ', html)
-                            raw = re.sub(r'\s+', ' ', raw).strip()[:50000]
+                            raw = _re.sub(r'<[^>]+>', ' ', html)
+                            raw = _re.sub(r'\s+', ' ', raw).strip()[:50000]
                         except Exception:
                             return
                     source_id = ingest_source(title, raw, "paste")
@@ -2169,7 +2183,7 @@ def main():
                     with urllib.request.urlopen(req2, timeout=120) as resp2:
                         result = json.loads(resp2.read().decode())
                     llm_text = result.get("message", {}).get("content", "")
-                    json_match = re.search(r'\{[\s\S]*"pages"[\s\S]*\}', llm_text)
+                    json_match = _re.search(r'\{[\s\S]*"pages"[\s\S]*\}', llm_text)
                     if json_match:
                         parsed = json.loads(json_match.group())
                         pages = parsed.get("pages", [])

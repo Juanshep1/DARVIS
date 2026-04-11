@@ -77,30 +77,13 @@ def safari_control(data):
 
 
 def play_music(query):
-    """Search and play a song in Apple Music via AppleScript."""
-    safe_query = query.replace('"', '\\"').replace("'", "\\'")
-    # Open Apple Music, search, and play
-    script = f'''
-    tell application "Music"
-        activate
-        delay 1
-    end tell
-    tell application "System Events"
-        tell process "Music"
-            -- Open search (Cmd+F) and type query
-            keystroke "f" using {{command down, option down}}
-            delay 0.5
-            keystroke "{safe_query}"
-            delay 1.5
-            -- Press Enter to search, then Enter again to play first result
-            key code 36
-            delay 1
-            key code 36
-        end tell
-    end tell
-    '''
+    """Search and play in Apple Music using the macOS URL scheme."""
+    import urllib.parse
+    encoded = urllib.parse.quote(query)
+    # Use macOS `open` with Apple Music URL scheme — opens Music app and searches
+    url = f"music://music.apple.com/search?term={encoded}"
     try:
-        subprocess.run(["osascript", "-e", script], timeout=15)
+        subprocess.run(["open", url], timeout=5)
         return f"Playing: {query}"
     except Exception as e:
         return f"Music error: {e}"

@@ -144,9 +144,11 @@ Examples of things you can do with shell:
 - Screenshot: `screencapture ~/Desktop/screenshot.png`
 - System info: `system_profiler SPHardwareDataType`
 - Open URL in browser: `open "https://youtube.com"`
-- Play music in Apple Music: `osascript -e 'tell application "Music" to play'`
-- Search & play in Apple Music: Use the play_music action instead of shell
-- Pause/skip/previous: `osascript -e 'tell application "Music" to pause'`, `next track`, `previous track`
+- Play music: `open "music://music.apple.com/search?term=SONG+NAME+ARTIST"` (URL-encode the query)
+- Pause music: `osascript -e 'tell application "Music" to pause'`
+- Resume music: `osascript -e 'tell application "Music" to play'`
+- Next song: `osascript -e 'tell application "Music" to next track'`
+- Previous song: `osascript -e 'tell application "Music" to previous track'`
 - Read clipboard: `pbpaste`
 - Copy to clipboard: `echo "text" | pbcopy`
 - Open Terminal: `open -a Terminal`

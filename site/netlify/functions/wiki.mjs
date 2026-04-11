@@ -297,11 +297,12 @@ function getDefaultSchema() {
 
 For each extraction:
 - Check if a page already exists (match by title/tags in the index)
-- If exists: merge new info into existing content, preserve what's there
+- If exists: UPDATE the page with the new info. If new info CONTRADICTS old info, the new info is correct — REPLACE the old facts, don't keep both
 - If new: create a page with id (type-slug format), title, markdown content, tags, links
 - Add [[page-id]] cross-references between related pages
 - Keep each page under 4000 chars
-- Write a one-line summary for the index entry`,
+- Write a one-line summary for the index entry
+- The user's own statements about themselves are always authoritative — if they say "I'm from X", that overrides any previous location`,
   };
 }
 

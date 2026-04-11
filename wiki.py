@@ -199,9 +199,11 @@ SOURCE DOCUMENT ({title}):
 YOUR TASK:
 1. Read the source and identify key entities, concepts, and facts
 2. Check the index — update existing pages or create new ones
-3. Use id format: type-slug (e.g. person-juan, concept-llm-wiki, entity-openai)
-4. Add [[page-id]] cross-references between related pages
-5. Keep each page under 4000 characters
+3. If new info CONTRADICTS old info, the new info is correct — REPLACE the old facts
+4. The user's own statements about themselves are always authoritative
+5. Use id format: type-slug (e.g. person-juan, concept-llm-wiki, entity-openai)
+6. Add [[page-id]] cross-references between related pages
+7. Keep each page under 4000 characters
 
 OUTPUT FORMAT — respond with ONLY this JSON, no other text:
 {{"pages": [

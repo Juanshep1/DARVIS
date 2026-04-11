@@ -1557,9 +1557,18 @@ class Brain:
             self.history = self.history[-(MAX_HISTORY * 2):]
 
         from memory import get_memory_context
+        from wiki import get_wiki_context
         prompt = SYSTEM_PROMPT.replace("HOME_DIR", HOME_DIR)
         prompt += f"\n\nYou are currently running the {self.model} model on the terminal (macOS). When asked what model you use, say {self.model}. You run across iPhone, browser, terminal, and Android — all share memory and history."
         prompt += get_memory_context()
+        # Inject relevant wiki knowledge based on user's message
+        if user_input:
+            try:
+                wiki_ctx = get_wiki_context(user_input)
+                if wiki_ctx:
+                    prompt += wiki_ctx
+            except Exception:
+                pass
         messages = [{"role": "system", "content": prompt}] + self.history
 
         reply = self._call_ollama(messages)
@@ -2431,6 +2440,179 @@ def main():
 
             if lower == "/fix":
                 fix_yourself(brain, tts, ear, ollama_key, elevenlabs_key, gemini_key, audio_mode)
+                continue
+
+            # ── Wiki ──
+            if lower == "/wiki" or lower.startswith("/wiki "):
+                from wiki import get_index, get_page, search_wiki, delete_page
+                parts = user_input.strip().split(None, 2)
+                subcmd = parts[1].lower() if len(parts) > 1 else "stats"
+
+                if subcmd == "list":
+                    idx = get_index()
+                    pages = idx.get("pages", {})
+                    if not pages:
+                        console.print("  [dim]Wiki is empty. Use /ingest to add content.[/dim]")
+                    else:
+                        console.print(f"\n  [bold {CYAN}]Wiki ({len(pages)} pages)[/bold {CYAN}]\n")
+                        for pid, entry in sorted(pages.items(), key=lambda x: x[1].get("updated", ""), reverse=True):
+                            ptype = entry.get("type", "?")
+                            console.print(f"  [{BLUE}]{ptype:<8}[/{BLUE}] [bold]{entry.get('title', pid)}[/bold]  [dim]{pid}[/dim]")
+                            console.print(f"           [dim]{entry.get('summary', '')[:80]}[/dim]")
+                elif subcmd == "search" and len(parts) > 2:
+                    results = search_wiki(parts[2])
+                    if not results:
+                        console.print("  [dim]No matching wiki pages.[/dim]")
+                    else:
+                        for r in results:
+                            console.print(f"  [{BLUE}]{r.get('type', '?'):<8}[/{BLUE}] [bold]{r.get('title', r['id'])}[/bold]  [dim]score:{r.get('score', 0)}[/dim]")
+                            console.print(f"           [dim]{r.get('summary', '')[:80]}[/dim]")
+                elif subcmd == "read" and len(parts) > 2:
+                    page = get_page(parts[2])
+                    if page:
+                        console.print(Panel(Markdown(page["content"]), title=f"[bold {CYAN}]{page['title']}[/bold {CYAN}]", border_style=BLUE, padding=(1, 2)))
+                    else:
+                        console.print(f"  [red]Page not found: {parts[2]}[/red]")
+                elif subcmd == "delete" and len(parts) > 2:
+                    if delete_page(parts[2]):
+                        console.print(f"  [green]Deleted: {parts[2]}[/green]")
+                    else:
+                        console.print(f"  [red]Failed to delete: {parts[2]}[/red]")
+                else:
+                    idx = get_index()
+                    pages = idx.get("pages", {})
+                    sources = idx.get("sources", {})
+                    console.print(f"\n  [bold {CYAN}]Wiki Stats[/bold {CYAN}]")
+                    console.print(f"  Pages: {len(pages)}  |  Sources ingested: {len(sources)}")
+                    if pages:
+                        recent = sorted(pages.items(), key=lambda x: x[1].get("updated", ""), reverse=True)[:5]
+                        console.print(f"\n  [bold]Recent pages:[/bold]")
+                        for pid, e in recent:
+                            console.print(f"    [{BLUE}]{e.get('title', pid)}[/{BLUE}] [dim]({e.get('type', '?')})[/dim]")
+                    console.print(f"\n  [dim]Commands: /wiki list | /wiki search QUERY | /wiki read PAGE-ID | /wiki delete PAGE-ID[/dim]")
+                continue
+
+            # ── Ingest ──
+            if lower.startswith("/ingest"):
+                from wiki import get_index, get_schema, ingest_source, bulk_upsert, build_ingest_prompt
+                parts = user_input.strip().split(None, 2)
+
+                raw_content = None
+                title = "Untitled"
+                source_type = "paste"
+
+                if len(parts) > 1 and parts[1].lower() == "url" and len(parts) > 2:
+                    # Fetch URL
+                    url = parts[2]
+                    title = url
+                    source_type = "url"
+                    console.print(f"  [{BLUE}]Fetching {url}...[/{BLUE}]")
+                    try:
+                        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+                        with urllib.request.urlopen(req, timeout=15) as resp:
+                            raw_content = resp.read().decode(errors="replace")
+                        # Strip HTML tags
+                        import re
+                        raw_content = re.sub(r'<[^>]+>', ' ', raw_content)
+                        raw_content = re.sub(r'\s+', ' ', raw_content).strip()[:50000]
+                    except Exception as e:
+                        console.print(f"  [red]Fetch error: {e}[/red]")
+                        continue
+                elif len(parts) > 1 and parts[1].lower() != "url":
+                    # File path
+                    filepath = Path(parts[1]).expanduser()
+                    if filepath.exists():
+                        raw_content = filepath.read_text(errors="replace")[:50000]
+                        title = filepath.name
+                        source_type = "file"
+                    else:
+                        console.print(f"  [red]File not found: {filepath}[/red]")
+                        continue
+                else:
+                    # Read from clipboard
+                    try:
+                        result = subprocess.run(["pbpaste"], capture_output=True, text=True, timeout=5)
+                        raw_content = result.stdout.strip()
+                        if not raw_content:
+                            console.print("  [dim]Clipboard is empty. Usage: /ingest FILE | /ingest url URL | copy text then /ingest[/dim]")
+                            continue
+                        title = "Clipboard paste"
+                    except Exception:
+                        console.print("  [red]Could not read clipboard[/red]")
+                        continue
+
+                console.print(f"  [{BLUE}]Ingesting: {title} ({len(raw_content)} chars)...[/{BLUE}]")
+
+                # Store raw source
+                source_id = ingest_source(title, raw_content, source_type)
+                if not source_id:
+                    console.print("  [red]Failed to store source[/red]")
+                    continue
+
+                # Build ingest prompt and send to LLM
+                index = get_index()
+                schema = get_schema()
+                ingest_prompt = build_ingest_prompt(index, schema, raw_content[:30000], title)
+
+                with console.status(f"[{BLUE}]Processing into wiki pages...", spinner="arc"):
+                    ingest_response = brain.think(ingest_prompt)
+
+                # Parse JSON output from LLM
+                try:
+                    import re
+                    json_match = re.search(r'\{[\s\S]*"pages"[\s\S]*\}', ingest_response)
+                    if json_match:
+                        result = json.loads(json_match.group())
+                        pages = result.get("pages", [])
+                        if pages:
+                            # Add source reference
+                            for p in pages:
+                                p.setdefault("sources", [])
+                                if source_id not in p["sources"]:
+                                    p["sources"].append(source_id)
+                            if bulk_upsert(pages, source_id):
+                                console.print(f"  [green]Wiki updated: {len(pages)} pages created/updated[/green]")
+                                for p in pages:
+                                    console.print(f"    [{BLUE}]{p.get('type', '?'):<8}[/{BLUE}] {p.get('title', p['id'])}")
+                            else:
+                                console.print("  [red]Failed to write wiki pages[/red]")
+                        else:
+                            console.print("  [yellow]LLM returned no pages[/yellow]")
+                    else:
+                        console.print("  [yellow]Could not parse LLM output as wiki pages[/yellow]")
+                        console.print(f"  [dim]{ingest_response[:200]}[/dim]")
+                except (json.JSONDecodeError, Exception) as e:
+                    console.print(f"  [red]Parse error: {e}[/red]")
+                continue
+
+            # ── Lint ──
+            if lower == "/lint":
+                from wiki import get_index
+                index = get_index()
+                pages = index.get("pages", {})
+                if not pages:
+                    console.print("  [dim]Wiki is empty — nothing to lint.[/dim]")
+                    continue
+
+                lint_prompt = f"""You are a wiki health checker. Analyze this wiki index and report issues.
+
+WIKI INDEX:
+{json.dumps(index, indent=2)}
+
+Check for:
+1. Orphan pages (no other pages link to them)
+2. Pages that should link to each other based on overlapping tags/topics
+3. Gaps — important topics mentioned in summaries but lacking their own page
+4. Stale or low-quality summaries
+
+Output a brief, actionable report. Be specific about page IDs."""
+
+                with console.status(f"[{BLUE}]Linting wiki...", spinner="arc"):
+                    lint_response = brain.think(lint_prompt)
+
+                display = re.sub(r'```command\s*\n.*?\n```', '', lint_response, flags=re.DOTALL).strip()
+                if display:
+                    console.print(Panel(Markdown(display), title=f"[bold {CYAN}]Wiki Lint Report[/bold {CYAN}]", border_style=BLUE, padding=(1, 2)))
                 continue
 
             # ── Macros ──

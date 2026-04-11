@@ -91,16 +91,18 @@ export default async (req) => {
 
   const OLLAMA_KEY = Netlify.env.get("OLLAMA_API_KEY");
 
-  // ── PARALLEL LOAD: settings + history + memory + search all at once ──
+  // ── PARALLEL LOAD: settings + history + memory + wiki index + search all at once ──
   const settingsStore = getStore("darvis-settings");
   const historyStore = getStore("darvis-history");
   const memoryStore = getStore("darvis-memory");
+  const wikiStore = getStore("darvis-wiki");
 
-  // Load settings, history, memory first
-  const [settingsData, historyData, memoryData] = await Promise.all([
+  // Load settings, history, memory, wiki index first
+  const [settingsData, historyData, memoryData, wikiIndexData] = await Promise.all([
     settingsStore.get("current", { type: "json" }).catch(() => null),
     historyStore.get("conversation", { type: "json" }).catch(() => null),
     memoryStore.get("all", { type: "json" }).catch(() => null),
+    wikiStore.get("index", { type: "json" }).catch(() => null),
   ]);
 
   // Build contextual search query using conversation history
@@ -135,6 +137,35 @@ export default async (req) => {
   let memoryContext = "";
   if (Array.isArray(memoryData) && memoryData.length > 0) {
     memoryContext = "\n\nUser's saved memories:\n" + memoryData.map((m) => `- [${m.category}] ${m.content}`).join("\n");
+  }
+
+  // ── Wiki context: search index for relevant pages ──
+  let wikiContext = "";
+  if (wikiIndexData && wikiIndexData.pages && Object.keys(wikiIndexData.pages).length > 0) {
+    const queryWords = message.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+    const scored = [];
+    for (const [id, entry] of Object.entries(wikiIndexData.pages)) {
+      const text = `${entry.title || ""} ${entry.summary || ""} ${(entry.tags || []).join(" ")}`.toLowerCase();
+      const score = queryWords.filter(w => text.includes(w)).length;
+      if (score > 0) scored.push({ id, ...entry, score });
+    }
+    scored.sort((a, b) => b.score - a.score);
+    const topPages = scored.slice(0, 3);
+    if (topPages.length > 0) {
+      const pageContents = await Promise.all(
+        topPages.map(p => wikiStore.get(`page:${p.id}`, { type: "json" }).catch(() => null))
+      );
+      const parts = [];
+      for (const page of pageContents) {
+        if (page && page.content) {
+          const content = page.content.length > 2000 ? page.content.substring(0, 2000) + "..." : page.content;
+          parts.push(`### ${page.title || "Untitled"} (${page.type || "page"})\n${content}`);
+        }
+      }
+      if (parts.length > 0) {
+        wikiContext = "\n\nRelevant wiki knowledge:\n" + parts.join("\n\n");
+      }
+    }
   }
 
   let searchContext = "";
@@ -275,12 +306,18 @@ Do NOT use for simple searches or general questions.
 {"action": "analyze_screen", "prompt": "What error is on screen?"}
 \`\`\`
 
+### Wiki (persistent knowledge base):
+\`\`\`command
+{"action": "wiki_ingest", "title": "descriptive title", "content": "the text to process into wiki pages"}
+\`\`\`
+Use when the user shares substantial info that should be preserved long-term (articles, notes, research, etc.)
+
 Common shortcuts:
 - "open YouTube" → open_url https://youtube.com
 - "open Gmail" → open_url https://mail.google.com
 - "Google X" → open_search with the query
 - "remind me in 30 min" → schedule with delay_minutes
-- "alert me when Tesla hits $300" → alert_add price_threshold${memoryContext}${searchContext}`;
+- "alert me when Tesla hits $300" → alert_add price_threshold${memoryContext}${wikiContext}${searchContext}`;
 
   const userMsg = { role: "user", content: `${timeBlock}\n${message}` };
   const messages = [
@@ -472,6 +509,73 @@ Common shortcuts:
           macros[cmd.name.toLowerCase()] = cmd.command || "";
           await macroStore.setJSON("all", macros);
           cmdResults.push(`Macro saved: ${cmd.name}`);
+        } else if (cmd.action === "wiki_ingest" && cmd.content) {
+          // Store raw source
+          const sourceId = `src-${Date.now()}`;
+          await wikiStore.set(`source-raw:${sourceId}`, cmd.content);
+          await wikiStore.setJSON(`source:${sourceId}`, {
+            id: sourceId, title: cmd.title || "Untitled", type: "paste",
+            ingested: new Date().toISOString(), size: cmd.content.length, pages_updated: [],
+          });
+          // Update index sources
+          let wIdx = wikiIndexData || { pages: {}, sources: {} };
+          wIdx.sources = wIdx.sources || {};
+          wIdx.sources[sourceId] = { title: cmd.title || "Untitled", ingested: new Date().toISOString(), pages_updated: [] };
+
+          // Ask LLM to process into wiki pages
+          const schema = await wikiStore.get("schema", { type: "json" }).catch(() => null);
+          const instructions = schema?.instructions || "Extract entities and concepts, create wiki pages.";
+          const ingestPrompt = `You are a wiki maintainer. Process this source into wiki pages.
+
+CURRENT WIKI INDEX:
+${JSON.stringify(wIdx, null, 2)}
+
+WIKI RULES:
+${instructions}
+
+SOURCE (${cmd.title || "Untitled"}):
+${cmd.content.substring(0, 30000)}
+
+Output ONLY JSON: {"pages": [{"id": "type-slug", "title": "...", "type": "entity|concept|summary", "content": "markdown...", "tags": [...], "links": [...], "summary": "one line"}]}`;
+
+          try {
+            const wikiRes = await fetch("https://ollama.com/api/chat", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${OLLAMA_KEY}` },
+              body: JSON.stringify({ model: MODEL, messages: [{ role: "user", content: ingestPrompt }], stream: false }),
+              signal: AbortSignal.timeout(90000),
+            });
+            if (wikiRes.ok) {
+              const wikiData = await wikiRes.json();
+              const wikiText = wikiData.message?.content || "";
+              const jsonMatch = wikiText.match(/\{[\s\S]*"pages"[\s\S]*\}/);
+              if (jsonMatch) {
+                const parsed = JSON.parse(jsonMatch[0]);
+                const pages = parsed.pages || [];
+                const now = new Date().toISOString();
+                for (const p of pages) {
+                  if (!p.id || !p.title || !p.content) continue;
+                  p.type = p.type || "concept";
+                  p.tags = p.tags || [];
+                  p.links = p.links || [];
+                  p.sources = [sourceId];
+                  p.created = now;
+                  p.updated = now;
+                  await wikiStore.setJSON(`page:${p.id}`, p);
+                  wIdx.pages[p.id] = {
+                    title: p.title, type: p.type, tags: p.tags,
+                    summary: p.summary || p.content.substring(0, 120).replace(/[#\n]/g, " ").trim(),
+                    updated: now,
+                  };
+                }
+                wIdx.sources[sourceId].pages_updated = pages.map(p => p.id);
+                await wikiStore.setJSON("index", wIdx);
+                cmdResults.push(`Wiki updated: ${pages.length} pages created/updated from "${cmd.title || "Untitled"}"`);
+              }
+            }
+          } catch (e) {
+            cmdResults.push(`Wiki ingest error: ${e.message}`);
+          }
         }
       } catch {}
     }

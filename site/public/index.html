@@ -73,12 +73,13 @@ body::after{content:'';position:fixed;top:-50%;left:-50%;width:200%;height:200%;
 </style>
 </head>
 <body>
-<div class="header"><div class="header-brand">S.P.E.C.T.R.A.</div><div class="header-actions"><button class="header-btn" id="ambientBtn" onclick="toggleAmbient()" title="Ambient Mode">&#x1F4A4;</button><button class="header-btn" id="situationBtn" onclick="toggleSituation()" title="Situation Room">&#x1F4CA;</button><button class="header-btn" id="fixBtn" onclick="fixYourself()" title="Fix Yourself">&#x1F527;</button><button class="header-btn" id="agentToggle" onclick="toggleAgentView()">&#x1F441;</button><button class="header-btn" onclick="toggleSettings()">&#9881;</button></div></div>
+<div class="header"><div class="header-brand">S.P.E.C.T.R.A.</div><div class="header-actions"><button class="header-btn" id="ambientBtn" onclick="toggleAmbient()" title="Ambient Mode">&#x1F4A4;</button><button class="header-btn" id="wikiBtn" onclick="toggleWiki()" title="Wiki">&#x1F4D6;</button><button class="header-btn" id="situationBtn" onclick="toggleSituation()" title="Situation Room">&#x1F4CA;</button><button class="header-btn" id="fixBtn" onclick="fixYourself()" title="Fix Yourself">&#x1F527;</button><button class="header-btn" id="agentToggle" onclick="toggleAgentView()">&#x1F441;</button><button class="header-btn" onclick="toggleSettings()">&#9881;</button></div></div>
 <div class="settings-panel" id="settingsPanel"><label>Audio Mode</label><select id="audioModeSelect" onchange="setAudioMode(this.value)"><option value="classic">Classic (Ollama + ElevenLabs)</option><option value="gemini">Gemini Live Audio</option><option value="gemma">Gemma 4 (Fast, Free)</option></select><div id="classicSettings"><label>Model</label><select id="modelSelect" onchange="setModel(this.value)"></select><label>Voice</label><select id="voiceSelect" onchange="setVoice(this.value)"></select><label>Custom Voice ID</label><div style="display:flex;gap:6px"><input type="text" id="voiceIdInput" placeholder="Paste ElevenLabs Voice ID..." style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:rgba(255,255,255,0.04);color:var(--text);font-family:var(--mono);font-size:0.7rem;outline:none"><button onclick="setCustomVoiceId()" style="padding:8px 12px;border:1px solid rgba(0,229,255,0.3);border-radius:8px;background:rgba(0,229,255,0.08);color:var(--cyan);font-family:var(--mono);font-size:0.7rem;font-weight:600;cursor:pointer">Set</button></div></div><div id="geminiVoiceSettings" style="display:none"><label>Gemini Voice</label><select id="geminiVoiceSelect" onchange="setGeminiVoice(this.value)"><option value="Kore">Kore (Default, calm female)</option><option value="Puck">Puck (warm male)</option><option value="Charon">Charon (deep male)</option><option value="Fenrir">Fenrir (bold male)</option><option value="Aoede">Aoede (bright female)</option><option value="Leda">Leda (soft female)</option><option value="Orus">Orus (clear male)</option><option value="Zephyr">Zephyr (breezy female)</option></select></div><div class="settings-status" id="settingsStatus"></div></div>
 <div class="agent-panel" id="agentPanel"><div class="agent-header"><span class="agent-title">Agent Browser</span><button class="agent-close" onclick="toggleAgentView()">&times;</button></div><div class="agent-screen-wrap"><img id="agentScreen" style="display:none" alt="Agent browser view"><div class="agent-no-feed" id="agentNoFeed">No active session<br>Ask SPECTRA to browse something</div></div><div class="agent-footer"><div class="agent-status" id="agentStatus">Idle</div><div class="agent-step" id="agentStep"></div></div></div>
 <div class="orb-area"><div class="orb-wrap" id="orbWrap"><canvas id="orbCanvas" width="600" height="600" onclick="if(!orb.classList.contains('speaking'))toggleMic()"></canvas><div class="orb" id="orb"></div></div><div class="response-area"><div id="response"></div></div></div>
 <div class="input-area"><input type="text" id="input" placeholder="Ask SPECTRA anything..." autocomplete="off" onkeydown="if(event.key==='Enter')send()"><button class="mic-btn" id="micBtn" onclick="toggleMic()">&#x1F3A4;</button><button class="cam-btn" id="camBtn" onclick="toggleCamera()">&#x1F4F7;</button></div>
 <div class="situation-panel" id="situationPanel"><div class="agent-header"><span class="agent-title">Situation Room</span><button class="agent-close" onclick="toggleSituation()">&times;</button></div><div id="situationGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px;max-height:70vh;overflow-y:auto"></div></div>
+<div class="situation-panel" id="wikiPanel" style="display:none"><div class="agent-header"><span class="agent-title">Wiki</span><button class="agent-close" onclick="toggleWiki()">&times;</button></div><div style="padding:12px"><div style="display:flex;gap:8px;margin-bottom:12px"><input type="text" id="wikiSearch" placeholder="Search wiki..." style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,0.04);color:var(--text);font-family:var(--mono);font-size:0.8rem;outline:none" onkeydown="if(event.key==='Enter')searchWikiUI()"><button onclick="searchWikiUI()" style="padding:8px 14px;border:1px solid rgba(0,229,255,0.3);border-radius:10px;background:rgba(0,229,255,0.08);color:var(--cyan);font-family:var(--mono);font-size:0.75rem;cursor:pointer">Search</button></div><div id="wikiContent" style="max-height:65vh;overflow-y:auto;font-family:var(--mono);font-size:0.8rem;line-height:1.5"></div><div style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px"><button onclick="showIngestForm()" id="ingestToggle" style="width:100%;padding:10px;border:1px solid rgba(0,230,118,0.3);border-radius:10px;background:rgba(0,230,118,0.08);color:var(--green);font-family:var(--mono);font-size:0.8rem;cursor:pointer">+ Ingest New Source</button><div id="ingestForm" style="display:none;margin-top:10px"><input type="text" id="ingestTitle" placeholder="Source title..." style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,0.04);color:var(--text);font-family:var(--mono);font-size:0.8rem;outline:none;margin-bottom:8px;box-sizing:border-box"><textarea id="ingestContent" placeholder="Paste content to ingest..." style="width:100%;height:120px;padding:8px 12px;border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,0.04);color:var(--text);font-family:var(--mono);font-size:0.75rem;outline:none;resize:vertical;box-sizing:border-box"></textarea><button onclick="ingestFromUI()" style="margin-top:8px;width:100%;padding:10px;border:1px solid rgba(108,99,255,0.4);border-radius:10px;background:rgba(108,99,255,0.1);color:var(--accent);font-family:var(--mono);font-size:0.8rem;cursor:pointer">Process into Wiki</button></div></div></div></div>
 <video class="cam-preview" id="camPreview" autoplay playsinline muted></video>
 <div id="statusBar">Ollama Cloud + ElevenLabs</div>
 <script>
@@ -1934,6 +1935,139 @@ function toggleAmbient() {
 // SITUATION ROOM
 // ══════════════════════════════════════════════════════════════════════════════
 let situationTimer = null;
+
+// ══════════════════════════════════════════════════════════════════════════════
+// WIKI PANEL
+// ══════════════════════════════════════════════════════════════════════════════
+
+function toggleWiki() {
+    const panel = document.getElementById('wikiPanel');
+    const isOpen = panel.style.display === 'none' || !panel.classList.contains('open');
+    if (isOpen) {
+        panel.style.display = '';
+        panel.classList.add('open');
+        loadWikiIndex();
+    } else {
+        panel.classList.remove('open');
+        panel.style.display = 'none';
+    }
+}
+
+async function loadWikiIndex() {
+    const el = document.getElementById('wikiContent');
+    el.innerHTML = '<div style="color:var(--text-dim)">Loading wiki...</div>';
+    try {
+        const res = await fetch('/api/wiki', { signal: AbortSignal.timeout(8000) });
+        const data = await res.json();
+        const pages = data.index?.pages || {};
+        const keys = Object.keys(pages);
+        if (keys.length === 0) {
+            el.innerHTML = '<div style="color:var(--text-dim)">Wiki is empty. Use the Ingest button to add content.</div>';
+            return;
+        }
+        const sorted = keys.sort((a, b) => (pages[b].updated || '').localeCompare(pages[a].updated || ''));
+        let html = `<div style="color:var(--text-dim);margin-bottom:8px">${keys.length} pages</div>`;
+        for (const id of sorted) {
+            const p = pages[id];
+            const typeColor = p.type === 'entity' ? 'var(--cyan)' : p.type === 'concept' ? 'var(--accent)' : 'var(--green)';
+            html += `<div onclick="viewWikiPage('${id}')" style="padding:10px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;cursor:pointer;transition:border-color 0.2s" onmouseover="this.style.borderColor='rgba(108,99,255,0.4)'" onmouseout="this.style.borderColor='var(--border)'">
+                <div style="display:flex;align-items:center;gap:8px"><span style="color:${typeColor};font-size:0.7rem;text-transform:uppercase;font-weight:600">${p.type || 'page'}</span><span style="font-weight:500">${p.title || id}</span></div>
+                <div style="color:var(--text-dim);font-size:0.75rem;margin-top:4px">${p.summary || ''}</div>
+            </div>`;
+        }
+        el.innerHTML = html;
+    } catch (err) {
+        el.innerHTML = `<div style="color:var(--red)">Error: ${err.message}</div>`;
+    }
+}
+
+async function viewWikiPage(id) {
+    const el = document.getElementById('wikiContent');
+    el.innerHTML = '<div style="color:var(--text-dim)">Loading page...</div>';
+    try {
+        const res = await fetch(`/api/wiki?page=${id}`, { signal: AbortSignal.timeout(8000) });
+        const data = await res.json();
+        const page = data.page;
+        if (!page) { el.innerHTML = '<div style="color:var(--red)">Page not found</div>'; return; }
+        const tags = (page.tags || []).map(t => `<span style="padding:2px 8px;border-radius:6px;background:rgba(108,99,255,0.1);color:var(--accent);font-size:0.65rem">${t}</span>`).join(' ');
+        // Simple markdown rendering (headers, bold, links)
+        let content = (page.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        content = content.replace(/^### (.+)$/gm, '<div style="font-weight:600;margin-top:12px;color:var(--text)">$1</div>');
+        content = content.replace(/^## (.+)$/gm, '<div style="font-weight:700;font-size:1rem;margin-top:14px;color:var(--text)">$1</div>');
+        content = content.replace(/^# (.+)$/gm, '<div style="font-weight:800;font-size:1.1rem;margin-top:16px;color:var(--text)">$1</div>');
+        content = content.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        content = content.replace(/\[\[([^\]]+)\]\]/g, '<a onclick="viewWikiPage(\'$1\')" style="color:var(--cyan);cursor:pointer;text-decoration:underline">$1</a>');
+        content = content.replace(/\n/g, '<br>');
+        el.innerHTML = `<div style="margin-bottom:10px"><button onclick="loadWikiIndex()" style="padding:4px 12px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--text-dim);font-family:var(--mono);font-size:0.7rem;cursor:pointer">&larr; Back</button></div>
+            <div style="font-weight:700;font-size:1.1rem;margin-bottom:6px">${page.title || id}</div>
+            <div style="margin-bottom:10px">${tags}</div>
+            <div style="color:var(--text);line-height:1.6">${content}</div>`;
+    } catch (err) {
+        el.innerHTML = `<div style="color:var(--red)">Error: ${err.message}</div>`;
+    }
+}
+
+async function searchWikiUI() {
+    const query = document.getElementById('wikiSearch').value.trim();
+    if (!query) { loadWikiIndex(); return; }
+    const el = document.getElementById('wikiContent');
+    el.innerHTML = '<div style="color:var(--text-dim)">Searching...</div>';
+    try {
+        const res = await fetch('/api/wiki', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'search', query }),
+            signal: AbortSignal.timeout(8000),
+        });
+        const data = await res.json();
+        const results = data.results || [];
+        if (results.length === 0) {
+            el.innerHTML = '<div style="color:var(--text-dim)">No matching pages.</div>';
+            return;
+        }
+        let html = `<div style="color:var(--text-dim);margin-bottom:8px">${results.length} results</div>`;
+        for (const r of results) {
+            const typeColor = r.type === 'entity' ? 'var(--cyan)' : r.type === 'concept' ? 'var(--accent)' : 'var(--green)';
+            html += `<div onclick="viewWikiPage('${r.id}')" style="padding:10px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;cursor:pointer" onmouseover="this.style.borderColor='rgba(108,99,255,0.4)'" onmouseout="this.style.borderColor='var(--border)'">
+                <div style="display:flex;align-items:center;gap:8px"><span style="color:${typeColor};font-size:0.7rem;text-transform:uppercase;font-weight:600">${r.type || 'page'}</span><span style="font-weight:500">${r.title || r.id}</span></div>
+                <div style="color:var(--text-dim);font-size:0.75rem;margin-top:4px">${r.summary || ''}</div>
+            </div>`;
+        }
+        el.innerHTML = html;
+    } catch (err) {
+        el.innerHTML = `<div style="color:var(--red)">Error: ${err.message}</div>`;
+    }
+}
+
+function showIngestForm() {
+    const form = document.getElementById('ingestForm');
+    form.style.display = form.style.display === 'none' ? 'block' : 'none';
+}
+
+async function ingestFromUI() {
+    const title = document.getElementById('ingestTitle').value.trim() || 'Untitled';
+    const content = document.getElementById('ingestContent').value.trim();
+    if (!content) return;
+    const el = document.getElementById('wikiContent');
+    el.innerHTML = '<div style="color:var(--text-dim)">Processing into wiki pages... This may take a moment.</div>';
+    try {
+        const res = await fetch('/api/chat', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: `Ingest this into the wiki with title "${title}": ${content.substring(0, 5000)}` }),
+            signal: AbortSignal.timeout(120000),
+        });
+        const data = await res.json();
+        document.getElementById('ingestTitle').value = '';
+        document.getElementById('ingestContent').value = '';
+        document.getElementById('ingestForm').style.display = 'none';
+        // Reload wiki to show new pages
+        await loadWikiIndex();
+        if (data.reply) {
+            responseEl.textContent = data.reply;
+        }
+    } catch (err) {
+        el.innerHTML = `<div style="color:var(--red)">Ingest error: ${err.message}</div>`;
+    }
+}
 
 function toggleSituation() {
     const panel = document.getElementById('situationPanel');

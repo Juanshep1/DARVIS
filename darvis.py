@@ -1456,6 +1456,114 @@ def extract_and_run_commands(response_text: str) -> list[str]:
                 except Exception as e:
                     results.append(f"Macro error: {e}")
 
+            elif action == "wiki_ingest" and "content" in data:
+                from wiki import get_index, get_schema, ingest_source, bulk_upsert, build_ingest_prompt
+                content = data["content"]
+                title = data.get("title", content[:60])
+                console.print(f"  [dim]Wiki ingest:[/dim] {title}")
+
+                # If URL, fetch it
+                if content.strip().startswith("http://") or content.strip().startswith("https://"):
+                    console.print(f"  [{BLUE}]Fetching URL...[/{BLUE}]")
+                    try:
+                        url_req = urllib.request.Request(content.strip(), headers={"User-Agent": "Mozilla/5.0"})
+                        with urllib.request.urlopen(url_req, timeout=15) as url_resp:
+                            html = url_resp.read().decode(errors="replace")
+                        title_match = re.search(r'<title[^>]*>([^<]+)</title>', html, re.IGNORECASE)
+                        if title_match:
+                            title = title_match.group(1).strip()
+                        content = re.sub(r'<[^>]+>', ' ', html)
+                        content = re.sub(r'\s+', ' ', content).strip()[:50000]
+                    except Exception as e:
+                        results.append(f"URL fetch failed: {e}")
+                        continue
+
+                source_id = ingest_source(title, content, "paste")
+                if source_id:
+                    index = get_index()
+                    schema = get_schema()
+                    prompt = build_ingest_prompt(index, schema, content[:25000], title)
+                    wiki_response = brain.think(prompt) if 'brain' in dir() else ""
+                    if not wiki_response:
+                        # Fallback: call Ollama directly
+                        env = load_env()
+                        ollama_key = env.get("OLLAMA_API_KEY", "")
+                        if ollama_key:
+                            payload = json.dumps({"model": "glm-5", "messages": [{"role": "user", "content": prompt}], "stream": False}).encode()
+                            req2 = urllib.request.Request("https://ollama.com/api/chat", data=payload, method="POST", headers={"Content-Type": "application/json", "Authorization": f"Bearer {ollama_key}"})
+                            with urllib.request.urlopen(req2, timeout=120) as resp2:
+                                wiki_response = json.loads(resp2.read().decode()).get("message", {}).get("content", "")
+                    json_match = re.search(r'\{[\s\S]*"pages"[\s\S]*\}', wiki_response)
+                    if json_match:
+                        parsed = json.loads(json_match.group())
+                        pages = parsed.get("pages", [])
+                        for p in pages:
+                            p.setdefault("sources", [])
+                            if source_id not in p["sources"]:
+                                p["sources"].append(source_id)
+                        if pages and bulk_upsert(pages, source_id):
+                            output = f"Wiki updated: {len(pages)} pages"
+                            for p in pages:
+                                console.print(f"    [{BLUE}]{p.get('type', '?'):<8}[/{BLUE}] {p.get('title', p['id'])}")
+                        else:
+                            output = "Wiki: no pages generated"
+                    else:
+                        output = "Wiki: could not parse LLM output"
+                else:
+                    output = "Wiki: failed to store source"
+                results.append(output)
+                console.print(f"  [dim]{output}[/dim]")
+
+            elif action == "wiki_search" and "query" in data:
+                from wiki import search_wiki
+                search_results = search_wiki(data["query"])
+                if search_results:
+                    output = f"Wiki search ({len(search_results)} results):\n" + "\n".join(f"  {r.get('title', r['id'])}: {r.get('summary', '')[:60]}" for r in search_results)
+                else:
+                    output = "No wiki pages match that query"
+                results.append(output)
+                console.print(f"  [dim]{output}[/dim]")
+
+            elif action == "play_music" and "query" in data:
+                import urllib.parse
+                encoded = urllib.parse.quote(data["query"])
+                url = f"music://music.apple.com/search?term={encoded}"
+                subprocess.run(["open", url], timeout=5)
+                output = f"Playing: {data['query']}"
+                results.append(output)
+                console.print(f"  [dim]{output}[/dim]")
+
+            elif action == "music_control" and "command" in data:
+                cmd_map = {
+                    "pause": 'tell application "Music" to pause',
+                    "play": 'tell application "Music" to play',
+                    "next": 'tell application "Music" to next track',
+                    "previous": 'tell application "Music" to previous track',
+                    "stop": 'tell application "Music" to stop',
+                }
+                script = cmd_map.get(data["command"].lower(), "")
+                if script:
+                    subprocess.run(["osascript", "-e", script], timeout=5)
+                output = f"Music: {data['command']}"
+                results.append(output)
+                console.print(f"  [dim]{output}[/dim]")
+
+            elif action == "maps" and data.get("type"):
+                mode_flags = {"driving": "d", "walking": "w", "transit": "r"}
+                if data["type"] == "directions" and data.get("destination"):
+                    flag = mode_flags.get(data.get("mode", "driving"), "d")
+                    url = f"maps://?daddr={urllib.parse.quote(data['destination'])}&dirflg={flag}"
+                elif data["type"] == "search" and data.get("query"):
+                    url = f"maps://?q={urllib.parse.quote(data['query'])}"
+                elif data["type"] == "show" and data.get("location"):
+                    url = f"maps://?q={urllib.parse.quote(data['location'])}"
+                else:
+                    url = "maps://"
+                subprocess.run(["open", url], timeout=5)
+                output = f"Maps: {data.get('type', '')} — {data.get('destination', data.get('query', data.get('location', '')))}"
+                results.append(output)
+                console.print(f"  [dim]{output}[/dim]")
+
             elif action == "macro_remove" and "name" in data:
                 try:
                     from macros import MacroManager

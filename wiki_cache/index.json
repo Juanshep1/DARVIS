@@ -31,7 +31,7 @@
         "husky"
       ],
       "summary": "3-year-old husky mix dog who loves playing in snow and chasing squirrels, weighs about 50 pounds",
-      "updated": "2026-04-11T16:27:42.940Z"
+      "updated": "2026-04-11T16:56:02.514Z"
     },
     "entity-springfield-il": {
       "title": "Springfield, IL",
@@ -42,6 +42,18 @@
       ],
       "summary": "Capital city of Illinois, hometown of Juan",
       "updated": "2026-04-11T16:38:27.732Z"
+    },
+    "entity-husky": {
+      "title": "Husky",
+      "type": "entity",
+      "tags": [
+        "dog",
+        "breed",
+        "animal",
+        "sled-dog"
+      ],
+      "summary": "Type of dog bred for polar regions and sled work, known for cold-weather tolerance and hardiness",
+      "updated": "2026-04-11T16:56:02.514Z"
     }
   },
   "sources": {
@@ -94,6 +106,14 @@
       "title": "into the wiki with title \"Religious cosmology\": https://en.w",
       "ingested": "2026-04-11T16:51:12.138Z",
       "pages_updated": []
+    },
+    "src-1775926503097": {
+      "title": "Husky - Wikipedia",
+      "ingested": "2026-04-11T16:55:03.097Z",
+      "pages_updated": [
+        "entity-husky",
+        "entity-azula"
+      ]
     }
   }
 }

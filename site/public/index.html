@@ -331,13 +331,29 @@ async function geminiConnect() {
 
         const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${tokenData.token}`;
 
-        // Fetch memories for system instruction
+        // Fetch memories + wiki for system instruction
         let memoryCtx = '';
+        let wikiCtx = '';
         try {
-            const memRes = await fetch('/api/memory');
-            const memData = await memRes.json();
-            if (memData.memories?.length) {
-                memoryCtx = '\n\nUser memories:\n' + memData.memories.map(m => `- [${m.category}] ${m.content}`).join('\n');
+            const [memRes, wikiRes] = await Promise.all([
+                fetch('/api/memory').catch(() => null),
+                fetch('/api/wiki').catch(() => null),
+            ]);
+            if (memRes) {
+                const memData = await memRes.json();
+                if (memData.memories?.length) {
+                    memoryCtx = '\n\nUser memories:\n' + memData.memories.map(m => `- [${m.category}] ${m.content}`).join('\n');
+                }
+            }
+            if (wikiRes) {
+                const wikiData = await wikiRes.json();
+                const pages = wikiData.index?.pages || {};
+                const keys = Object.keys(pages);
+                if (keys.length > 0) {
+                    // Include wiki summaries so Gemini knows what's in the knowledge base
+                    wikiCtx = '\n\nWiki knowledge base (' + keys.length + ' pages):\n' +
+                        keys.map(k => `- ${pages[k].title}: ${pages[k].summary || ''}`).join('\n');
+                }
             }
         } catch {}
 
@@ -371,7 +387,8 @@ You are running on the Gemini 2.5 Flash Native Audio model in Gemini Live mode v
 You may receive camera images from the user's device. When you see images, describe what you see accurately.
 
 When the user asks you to remember something, confirm naturally ("Noted, sir" or "I'll remember that"). The memory system saves it automatically.
-When asked what you remember, refer to the user memories listed below.${memoryCtx}`
+When asked what you remember, refer to the user memories and wiki knowledge listed below.
+Use the wiki knowledge to answer questions about topics you have pages on — this is your persistent knowledge base.${memoryCtx}${wikiCtx}`
                             }]
                         }
                     }

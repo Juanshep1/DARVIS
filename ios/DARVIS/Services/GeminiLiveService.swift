@@ -28,10 +28,29 @@ class GeminiLiveService: ObservableObject {
             webSocket = session?.webSocketTask(with: url)
             webSocket?.resume()
 
-            // Fetch memories for context
+            // Fetch memories + wiki for context
             var memoryCtx = ""
+            var wikiCtx = ""
             if let memories = try? await APIClient.shared.getMemories(), !memories.isEmpty {
                 memoryCtx = "\n\nUser memories:\n" + memories.map { "- [\($0.category)] \($0.content)" }.joined(separator: "\n")
+            }
+
+            // Fetch wiki index for context
+            if let wikiUrl = URL(string: "https://darvis1.netlify.app/api/wiki") {
+                if let (data, _) = try? await URLSession.shared.data(from: wikiUrl),
+                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let index = json["index"] as? [String: Any],
+                   let pages = index["pages"] as? [String: [String: Any]], !pages.isEmpty {
+                    var lines: [String] = []
+                    for (_, page) in pages {
+                        let title = page["title"] as? String ?? ""
+                        let summary = page["summary"] as? String ?? ""
+                        if !title.isEmpty { lines.append("- \(title): \(summary)") }
+                    }
+                    if !lines.isEmpty {
+                        wikiCtx = "\n\nWiki knowledge base (\(pages.count) pages):\n" + lines.joined(separator: "\n")
+                    }
+                }
             }
 
             // Send setup
@@ -51,7 +70,8 @@ class GeminiLiveService: ObservableObject {
                         You are the user's personal AI assistant. NEVER say "Spectra" or your name unless directly asked "who are you?". NEVER describe your personality traits.
                         British-accented. Addresses user as "sir" (user is male, NEVER say "ma'am").
                         Keep responses concise (1-3 sentences).
-                        You are running on the Gemini 2.5 Flash Native Audio model in Gemini Live mode on the iOS SPECTRA app. When asked what model you are, say Gemini 2.5 Flash Native Audio. You run across iPhone, browser, terminal, and Android — all share memory and history.\(memoryCtx)
+                        You are running on the Gemini 2.5 Flash Native Audio model in Gemini Live mode on the iOS SPECTRA app. When asked what model you are, say Gemini 2.5 Flash Native Audio. You run across iPhone, browser, terminal, and Android — all share memory and history.
+                        Use the wiki knowledge below to answer questions about topics you have pages on.\(memoryCtx)\(wikiCtx)
                         """]]
                     ]
                 ]

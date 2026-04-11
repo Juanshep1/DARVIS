@@ -2120,10 +2120,13 @@ def main():
     def _background_listener():
         """Continuously listen for speech and put results in the queue."""
         while not _listen_stop.is_set():
-            if not listening_active:
-                _listen_stop.wait(timeout=0.5)
+            if not listening_active or ear.suppressed:
+                _listen_stop.wait(timeout=0.3)
                 continue
             result = ear.listen(return_audio=is_locked)
+            # Discard anything captured while suppressed (TTS was playing)
+            if ear.suppressed:
+                continue
             if is_locked and isinstance(result, tuple):
                 text, wav_data = result
                 if text and wav_data:
@@ -2626,6 +2629,8 @@ def main():
                 continue
 
             # ── Classic Mode: Thinking Phase ──
+            # Suppress mic early so listen() doesn't pick up TTS
+            ear.suppressed = True
             with console.status(f"[{BLUE}]Thinking...", spinner="arc"):
                 response = brain.think(user_input)
 
@@ -2654,12 +2659,10 @@ def main():
                 )
                 console.print()
 
-                # Suppress mic entirely while speaking so it can't hear itself
-                ear.suppressed = True
+                # Mic already suppressed before thinking — drain queue
                 was_listening = listening_active
                 if was_listening:
                     listening_active = False
-                # Drain anything the mic picked up during thinking
                 try:
                     while not speech_queue.empty():
                         speech_queue.get_nowait()
@@ -2669,9 +2672,9 @@ def main():
                 tts.speak(display_text)
                 tts.wait_for_speech()
 
-                # Wait for any in-flight listen() to finish, then drain
+                # Wait for TTS audio to fully stop, then drain anything captured
                 import time
-                time.sleep(0.5)
+                time.sleep(1.0)
                 try:
                     while not speech_queue.empty():
                         speech_queue.get_nowait()

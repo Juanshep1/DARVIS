@@ -179,6 +179,106 @@ export default async (req) => {
       return Response.json({ ok: true });
     }
 
+    // ── Natural language ingest (called from chat.mjs) ──
+    if (action === "natural_ingest" && body.content) {
+     try {
+      const OLLAMA_KEY = Netlify.env.get("OLLAMA_API_KEY");
+      if (!OLLAMA_KEY) return Response.json({ reply: "OLLAMA_API_KEY not configured" });
+      let contentToIngest = body.content;
+      let title = contentToIngest.substring(0, 60).replace(/\n/g, " ").trim();
+      let sourceType = "paste";
+
+      // Check if URL
+      if (contentToIngest.match(/^https?:\/\//)) {
+        title = contentToIngest.trim();
+        sourceType = "url";
+        try {
+          const fetchRes = await fetch(contentToIngest.trim(), { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(15000) });
+          const html = await fetchRes.text();
+          const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+          if (titleMatch) title = titleMatch[1].trim();
+          contentToIngest = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().substring(0, 50000);
+        } catch (e) {
+          return Response.json({ reply: `Couldn't fetch that URL, sir: ${e.message}` });
+        }
+      }
+
+      // Store raw source
+      const sourceId = `src-${Date.now()}`;
+      await store.set(`source-raw:${sourceId}`, contentToIngest);
+      await store.setJSON(`source:${sourceId}`, {
+        id: sourceId, title, type: sourceType,
+        ingested: new Date().toISOString(), size: contentToIngest.length, pages_updated: [],
+      });
+
+      // Load index
+      let wIdx = { pages: {}, sources: {} };
+      try { const d = await store.get("index", { type: "json" }); if (d) wIdx = d; } catch {}
+      if (!wIdx.sources) wIdx.sources = {};
+      wIdx.sources[sourceId] = { title, ingested: new Date().toISOString(), pages_updated: [] };
+
+      const schema = await store.get("schema", { type: "json" }).catch(() => null);
+      const instructions = schema?.instructions || "Extract entities and concepts, create wiki pages.";
+
+      const MODEL = Netlify.env.get("DARVIS_MODEL") || "glm-5";
+      const ingestPrompt = `You are a wiki maintainer. Process this source into wiki pages.
+
+CURRENT WIKI INDEX:
+${JSON.stringify(wIdx, null, 2)}
+
+WIKI RULES:
+${instructions}
+
+SOURCE (${title}):
+${contentToIngest.substring(0, 30000)}
+
+Output ONLY JSON: {"pages": [{"id": "type-slug", "title": "...", "type": "entity|concept|summary", "content": "markdown...", "tags": [...], "links": [...], "summary": "one line"}]}`;
+
+      try {
+        const llmRes = await fetch("https://ollama.com/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${OLLAMA_KEY}` },
+          body: JSON.stringify({ model: MODEL, messages: [{ role: "user", content: ingestPrompt }], stream: false }),
+          signal: AbortSignal.timeout(100000),
+        });
+        if (llmRes.ok) {
+          const llmData = await llmRes.json();
+          const llmText = llmData.message?.content || "";
+          const jsonMatch = llmText.match(/\{[\s\S]*"pages"[\s\S]*\}/);
+          if (jsonMatch) {
+            const parsed = JSON.parse(jsonMatch[0]);
+            const pages = parsed.pages || [];
+            const now = new Date().toISOString();
+            for (const p of pages) {
+              if (!p.id || !p.title || !p.content) continue;
+              p.type = p.type || "concept";
+              p.tags = p.tags || [];
+              p.links = p.links || [];
+              p.sources = [sourceId];
+              p.created = now;
+              p.updated = now;
+              await store.setJSON(`page:${p.id}`, p);
+              wIdx.pages[p.id] = {
+                title: p.title, type: p.type, tags: p.tags,
+                summary: p.summary || p.content.substring(0, 120).replace(/[#\n]/g, " ").trim(),
+                updated: now,
+              };
+            }
+            wIdx.sources[sourceId].pages_updated = pages.map(p => p.id);
+            await store.setJSON("index", wIdx);
+            const pageList = pages.map(p => `  ${p.type}: ${p.title}`).join("\n");
+            return Response.json({ reply: `Ingested into the wiki, sir. ${pages.length} pages created:\n${pageList}` });
+          }
+        }
+        return Response.json({ reply: "Source stored but couldn't generate wiki pages. Raw content saved, sir." });
+      } catch (e) {
+        return Response.json({ reply: `Wiki processing error: ${e.message}. Raw source was saved.` });
+      }
+     } catch (outerErr) {
+      return Response.json({ reply: `Wiki ingest crashed: ${outerErr.message}` });
+     }
+    }
+
     return Response.json({ error: "Unknown action" }, { status: 400 });
   }
 

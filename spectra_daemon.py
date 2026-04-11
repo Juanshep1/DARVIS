@@ -136,6 +136,68 @@ def poll_and_execute():
                     log(play_music(cmd["query"]))
                 elif action == "music_control" and cmd.get("command"):
                     log(music_control(cmd["command"]))
+                elif action == "wiki_ingest" and cmd.get("content"):
+                    log(f"Wiki ingest: {cmd.get('title', 'Untitled')}")
+                    try:
+                        sys.path.insert(0, os.path.dirname(__file__))
+                        from wiki import get_index, get_schema, ingest_source, bulk_upsert, build_ingest_prompt
+                        import re as re_mod
+
+                        raw = cmd["content"]
+                        title = cmd.get("title", "Untitled")
+
+                        # Store source
+                        source_id = ingest_source(title, raw, "paste")
+                        if not source_id:
+                            log("Failed to store wiki source")
+                            continue
+
+                        # Build ingest prompt
+                        index = get_index()
+                        schema = get_schema()
+                        prompt = build_ingest_prompt(index, schema, raw[:25000], title)
+
+                        # Call Ollama API directly
+                        env_path = Path(__file__).parent / ".env"
+                        ollama_key = ""
+                        if env_path.exists():
+                            for line in env_path.read_text().splitlines():
+                                if line.startswith("OLLAMA_API_KEY="):
+                                    ollama_key = line.split("=", 1)[1].strip().strip('"')
+                        if not ollama_key:
+                            log("No OLLAMA_API_KEY found")
+                            continue
+
+                        payload = json.dumps({"model": "glm-5", "messages": [{"role": "user", "content": prompt}], "stream": False}).encode()
+                        req2 = urllib.request.Request(
+                            "https://ollama.com/api/chat", data=payload, method="POST",
+                            headers={"Content-Type": "application/json", "Authorization": f"Bearer {ollama_key}"},
+                        )
+                        with urllib.request.urlopen(req2, timeout=120) as resp2:
+                            result = json.loads(resp2.read().decode())
+
+                        llm_text = result.get("message", {}).get("content", "")
+                        json_match = re_mod.search(r'\{[\s\S]*"pages"[\s\S]*\}', llm_text)
+                        if json_match:
+                            parsed = json.loads(json_match.group())
+                            pages = parsed.get("pages", [])
+                            if pages:
+                                for p in pages:
+                                    p.setdefault("sources", [])
+                                    if source_id not in p["sources"]:
+                                        p["sources"].append(source_id)
+                                if bulk_upsert(pages, source_id):
+                                    log(f"Wiki: {len(pages)} pages created/updated")
+                                    for p in pages:
+                                        log(f"  {p.get('type', '?')}: {p.get('title', p['id'])}")
+                                else:
+                                    log("Wiki: Failed to write pages")
+                            else:
+                                log("Wiki: No pages in LLM output")
+                        else:
+                            log("Wiki: Could not parse LLM output")
+                    except Exception as e:
+                        log(f"Wiki ingest error: {e}")
                 else:
                     log(f"Unknown action: {action}")
             except Exception as e:

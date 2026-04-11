@@ -90,12 +90,45 @@ export default async (req) => {
   }
 
   const OLLAMA_KEY = Netlify.env.get("OLLAMA_API_KEY");
+  let wikiStore;
+  try { wikiStore = getStore("darvis-wiki"); } catch { wikiStore = null; }
+
+  // ── NATURAL LANGUAGE WIKI INGEST — handled inline (needs chat's 120s timeout) ──
+  const lowerMsg = message.toLowerCase();
+  const ingestTriggers = ["ingest this:", "ingest this ", "add to wiki:", "add this to wiki:", "wiki this:", "save to wiki:"];
+  const ingestMatch = ingestTriggers.find(t => lowerMsg.startsWith(t) || lowerMsg.includes(t));
+  if (ingestMatch) {
+    try {
+      const idx = lowerMsg.indexOf(ingestMatch);
+      let rawContent = message.substring(idx + ingestMatch.length).trim();
+      if (rawContent.length < 5) {
+        return Response.json({ reply: "I need more content to ingest, sir. Say: ingest this: [your information]" });
+      }
+
+      let title = rawContent.substring(0, 60).replace(/\n/g, " ").trim();
+
+      // Store as pending ingest for the daemon to process (avoids CDN timeout)
+      if (wikiStore) {
+        await wikiStore.setJSON("pending_ingest", { content: rawContent, title, ts: Date.now() });
+      }
+
+      // Also store as a pending command for the daemon
+      const cmdStore = getStore("darvis-agent");
+      let pending = [];
+      try { const d = await cmdStore.get("pending_commands", { type: "json" }); if (Array.isArray(d)) pending = d; } catch {}
+      pending.push({ action: "wiki_ingest", content: rawContent.substring(0, 30000), title, ts: Date.now() });
+      await cmdStore.setJSON("pending_commands", pending);
+
+      return Response.json({ reply: `Noted, sir. Ingesting "${title}" into the wiki. Your Mac will process it in the background — check /wiki list in a moment.` });
+    } catch (e) {
+      return Response.json({ reply: `Wiki ingest error: ${e.message}` });
+    }
+  }
 
   // ── PARALLEL LOAD: settings + history + memory + wiki index + search all at once ──
   const settingsStore = getStore("darvis-settings");
   const historyStore = getStore("darvis-history");
   const memoryStore = getStore("darvis-memory");
-  const wikiStore = getStore("darvis-wiki");
 
   // Load settings, history, memory, wiki index first
   const [settingsData, historyData, memoryData, wikiIndexData] = await Promise.all([

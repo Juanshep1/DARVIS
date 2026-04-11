@@ -2737,6 +2737,76 @@ Output a brief, actionable report. Be specific about page IDs."""
                         tts.wait_for_speech()
                 continue
 
+            # ── Natural language wiki ingest ──
+            ingest_triggers = ["ingest this:", "ingest this ", "add to wiki:", "add this to wiki:", "wiki this:", "save to wiki:"]
+            ingest_match = next((t for t in ingest_triggers if t in lower), None)
+            if ingest_match:
+                from wiki import get_index, get_schema, ingest_source, bulk_upsert, build_ingest_prompt
+                idx = lower.index(ingest_match)
+                raw_content = user_input[idx + len(ingest_match):].strip()
+
+                if not raw_content or len(raw_content) < 5:
+                    console.print("  [dim]Need more content. Say: ingest this: [your information][/dim]")
+                    continue
+
+                # Check if URL
+                title = raw_content[:60].replace("\n", " ").strip()
+                source_type = "paste"
+                if raw_content.startswith("http://") or raw_content.startswith("https://"):
+                    title = raw_content
+                    source_type = "url"
+                    console.print(f"  [{BLUE}]Fetching {raw_content}...[/{BLUE}]")
+                    try:
+                        req = urllib.request.Request(raw_content, headers={"User-Agent": "Mozilla/5.0"})
+                        with urllib.request.urlopen(req, timeout=15) as resp:
+                            html = resp.read().decode(errors="replace")
+                        import re as re2
+                        title_match = re2.search(r'<title[^>]*>([^<]+)</title>', html, re2.IGNORECASE)
+                        if title_match:
+                            title = title_match.group(1).strip()
+                        raw_content = re2.sub(r'<[^>]+>', ' ', html)
+                        raw_content = re2.sub(r'\s+', ' ', raw_content).strip()[:50000]
+                    except Exception as e:
+                        console.print(f"  [red]Fetch error: {e}[/red]")
+                        continue
+
+                console.print(f"  [{BLUE}]Ingesting: {title} ({len(raw_content)} chars)...[/{BLUE}]")
+                source_id = ingest_source(title, raw_content, source_type)
+                if not source_id:
+                    console.print("  [red]Failed to store source[/red]")
+                    continue
+
+                index = get_index()
+                schema = get_schema()
+                ingest_prompt = build_ingest_prompt(index, schema, raw_content[:30000], title)
+
+                with console.status(f"[{BLUE}]Processing into wiki pages...", spinner="arc"):
+                    ingest_response = brain.think(ingest_prompt)
+
+                try:
+                    json_match = re.search(r'\{[\s\S]*"pages"[\s\S]*\}', ingest_response)
+                    if json_match:
+                        result = json.loads(json_match.group())
+                        pages = result.get("pages", [])
+                        if pages:
+                            for p in pages:
+                                p.setdefault("sources", [])
+                                if source_id not in p["sources"]:
+                                    p["sources"].append(source_id)
+                            if bulk_upsert(pages, source_id):
+                                console.print(f"  [green]Wiki updated: {len(pages)} pages[/green]")
+                                for p in pages:
+                                    console.print(f"    [{BLUE}]{p.get('type', '?'):<8}[/{BLUE}] {p.get('title', p['id'])}")
+                            else:
+                                console.print("  [red]Failed to write wiki pages[/red]")
+                        else:
+                            console.print("  [yellow]No pages generated[/yellow]")
+                    else:
+                        console.print("  [yellow]Could not parse LLM output[/yellow]")
+                except Exception as e:
+                    console.print(f"  [red]Parse error: {e}[/red]")
+                continue
+
             # ── Screen analysis keywords ──
             screen_triggers = ["what's on my screen", "read my screen", "what error", "look at my screen", "screen analysis", "what am i looking at"]
             if any(t in lower for t in screen_triggers):

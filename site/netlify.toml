@@ -12,5 +12,8 @@
 [functions."briefing"]
   timeout = 120
 
+[functions."wiki"]
+  timeout = 120
+
 [functions."situation"]
   timeout = 30

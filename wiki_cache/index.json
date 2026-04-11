@@ -54,6 +54,128 @@
       ],
       "summary": "Type of dog bred for polar regions and sled work, known for cold-weather tolerance and hardiness",
       "updated": "2026-04-11T16:56:02.514Z"
+    },
+    "concept-religious-cosmology": {
+      "title": "Religious Cosmology",
+      "type": "concept",
+      "tags": [
+        "cosmology",
+        "religion",
+        "philosophy",
+        "belief-system",
+        "metaphysics"
+      ],
+      "summary": "Religious explanation of the origin, evolution, and eventual fate of the universe",
+      "updated": "2026-04-11T17:04:06.822Z"
+    },
+    "concept-zoroastrian-cosmology": {
+      "title": "Zoroastrian Cosmology",
+      "type": "concept",
+      "tags": [
+        "zoroastrianism",
+        "cosmology",
+        "religion",
+        "persian",
+        "dualism"
+      ],
+      "summary": "Zoroastrian view of universe as cosmic conflict between good and evil over 12,000 years",
+      "updated": "2026-04-11T17:04:06.822Z"
+    },
+    "concept-biblical-cosmology": {
+      "title": "Biblical Cosmology",
+      "type": "concept",
+      "tags": [
+        "christianity",
+        "judaism",
+        "islam",
+        "cosmology",
+        "abrahamic",
+        "creation"
+      ],
+      "summary": "Biblical and Abrahamic view of universe with flat Earth, heaven, and underworld evolving to spherical Earth",
+      "updated": "2026-04-11T17:04:06.822Z"
+    },
+    "concept-buddhist-cosmology": {
+      "title": "Buddhist Cosmology",
+      "type": "concept",
+      "tags": [
+        "buddhism",
+        "cosmology",
+        "religion",
+        "indian",
+        "samsara",
+        "karma"
+      ],
+      "summary": "Buddhist view of eternal, cyclic universe with six realms of rebirth and no creator god",
+      "updated": "2026-04-11T17:04:06.822Z"
+    },
+    "concept-hindu-cosmology": {
+      "title": "Hindu Cosmology",
+      "type": "concept",
+      "tags": [
+        "hinduism",
+        "cosmology",
+        "religion",
+        "indian",
+        "yuga",
+        "samsara"
+      ],
+      "summary": "Hindu cyclic cosmology with Yuga time scales, multiple lokas, and diverse creation theories",
+      "updated": "2026-04-11T17:04:06.822Z"
+    },
+    "concept-jain-cosmology": {
+      "title": "Jain Cosmology",
+      "type": "concept",
+      "tags": [
+        "jainism",
+        "cosmology",
+        "religion",
+        "indian",
+        "atheism"
+      ],
+      "summary": "Jain view of universe as uncreated, eternal entity with human-like shape and no creator",
+      "updated": "2026-04-11T17:04:06.822Z"
+    },
+    "concept-chinese-cosmology": {
+      "title": "Chinese Cosmology",
+      "type": "concept",
+      "tags": [
+        "chinese",
+        "cosmology",
+        "taoism",
+        "confucianism",
+        "pangu",
+        "yin-yang"
+      ],
+      "summary": "Chinese cosmology with Wuji, Taiji, Wuxing, Yin-Yang, and Pangu creation legend",
+      "updated": "2026-04-11T17:04:06.822Z"
+    },
+    "concept-gnosticism": {
+      "title": "Gnosticism",
+      "type": "concept",
+      "tags": [
+        "gnosticism",
+        "cosmology",
+        "religion",
+        "dualism",
+        "pleroma"
+      ],
+      "summary": "Gnostic dualistic cosmology with Pleroma (higher Light world) distinct from material world",
+      "updated": "2026-04-11T17:04:06.822Z"
+    },
+    "entity-serer-religion": {
+      "title": "Serer Religion",
+      "type": "entity",
+      "tags": [
+        "serer",
+        "religion",
+        "cosmology",
+        "africa",
+        "sirius",
+        "roog"
+      ],
+      "summary": "African religion with creator deity Roog and Sirius star (Yoonir) as universe symbol",
+      "updated": "2026-04-11T17:04:06.822Z"
     }
   },
   "sources": {
@@ -113,6 +235,21 @@
       "pages_updated": [
         "entity-husky",
         "entity-azula"
+      ]
+    },
+    "src-1775926960543": {
+      "title": "Religious cosmology - Wikipedia",
+      "ingested": "2026-04-11T17:02:40.543Z",
+      "pages_updated": [
+        "concept-religious-cosmology",
+        "concept-zoroastrian-cosmology",
+        "concept-biblical-cosmology",
+        "concept-buddhist-cosmology",
+        "concept-hindu-cosmology",
+        "concept-jain-cosmology",
+        "concept-chinese-cosmology",
+        "concept-gnosticism",
+        "entity-serer-religion"
       ]
     }
   }

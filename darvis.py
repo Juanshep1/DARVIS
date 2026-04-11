@@ -2138,6 +2138,51 @@ def main():
             except Exception:
                 pass
 
+            # Wiki ingest helper (runs in background thread)
+            def _remote_wiki_ingest(cmd):
+                try:
+                    from wiki import get_index, get_schema, ingest_source, bulk_upsert, build_ingest_prompt
+                    raw = cmd["content"].strip()
+                    title = cmd.get("title", raw[:60])
+                    # Fetch URL if needed
+                    if raw.startswith("http://") or raw.startswith("https://"):
+                        try:
+                            url_req = urllib.request.Request(raw, headers={"User-Agent": "Mozilla/5.0"})
+                            with urllib.request.urlopen(url_req, timeout=15) as url_resp:
+                                html = url_resp.read().decode(errors="replace")
+                            tm = re.search(r'<title[^>]*>([^<]+)</title>', html, re.IGNORECASE)
+                            if tm: title = tm.group(1).strip()
+                            raw = re.sub(r'<[^>]+>', ' ', html)
+                            raw = re.sub(r'\s+', ' ', raw).strip()[:50000]
+                        except Exception:
+                            return
+                    source_id = ingest_source(title, raw, "paste")
+                    if not source_id: return
+                    index = get_index()
+                    schema = get_schema()
+                    prompt = build_ingest_prompt(index, schema, raw[:25000], title)
+                    env = load_env()
+                    ollama_key = env.get("OLLAMA_API_KEY", "")
+                    if not ollama_key: return
+                    payload = json.dumps({"model": "glm-5", "messages": [{"role": "user", "content": prompt}], "stream": False}).encode()
+                    req2 = urllib.request.Request("https://ollama.com/api/chat", data=payload, method="POST", headers={"Content-Type": "application/json", "Authorization": f"Bearer {ollama_key}"})
+                    with urllib.request.urlopen(req2, timeout=120) as resp2:
+                        result = json.loads(resp2.read().decode())
+                    llm_text = result.get("message", {}).get("content", "")
+                    json_match = re.search(r'\{[\s\S]*"pages"[\s\S]*\}', llm_text)
+                    if json_match:
+                        parsed = json.loads(json_match.group())
+                        pages = parsed.get("pages", [])
+                        for p in pages:
+                            p.setdefault("sources", [])
+                            if source_id not in p["sources"]: p["sources"].append(source_id)
+                        if pages and bulk_upsert(pages, source_id):
+                            console.print(f"\n  [green]Wiki updated: {len(pages)} pages from remote ingest[/green]")
+                            for p in pages:
+                                console.print(f"    [{BLUE}]{p.get('type','?'):<8}[/{BLUE}] {p.get('title', p['id'])}")
+                except Exception as e:
+                    console.print(f"\n  [red]Wiki ingest error: {e}[/red]")
+
             # Check for pending commands from browser/iOS
             try:
                 cmd_req = urllib.request.Request("https://darvis1.netlify.app/api/commands", method="GET")
@@ -2163,6 +2208,33 @@ def main():
                             elif action == "safari" and cmd.get("method"):
                                 console.print(f"  [dim]Safari: {cmd['method']}[/dim]")
                                 console.print(f"  [dim]{safari_control(cmd)[:200]}[/dim]")
+                            elif action == "play_music" and cmd.get("query"):
+                                import urllib.parse as _up
+                                encoded = _up.quote(cmd["query"])
+                                subprocess.run(["open", f"music://music.apple.com/search?term={encoded}"], timeout=5)
+                                console.print(f"  [dim]Playing: {cmd['query']}[/dim]")
+                            elif action == "music_control" and cmd.get("command"):
+                                mc = {"pause": "pause", "play": "play", "next": "next track", "previous": "previous track", "stop": "stop"}
+                                sc = mc.get(cmd["command"].lower(), "")
+                                if sc:
+                                    subprocess.run(["osascript", "-e", f'tell application "Music" to {sc}'], timeout=5)
+                                console.print(f"  [dim]Music: {cmd['command']}[/dim]")
+                            elif action == "wiki_ingest" and cmd.get("content"):
+                                console.print(f"  [dim]Wiki ingest: {cmd.get('title', 'Untitled')[:50]}[/dim]")
+                                threading.Thread(target=lambda: _remote_wiki_ingest(cmd), daemon=True).start()
+                            elif action == "maps":
+                                import urllib.parse as _up
+                                mf = {"driving": "d", "walking": "w", "transit": "r"}
+                                if cmd.get("type") == "directions" and cmd.get("destination"):
+                                    url = f"maps://?daddr={_up.quote(cmd['destination'])}&dirflg={mf.get(cmd.get('mode','driving'),'d')}"
+                                elif cmd.get("type") == "search" and cmd.get("query"):
+                                    url = f"maps://?q={_up.quote(cmd['query'])}"
+                                elif cmd.get("type") == "show" and cmd.get("location"):
+                                    url = f"maps://?q={_up.quote(cmd['location'])}"
+                                else:
+                                    url = "maps://"
+                                subprocess.run(["open", url], timeout=5)
+                                console.print(f"  [dim]Maps opened[/dim]")
                             else:
                                 console.print(f"  [dim]Unknown action: {action}[/dim]")
                         except Exception as e:

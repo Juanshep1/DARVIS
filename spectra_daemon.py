@@ -108,6 +108,8 @@ def music_control(command):
         return f"Music control error: {e}"
 
 
+_seen_ts = set()  # Track processed command timestamps to prevent double execution
+
 def poll_and_execute():
     try:
         req = urllib.request.Request(COMMANDS_URL, method="GET")
@@ -115,6 +117,15 @@ def poll_and_execute():
             data = json.loads(resp.read().decode())
         commands = data.get("commands", [])
         for cmd in commands:
+            # Skip already-processed commands
+            ts = cmd.get("ts", 0)
+            if ts and ts in _seen_ts:
+                continue
+            if ts:
+                _seen_ts.add(ts)
+                # Keep set from growing forever
+                if len(_seen_ts) > 100:
+                    _seen_ts.clear()
             action = cmd.get("action", "")
             log(f"Executing: {action} — {json.dumps(cmd)}")
             try:
@@ -143,8 +154,25 @@ def poll_and_execute():
                         from wiki import get_index, get_schema, ingest_source, bulk_upsert, build_ingest_prompt
                         import re as re_mod
 
-                        raw = cmd["content"]
+                        raw = cmd["content"].strip()
                         title = cmd.get("title", "Untitled")
+
+                        # If content is a URL, fetch it
+                        if raw.startswith("http://") or raw.startswith("https://"):
+                            log(f"Fetching URL: {raw}")
+                            try:
+                                url_req = urllib.request.Request(raw, headers={"User-Agent": "Mozilla/5.0"})
+                                with urllib.request.urlopen(url_req, timeout=15) as url_resp:
+                                    html = url_resp.read().decode(errors="replace")
+                                title_match = re_mod.search(r'<title[^>]*>([^<]+)</title>', html, re_mod.IGNORECASE)
+                                if title_match:
+                                    title = title_match.group(1).strip()
+                                raw = re_mod.sub(r'<[^>]+>', ' ', html)
+                                raw = re_mod.sub(r'\s+', ' ', raw).strip()[:50000]
+                                log(f"Fetched: {title} ({len(raw)} chars)")
+                            except Exception as e:
+                                log(f"URL fetch failed: {e}")
+                                continue
 
                         # Store source
                         source_id = ingest_source(title, raw, "paste")

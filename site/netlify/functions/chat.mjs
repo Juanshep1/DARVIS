@@ -95,12 +95,14 @@ export default async (req) => {
 
   // ── NATURAL LANGUAGE WIKI INGEST — handled inline (needs chat's 120s timeout) ──
   const lowerMsg = message.toLowerCase();
-  const ingestTriggers = ["ingest this:", "ingest this ", "add to wiki:", "add this to wiki:", "wiki this:", "save to wiki:"];
-  const ingestMatch = ingestTriggers.find(t => lowerMsg.startsWith(t) || lowerMsg.includes(t));
+  const ingestTriggers = ["ingest this:", "add to wiki:", "add this to wiki:", "wiki this:", "save to wiki:"];
+  const ingestMatch = ingestTriggers.find(t => lowerMsg.includes(t));
   if (ingestMatch) {
     try {
       const idx = lowerMsg.indexOf(ingestMatch);
       let rawContent = message.substring(idx + ingestMatch.length).trim();
+      // Strip common filler after the trigger ("into the wiki", "with title X:")
+      rawContent = rawContent.replace(/^into the wiki\s*(with title\s*"[^"]*"\s*:?\s*)?/i, "").trim();
       if (rawContent.length < 5) {
         return Response.json({ reply: "I need more content to ingest, sir. Say: ingest this: [your information]" });
       }

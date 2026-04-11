@@ -15,20 +15,11 @@
       "title": "Juan",
       "type": "entity",
       "tags": [
-        "person"
+        "person",
+        "owner"
       ],
-      "summary": "28-year-old African American from Springfield, IL who drives a black car and loves tacos",
-      "updated": "2026-04-11T16:38:04.162Z"
-    },
-    "entity-dallas": {
-      "title": "Dallas",
-      "type": "entity",
-      "tags": [
-        "city",
-        "location"
-      ],
-      "summary": "City where Juan lives",
-      "updated": "2026-04-11T16:18:13.766Z"
+      "summary": "28-year-old from Springfield, IL. Into AI, coding, and music production. Creator of Spectra.",
+      "updated": "2026-04-11T16:41:18.139Z"
     },
     "entity-azula": {
       "title": "Azula",
@@ -50,7 +41,7 @@
         "location"
       ],
       "summary": "Capital city of Illinois, hometown of Juan",
-      "updated": "2026-04-11T16:38:04.162Z"
+      "updated": "2026-04-11T16:38:27.732Z"
     }
   },
   "sources": {
@@ -84,10 +75,25 @@
     "src-1775925454684": {
       "title": "my name is Juan, I\u2019m 28 I\u2019m from Springfield,IL, I\u2019m African",
       "ingested": "2026-04-11T16:37:34.684Z",
+      "pages_updated": []
+    },
+    "src-1775925490371": {
+      "title": "my name is Juan, I\u2019m 28 I\u2019m from Springfield,IL, I\u2019m African",
+      "ingested": "2026-04-11T16:38:10.371Z",
       "pages_updated": [
         "entity-juan",
         "entity-springfield-il"
       ]
+    },
+    "src-1775926234224": {
+      "title": "into the wiki with title \"Religious cosmology\": https://en.w",
+      "ingested": "2026-04-11T16:50:34.224Z",
+      "pages_updated": []
+    },
+    "src-1775926272138": {
+      "title": "into the wiki with title \"Religious cosmology\": https://en.w",
+      "ingested": "2026-04-11T16:51:12.138Z",
+      "pages_updated": []
     }
   }
 }

@@ -712,10 +712,37 @@ class ChatViewModel: ObservableObject {
 
     private func isPhoneControlRequest(_ text: String) -> Bool {
         let lower = text.lowercased()
-        let triggers = ["brightness", "volume", "flashlight", "torch", "open settings",
-                        "open safari", "open maps", "open messages", "open phone", "open mail",
-                        "open camera", "open music", "open photos", "clipboard", "battery",
-                        "device info", "phone info", "mute", "silent"]
+        let triggers = [
+            // Device control
+            "brightness", "volume", "flashlight", "torch", "mute", "silent",
+            "do not disturb", "dnd", "focus mode", "wifi settings", "bluetooth settings",
+            // Info
+            "clipboard", "battery", "device info", "phone info",
+            // Apps
+            "open settings", "open safari", "open maps", "open map", "open messages",
+            "open phone", "open mail", "open camera", "open music", "open photos",
+            "open calendar", "open notes", "open reminders", "open clock", "open timer",
+            "open weather", "open wallet", "open facetime", "open files", "open shortcuts",
+            "open health", "open app store", "open youtube", "open instagram", "open twitter",
+            "open x app", "open tiktok", "open whatsapp", "open snapchat", "open telegram",
+            "open discord", "open reddit", "open netflix", "open amazon", "open uber",
+            "open lyft", "open doordash", "open spotify", "open texts", "open email",
+            "open dialer", "open gallery",
+            // Maps & navigation
+            "directions to", "navigate to", "take me to", "drive to", "how to get to",
+            "route to", "nearby", "near me", "nearest", "closest", "drop a pin", "drop pin",
+            "how far", "eta to", "distance to", "traffic", "where am i", "share my location",
+            "show me", "find a ", "find an ", "find me",
+            // Music
+            "play ", "pause music", "pause song", "stop music", "resume music", "resume song",
+            "next song", "next track", "skip song", "skip track", "previous song", "previous track",
+            "last song", "go back", "what's playing", "what song", "now playing", "current song",
+            "shuffle", "repeat", "on spotify", "on soundcloud", "youtube music",
+            // Communication
+            "call ", "text ", "message ", "facetime ",
+            // Timers
+            "set a timer", "set timer", "start a timer", "set an alarm", "set alarm", "stopwatch",
+        ]
         return triggers.contains(where: { lower.contains($0) })
     }
 

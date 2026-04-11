@@ -216,11 +216,23 @@ Also supports: "pause music", "skip", "next song", "previous song", "resume musi
 \`\`\`
 Valid commands: pause, play, next, previous, stop
 
+### Maps & Navigation:
+\`\`\`command
+{"action": "maps", "type": "directions", "destination": "Dallas, TX", "mode": "driving"}
+\`\`\`
+\`\`\`command
+{"action": "maps", "type": "search", "query": "gas stations"}
+\`\`\`
+\`\`\`command
+{"action": "maps", "type": "show", "location": "Empire State Building"}
+\`\`\`
+Use for: directions/navigation (modes: driving, walking, transit), nearby search, showing locations. Works on Mac and iPhone.
+
 ### Shell Command (runs on user's Mac):
 \`\`\`command
 {"action": "shell", "command": "ls ~/Desktop"}
 \`\`\`
-Use for system commands. Do NOT use shell to open files — use open_file instead. Do NOT use shell for music — use play_music instead.
+Use for system commands. Do NOT use shell to open files — use open_file instead. Do NOT use shell for music — use play_music instead. Do NOT use shell for maps — use the maps action instead.
 
 ### Remember/Forget:
 \`\`\`command
@@ -374,6 +386,26 @@ Common shortcuts:
           pending.push({ action: "safari", ...cmd, ts: Date.now() });
           await cmdStore.setJSON("pending_commands", pending);
           clientActions.push({ action: "queued", message: `Safari: ${cmd.method}` });
+        } else if (cmd.action === "maps") {
+          const modeFlags = { driving: "d", walking: "w", transit: "r" };
+          let mapsUrl = "";
+          if (cmd.type === "directions" && cmd.destination) {
+            const flag = modeFlags[cmd.mode] || "d";
+            mapsUrl = `maps://?daddr=${encodeURIComponent(cmd.destination)}&dirflg=${flag}`;
+          } else if (cmd.type === "search" && cmd.query) {
+            mapsUrl = `maps://?q=${encodeURIComponent(cmd.query)}`;
+          } else if (cmd.type === "show" && cmd.location) {
+            mapsUrl = `maps://?q=${encodeURIComponent(cmd.location)}`;
+          }
+          if (mapsUrl) {
+            // Queue for daemon (Mac) AND send to client (browser/iOS)
+            const cmdStore = getStore("darvis-agent");
+            let pending = [];
+            try { const d = await cmdStore.get("pending_commands", { type: "json" }); if (Array.isArray(d)) pending = d; } catch {}
+            pending.push({ action: "shell", command: `open "${mapsUrl}"`, ts: Date.now() });
+            await cmdStore.setJSON("pending_commands", pending);
+            clientActions.push({ action: "open_maps", url: mapsUrl, type: cmd.type, destination: cmd.destination || cmd.query || cmd.location });
+          }
         } else if (cmd.action === "play_music" && cmd.query) {
           // Queue for Mac daemon AND send to browser client
           const cmdStore = getStore("darvis-agent");

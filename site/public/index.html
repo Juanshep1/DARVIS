@@ -1078,6 +1078,9 @@ function needsClassicRoute(text) {
         'next song', 'previous song', 'create a file', 'create file',
         'make a file', 'write a file', 'save to desktop', 'open file',
         'close safari', 'close app', 'kill ', 'killall',
+        'directions to', 'navigate to', 'take me to', 'drive to',
+        'route to', 'how to get to', 'nearby', 'near me', 'nearest',
+        'drop a pin', 'show me on map', 'eta to', 'how far',
     ];
     return triggers.some(t => lower.includes(t));
 }
@@ -1087,6 +1090,26 @@ function needsClassicRoute(text) {
 // On iOS/Mac: opens Apple Music app with search. On browser: opens Apple Music web.
 // The daemon also receives the command and plays via AppleScript on Mac.
 // ══════════════════════════════════════════════════════════════════════════════
+
+function handleMaps(act) {
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const url = act.url || '';
+    const dest = act.destination || '';
+
+    if (isIOS && url) {
+        // iOS: open Maps app directly via URL scheme
+        window.location.href = url;
+    } else if (url) {
+        // Mac browser: daemon handles it, also open Google Maps as web fallback
+        const encoded = encodeURIComponent(dest);
+        if (act.type === 'directions') {
+            window.open(`https://www.google.com/maps/dir/?api=1&destination=${encoded}`, '_blank');
+        } else {
+            window.open(`https://www.google.com/maps/search/${encoded}`, '_blank');
+        }
+    }
+    responseEl.textContent += '\n🗺️ ' + (act.type === 'directions' ? `Navigating to ${dest}` : `Showing ${dest} on map`);
+}
 
 function handlePlayMusic(query) {
     const encoded = encodeURIComponent(query);
@@ -1194,6 +1217,7 @@ async function send() {
                     if (classicData.actions) {
                         classicData.actions.forEach(act => {
                             if (act.action === 'open_url' && act.url) window.open(act.url, '_blank');
+                            else if (act.action === 'open_maps') handleMaps(act);
                             else if (act.action === 'play_music' && act.query) handlePlayMusic(act.query);
                             else if (act.action === 'music_control' && act.command) handleMusicControl(act.command);
                         });
@@ -1366,6 +1390,8 @@ async function send() {
                 } else if (act.action === 'agent_started') {
                     document.getElementById('agentPanel').classList.add('open');
                     startAgentPolling();
+                } else if (act.action === 'open_maps') {
+                    handleMaps(act);
                 } else if (act.action === 'play_music' && act.query) {
                     handlePlayMusic(act.query);
                 } else if (act.action === 'music_control' && act.command) {

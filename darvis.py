@@ -145,14 +145,22 @@ Examples of things you can do with shell:
 - System info: `system_profiler SPHardwareDataType`
 - Open URL in browser: `open "https://youtube.com"`
 - Play music: `open "music://music.apple.com/search?term=SONG+NAME+ARTIST"` (URL-encode the query)
+- Play on Spotify: `open "spotify:search:QUERY"`
 - Pause music: `osascript -e 'tell application "Music" to pause'`
 - Resume music: `osascript -e 'tell application "Music" to play'`
 - Next song: `osascript -e 'tell application "Music" to next track'`
 - Previous song: `osascript -e 'tell application "Music" to previous track'`
+- Now playing: `osascript -e 'tell application "Music" to get {name, artist} of current track'`
+- Maps — directions: `open "maps://?daddr=DESTINATION&dirflg=d"` (d=drive, w=walk, r=transit)
+- Maps — search nearby: `open "maps://?q=gas+station"`
+- Maps — show location: `open "maps://?q=Empire+State+Building"`
+- Maps — open app: `open -a Maps`
 - Read clipboard: `pbpaste`
 - Copy to clipboard: `echo "text" | pbcopy`
 - Open Terminal: `open -a Terminal`
 - Show notification: `osascript -e 'display notification "Hello sir" with title "SPECTRA"'`
+- Lock screen: `osascript -e 'tell application "System Events" to keystroke "q" using {command down, control down}'`
+- Do Not Disturb: `open "x-apple.systempreferences:com.apple.Focus"`
 
 ALWAYS use shell commands for system control tasks. Don't say you can't do it — try it.
 

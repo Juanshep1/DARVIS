@@ -1433,12 +1433,18 @@ async function send() {
                         persistentAudio.currentTime = 0;
                         persistentAudio._blobUrl = audioUrl;
                         persistentAudio.src = audioUrl;
+                        currentAudio = persistentAudio;
                         orb.className = 'orb speaking';
+                        try {
+                            await persistentAudio.play();
+                        } catch (playErr) {
+                            console.warn('Audio play blocked:', playErr);
+                            orb.className = 'orb';
+                            return false;
+                        }
                         await new Promise((resolve) => {
                             persistentAudio.onended = () => { URL.revokeObjectURL(audioUrl); currentAudio = null; resolve(); };
-                            persistentAudio.onerror = () => { resolve(); };
-                            currentAudio = persistentAudio;
-                            persistentAudio.play();
+                            persistentAudio.onerror = () => { orb.className = 'orb'; resolve(); };
                         });
                         return true;
                     }

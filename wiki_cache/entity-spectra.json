@@ -1,0 +1,18 @@
+{
+  "id": "entity-spectra",
+  "title": "Spectra",
+  "type": "entity",
+  "content": "# Spectra\n\nSmart Personal Executive for Cognitive Tasks & Real-time Assistance.\n\nA voice-activated AI assistant running across iPhone, browser, macOS terminal, and Android.\n\n## Key Features\n- Voice control via ElevenLabs TTS + Google STT\n- Gemini Live native audio mode\n- Cross-device memory and history sync\n- Computer Use (browser automation)\n- Apple Music playback\n- Maps & navigation\n\n## See Also\n- [[person-juan]]",
+  "tags": [
+    "ai",
+    "assistant",
+    "project"
+  ],
+  "links": [
+    "person-juan"
+  ],
+  "summary": "Voice-activated AI assistant running across all platforms",
+  "created": "2026-04-11T15:49:17.122Z",
+  "updated": "2026-04-11T15:49:17.122Z",
+  "sources": []
+}

@@ -1,0 +1,21 @@
+{
+  "id": "entity-husky",
+  "title": "Husky",
+  "type": "entity",
+  "content": "# Husky\n\nHusky is a general term for a type of dog used in polar regions, primarily for work as sled dogs. They are notable for cold-weather tolerance and overall hardiness.\n\n## Etymology\n\nThe term \"husky\" originated in the mid to late 1700s from \"Esquimaux\" or \"Eskimo\" - terms for pre-Columbian Arctic inhabitants. Dogs used by these people became known as \"husky dogs\" and eventually just \"huskies.\"\n\n## Characteristics\n\n- Energetic and athletic\n- Thick double coat protecting against harsh winters\n- Cold-weather tolerance and hardiness\n- Eyes typically pale blue, but can be brown, green, yellow, or heterochromic\n- Can survive in hotter climates by shedding undercoat\n- Adjust eating habits based on season (eat more in cold to generate body heat)\n\n## Breeds\n\n### Alaskan Husky\nMost commonly used in sled dog racing. Bred specifically for performance, typically weighing 18-34 kg (40-75 lb). Result of crossbreeding with English Pointers, German Shepherds, Salukis and other breeds.\n\n### Siberian Husky\nDescendants of Chukotka sled dogs from Siberia, used by the Chukchi people around 2000 BC. Stand 20-23.5 inches, weigh 35-60 lbs. Smaller than Alaskan Malamutes. Imported to Alaska in early 1900s.\n\n### Labrador Husky\nOriginated in Canadian Labrador region around 1300 AD. Not related to Labrador retrievers - most closely related to Canadian Eskimo Dog. Only 50-60 estimated worldwide.\n\n### Sakhalin Husky\nCritically endangered landrace from Sakhalin Island. Also known as Karafuto Ken. Approximately 20 remaining. Used for sled work, hunting bear, and fishing.\n\n### Mackenzie River Husky\nHistorical populations from Yukon Territory, crossed with St. Bernards and Newfoundlands during Klondike Gold Rush for freighting.\n\n## Genetics\n\nHuskies show genetic closeness to gray wolves. Siberian Huskies and Greenland Dogs also share genetic material with the now-extinct Taimyr wolf of North Asia.\n\n## Related\n\n- [[entity-azula]] - A 3-year-old husky mix",
+  "tags": [
+    "dog",
+    "breed",
+    "animal",
+    "sled-dog"
+  ],
+  "links": [
+    "entity-azula"
+  ],
+  "summary": "Type of dog bred for polar regions and sled work, known for cold-weather tolerance and hardiness",
+  "sources": [
+    "src-1775926503097"
+  ],
+  "created": "2026-04-11T16:56:02.514Z",
+  "updated": "2026-04-11T16:56:02.514Z"
+}

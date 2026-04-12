@@ -1668,9 +1668,10 @@ class Brain:
             }
 
         req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
+        timeout = 300 if use_local else 120  # Local models need more time
 
         try:
-            with urllib.request.urlopen(req, timeout=120) as resp:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
                 return data["message"]["content"]
         except urllib.error.HTTPError as e:
@@ -1698,19 +1699,35 @@ class Brain:
 
         from memory import get_memory_context
         from wiki import get_wiki_context
-        prompt = SYSTEM_PROMPT.replace("HOME_DIR", HOME_DIR)
-        mode_str = "locally via Ollama" if self.local_mode else "via Ollama Cloud"
-        prompt += f"\n\nYou are currently running the {self.model} model {mode_str} on the terminal (macOS). When asked what model you use, say {self.model}. You run across iPhone, browser, terminal, and Android — all share memory and history."
-        prompt += get_memory_context()
-        # Inject relevant wiki knowledge based on user's message
-        if user_input:
-            try:
-                wiki_ctx = get_wiki_context(user_input)
-                if wiki_ctx:
-                    prompt += wiki_ctx
-            except Exception:
-                pass
-        messages = [{"role": "system", "content": prompt}] + self.history
+
+        if self.local_mode:
+            # Lightweight prompt for local models (7B can't handle huge prompts)
+            prompt = f"""You are a helpful AI assistant with a British tone. Address the user as "sir". Be concise (1-3 sentences).
+You are running {self.model} locally. You have access to the user's memories and wiki knowledge below.
+{get_memory_context()}"""
+            # Only add wiki if relevant (keep prompt small)
+            if user_input:
+                try:
+                    wiki_ctx = get_wiki_context(user_input)
+                    if wiki_ctx:
+                        prompt += wiki_ctx
+                except Exception:
+                    pass
+            # Keep less history for local models
+            recent_history = self.history[-10:] if len(self.history) > 10 else self.history
+            messages = [{"role": "system", "content": prompt}] + recent_history
+        else:
+            prompt = SYSTEM_PROMPT.replace("HOME_DIR", HOME_DIR)
+            prompt += f"\n\nYou are currently running the {self.model} model via Ollama Cloud on the terminal (macOS). When asked what model you use, say {self.model}. You run across iPhone, browser, terminal, and Android — all share memory and history."
+            prompt += get_memory_context()
+            if user_input:
+                try:
+                    wiki_ctx = get_wiki_context(user_input)
+                    if wiki_ctx:
+                        prompt += wiki_ctx
+                except Exception:
+                    pass
+            messages = [{"role": "system", "content": prompt}] + self.history
 
         reply = self._call_ollama(messages)
         assistant_msg = {"role": "assistant", "content": reply}

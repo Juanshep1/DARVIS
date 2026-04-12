@@ -1,0 +1,22 @@
+{
+  "id": "entity-azula",
+  "title": "Azula",
+  "type": "entity",
+  "content": "# Azula\n\nAzula is a 3-year-old husky mix dog who loves playing in snow and chasing squirrels. She weighs about 50 pounds.\n\n## Breed\n\nAs a husky mix, Azula belongs to a type of dog originally bred for polar regions and sled work. [[entity-husky|Huskies]] are known for their cold-weather tolerance, thick double coats, and energetic nature. They typically have pale blue eyes (though can have brown, green, or heterochromic eyes) and are distinguished by their hardiness.\n\n## Owner\n\nAzula belongs to [[entity-juan|Juan]].\n\n## Personality\n\n- Loves playing in snow\n- Enjoys chasing squirrels",
+  "tags": [
+    "dog",
+    "pet",
+    "animal",
+    "husky"
+  ],
+  "links": [
+    "entity-husky",
+    "entity-juan"
+  ],
+  "summary": "3-year-old husky mix dog who loves playing in snow and chasing squirrels, weighs about 50 pounds",
+  "sources": [
+    "src-1775926503097"
+  ],
+  "created": "2026-04-11T16:27:22.564Z",
+  "updated": "2026-04-11T16:56:02.514Z"
+}

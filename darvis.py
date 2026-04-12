@@ -1647,27 +1647,24 @@ class Brain:
 
         if self.local_mode:
             # Local Ollama — no auth needed
-            req = urllib.request.Request(
-                f"{OLLAMA_LOCAL_URL}/chat",
-                data=payload,
-                headers={"Content-Type": "application/json"},
-                method="POST",
-            )
+            url = f"{OLLAMA_LOCAL_URL}/chat"
+            headers = {"Content-Type": "application/json"}
         else:
             # Ollama Cloud — needs Bearer token
-            req = urllib.request.Request(
-                f"{OLLAMA_URL}/chat",
-                data=payload,
-                headers={
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {self.api_key}",
-                },
-                method="POST",
-            )
+            url = f"{OLLAMA_URL}/chat"
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self.api_key}",
+            }
 
-        with urllib.request.urlopen(req, timeout=120) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            return data["message"]["content"]
+        req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
+
+        try:
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                return data["message"]["content"]
+        except urllib.error.HTTPError as e:
+            raise Exception(f"API error ({e.code}): {e.reason} — URL: {url} Model: {self.model} Local: {self.local_mode}")
 
     def think(self, user_input: str, context: str = "") -> str:
         now = datetime.datetime.now()
@@ -3220,7 +3217,8 @@ Output a brief, actionable report. Be specific about page IDs."""
             if e.code == 401:
                 console.print(f"\n  [red]Authentication failed — check your API key(s).[/red]\n")
             else:
-                console.print(f"\n  [red]API error ({e.code}): {e.reason}[/red]\n")
+                mode_str = "local" if brain.local_mode else "cloud"
+                console.print(f"\n  [red]API error ({e.code}): {e.reason} [{mode_str}: {brain.model}][/red]\n")
         except urllib.error.URLError as e:
             console.print(f"\n  [red]Connection error: {e}[/red]")
             console.print(f"  [dim]Check your internet connection.[/dim]\n")

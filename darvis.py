@@ -2178,7 +2178,6 @@ def main():
             # Wiki ingest helper (runs in background thread)
             def _remote_wiki_ingest(cmd):
                 try:
-                    import re as _re
                     from wiki import get_index, get_schema, ingest_source, bulk_upsert, build_ingest_prompt
                     raw = cmd["content"].strip()
                     title = cmd.get("title", raw[:60])
@@ -2188,10 +2187,10 @@ def main():
                             url_req = urllib.request.Request(raw, headers={"User-Agent": "Mozilla/5.0"})
                             with urllib.request.urlopen(url_req, timeout=15) as url_resp:
                                 html = url_resp.read().decode(errors="replace")
-                            tm = _re.search(r'<title[^>]*>([^<]+)</title>', html, _re.IGNORECASE)
+                            tm = re.search(r'<title[^>]*>([^<]+)</title>', html, re.IGNORECASE)
                             if tm: title = tm.group(1).strip()
-                            raw = _re.sub(r'<[^>]+>', ' ', html)
-                            raw = _re.sub(r'\s+', ' ', raw).strip()[:50000]
+                            raw = re.sub(r'<[^>]+>', ' ', html)
+                            raw = re.sub(r'\s+', ' ', raw).strip()[:50000]
                         except Exception:
                             return
                     source_id = ingest_source(title, raw, "paste")
@@ -2207,7 +2206,7 @@ def main():
                     with urllib.request.urlopen(req2, timeout=120) as resp2:
                         result = json.loads(resp2.read().decode())
                     llm_text = result.get("message", {}).get("content", "")
-                    json_match = _re.search(r'\{[\s\S]*"pages"[\s\S]*\}', llm_text)
+                    json_match = re.search(r'\{[\s\S]*"pages"[\s\S]*\}', llm_text)
                     if json_match:
                         parsed = json.loads(json_match.group())
                         pages = parsed.get("pages", [])
@@ -2781,7 +2780,6 @@ def main():
                         with urllib.request.urlopen(req, timeout=15) as resp:
                             raw_content = resp.read().decode(errors="replace")
                         # Strip HTML tags
-                        import re
                         raw_content = re.sub(r'<[^>]+>', ' ', raw_content)
                         raw_content = re.sub(r'\s+', ' ', raw_content).strip()[:50000]
                     except Exception as e:
@@ -2828,7 +2826,6 @@ def main():
 
                 # Parse JSON output from LLM
                 try:
-                    import re
                     json_match = re.search(r'\{[\s\S]*"pages"[\s\S]*\}', ingest_response)
                     if json_match:
                         result = json.loads(json_match.group())
@@ -3029,12 +3026,11 @@ Output a brief, actionable report. Be specific about page IDs."""
                         req = urllib.request.Request(raw_content, headers={"User-Agent": "Mozilla/5.0"})
                         with urllib.request.urlopen(req, timeout=15) as resp:
                             html = resp.read().decode(errors="replace")
-                        import re as re2
-                        title_match = re2.search(r'<title[^>]*>([^<]+)</title>', html, re2.IGNORECASE)
+                        title_match = re.search(r'<title[^>]*>([^<]+)</title>', html, re.IGNORECASE)
                         if title_match:
                             title = title_match.group(1).strip()
-                        raw_content = re2.sub(r'<[^>]+>', ' ', html)
-                        raw_content = re2.sub(r'\s+', ' ', raw_content).strip()[:50000]
+                        raw_content = re.sub(r'<[^>]+>', ' ', html)
+                        raw_content = re.sub(r'\s+', ' ', raw_content).strip()[:50000]
                     except Exception as e:
                         console.print(f"  [red]Fetch error: {e}[/red]")
                         continue

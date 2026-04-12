@@ -18,8 +18,8 @@
         "person",
         "owner"
       ],
-      "summary": "28-year-old from Springfield, IL. Into AI, coding, and music production. Creator of Spectra. Works at the Melo Cream Factory.",
-      "updated": "2026-04-11T17:11:57.011Z"
+      "summary": "28-year-old from Springfield, IL. Into AI, coding, and music production. Creator of Spectra. Works at the Melo Cream Factory. Favorite food is cookout food.",
+      "updated": "2026-04-11T17:31:07.077Z"
     },
     "entity-azula": {
       "title": "Azula",
@@ -275,6 +275,13 @@
       "title": "my favorite food is cookout food",
       "ingested": "2026-04-11T17:30:47.102Z",
       "pages_updated": []
+    },
+    "src-1775928652406": {
+      "title": "my favorite food is cookout food",
+      "ingested": "2026-04-11T17:30:52.406Z",
+      "pages_updated": [
+        "entity-juan"
+      ]
     }
   }
 }

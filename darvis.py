@@ -1645,10 +1645,20 @@ class Brain:
             "stream": False,
         }).encode("utf-8")
 
-        if self.local_mode:
+        # Auto-detect local mode: if model exists locally, use local Ollama
+        use_local = self.local_mode
+        if not use_local and self.model:
+            # Check if this is a known local model (nimble-* or matches local Ollama)
+            if self.model.startswith("nimble") or self.model.startswith("local:"):
+                use_local = True
+                self.local_mode = True
+
+        if use_local:
             # Local Ollama — no auth needed
+            model_name = self.model.replace("local:", "")
             url = f"{OLLAMA_LOCAL_URL}/chat"
             headers = {"Content-Type": "application/json"}
+            payload = json.dumps({"model": model_name, "messages": messages, "stream": False}).encode("utf-8")
         else:
             # Ollama Cloud — needs Bearer token
             url = f"{OLLAMA_URL}/chat"

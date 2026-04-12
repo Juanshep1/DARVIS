@@ -40,7 +40,18 @@ export default async (req) => {
     ];
   }
 
-  return Response.json({ models, current });
+  // Add local Nimble models (run on user's Mac via daemon proxy)
+  const localModels = [
+    "nimble-athena-unclothed", "nimble-athena",
+    "nimble-aries-big", "nimble-aries", "nimble",
+  ];
+  // Prefix local models so the chat function knows to route them through daemon
+  const allModels = [
+    ...localModels.map(m => `local:${m}`),
+    ...models,
+  ];
+
+  return Response.json({ models: allModels, current });
 };
 
 export const config = { path: "/api/models" };

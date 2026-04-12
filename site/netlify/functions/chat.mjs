@@ -155,6 +155,8 @@ export default async (req) => {
   const searchResults = needsSearch(message) ? await tavilySearch(searchQuery, 10) : null;
 
   let MODEL = settingsData?.model || Netlify.env.get("DARVIS_MODEL") || "glm-5";
+  const isLocalModel = MODEL.startsWith("local:");
+  const actualModel = isLocalModel ? MODEL.replace("local:", "") : MODEL;
   let history = Array.isArray(historyData) ? historyData : [];
 
   // Keep only last 20 messages and clean any chain-of-thought junk
@@ -362,6 +364,36 @@ Common shortcuts:
   ];
 
   try {
+    // If local model selected, route through daemon for local Ollama processing
+    if (isLocalModel) {
+      const cmdStore = getStore("darvis-agent");
+      const requestId = `lchat-${Date.now()}`;
+      // Store the chat request for the daemon to process
+      await cmdStore.setJSON("pending_local_chat", {
+        id: requestId,
+        model: actualModel,
+        messages,
+        ts: Date.now(),
+      });
+      // Poll for response (daemon will store it)
+      for (let i = 0; i < 24; i++) { // 24 * 5s = 120s max
+        await new Promise(r => setTimeout(r, 5000));
+        const resp = await cmdStore.get("local_chat_response", { type: "json" }).catch(() => null);
+        if (resp && resp.id === requestId && resp.reply) {
+          await cmdStore.delete("local_chat_response");
+          // Save history
+          try {
+            history.push(userMsg);
+            history.push({ role: "assistant", content: resp.reply });
+            if (history.length > 40) history = history.slice(-40);
+            await historyStore.setJSON("conversation", history);
+          } catch {}
+          return Response.json({ reply: resp.reply });
+        }
+      }
+      return Response.json({ reply: "Local model timed out, sir. Make sure Ollama is running on your Mac." });
+    }
+
     const res = await fetch("https://ollama.com/api/chat", {
       method: "POST",
       headers: {

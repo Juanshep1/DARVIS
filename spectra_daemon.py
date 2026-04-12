@@ -234,10 +234,90 @@ def poll_and_execute():
         pass  # Network error, try again next poll
 
 
+LOCAL_CHAT_URL = "https://darvis1.netlify.app/api/wiki"  # Reuse wiki store for local chat
+AGENT_STORE_URL = "https://darvis1.netlify.app"
+
+def poll_local_chat():
+    """Check for pending local chat requests and process them with local Ollama."""
+    try:
+        # Check for pending local chat request
+        req = urllib.request.Request(
+            f"{AGENT_STORE_URL}/api/wiki",
+            method="POST",
+            data=json.dumps({"action": "get_local_chat"}).encode(),
+            headers={"Content-Type": "application/json"},
+        )
+        # Use a simpler approach: read from the darvis-agent blob store via commands endpoint
+        # Actually, we need to read from Netlify Blobs directly. Let's use a dedicated endpoint.
+        pass
+    except Exception:
+        pass
+
+
+def process_local_chat():
+    """Poll for local chat requests from browser and process with local Ollama."""
+    try:
+        # Read pending_local_chat from darvis-agent store
+        # We'll add a simple GET endpoint to the commands function for this
+        req = urllib.request.Request(
+            f"{AGENT_STORE_URL}/api/commands?local_chat=true",
+            method="GET",
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode())
+
+        chat_req = data.get("local_chat")
+        if not chat_req or not chat_req.get("messages"):
+            return
+
+        model = chat_req.get("model", "nimble-athena-unclothed")
+        messages = chat_req["messages"]
+        request_id = chat_req.get("id", "")
+
+        log(f"Local chat: {model} (request {request_id})")
+
+        # Call local Ollama
+        payload = json.dumps({"model": model, "messages": messages, "stream": False}).encode()
+        ollama_req = urllib.request.Request(
+            "http://localhost:11434/api/chat",
+            data=payload,
+            method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(ollama_req, timeout=120) as ollama_resp:
+            result = json.loads(ollama_resp.read().decode())
+
+        reply = result.get("message", {}).get("content", "No response")
+        log(f"Local chat response: {reply[:100]}...")
+
+        # Store response back
+        resp_payload = json.dumps({
+            "action": "store_local_response",
+            "id": request_id,
+            "reply": reply,
+        }).encode()
+        store_req = urllib.request.Request(
+            f"{AGENT_STORE_URL}/api/commands",
+            data=resp_payload,
+            method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        urllib.request.urlopen(store_req, timeout=10)
+
+    except urllib.error.URLError:
+        pass  # Local Ollama not running
+    except Exception as e:
+        if "local_chat" in str(e).lower() or "connection refused" in str(e).lower():
+            pass
+        else:
+            log(f"Local chat error: {e}")
+
+
 def run_daemon():
     log("SPECTRA daemon started")
     while True:
         poll_and_execute()
+        process_local_chat()
         time.sleep(POLL_INTERVAL)
 
 

@@ -98,6 +98,7 @@ def _open_url_in_browser(url: str):
 
 WAKE_WORD = "spectra"
 OLLAMA_URL = "https://ollama.com/api"
+OLLAMA_LOCAL_URL = "http://localhost:11434/api"
 ELEVENLABS_URL = "https://api.elevenlabs.io/v1"
 MODEL = "llama3.3:70b"
 DEFAULT_VOICE_ID = "kPtEHAvRnjUJFv7SK9WI"
@@ -1628,6 +1629,7 @@ class Brain:
     def __init__(self, api_key: str, model: str = MODEL):
         self.api_key = api_key
         self.model = model
+        self.local_mode = False  # True = use local Ollama, False = use Ollama Cloud
         self.history: list[dict] = []
         # Load conversation history from cloud on startup
         try:
@@ -1643,15 +1645,25 @@ class Brain:
             "stream": False,
         }).encode("utf-8")
 
-        req = urllib.request.Request(
-            f"{OLLAMA_URL}/chat",
-            data=payload,
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {self.api_key}",
-            },
-            method="POST",
-        )
+        if self.local_mode:
+            # Local Ollama — no auth needed
+            req = urllib.request.Request(
+                f"{OLLAMA_LOCAL_URL}/chat",
+                data=payload,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+        else:
+            # Ollama Cloud — needs Bearer token
+            req = urllib.request.Request(
+                f"{OLLAMA_URL}/chat",
+                data=payload,
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {self.api_key}",
+                },
+                method="POST",
+            )
 
         with urllib.request.urlopen(req, timeout=120) as resp:
             data = json.loads(resp.read().decode("utf-8"))
@@ -1680,7 +1692,8 @@ class Brain:
         from memory import get_memory_context
         from wiki import get_wiki_context
         prompt = SYSTEM_PROMPT.replace("HOME_DIR", HOME_DIR)
-        prompt += f"\n\nYou are currently running the {self.model} model on the terminal (macOS). When asked what model you use, say {self.model}. You run across iPhone, browser, terminal, and Android — all share memory and history."
+        mode_str = "locally via Ollama" if self.local_mode else "via Ollama Cloud"
+        prompt += f"\n\nYou are currently running the {self.model} model {mode_str} on the terminal (macOS). When asked what model you use, say {self.model}. You run across iPhone, browser, terminal, and Android — all share memory and history."
         prompt += get_memory_context()
         # Inject relevant wiki knowledge based on user's message
         if user_input:
@@ -1817,6 +1830,17 @@ def list_cloud_models(api_key: str) -> list[str]:
             method="GET",
         )
         with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            return [m["name"] for m in data.get("models", [])]
+    except Exception:
+        return []
+
+
+def list_local_models() -> list[str]:
+    """List models available on local Ollama instance."""
+    try:
+        req = urllib.request.Request(f"{OLLAMA_LOCAL_URL}/tags", method="GET")
+        with urllib.request.urlopen(req, timeout=5) as resp:
             data = json.loads(resp.read().decode("utf-8"))
             return [m["name"] for m in data.get("models", [])]
     except Exception:
@@ -2543,15 +2567,66 @@ def main():
                     tts.speak("Voice updated. How do I sound, sir?")
                 continue
 
+            # ── Local / Cloud / Nimble toggle ──
+            if lower == "/local" or lower.startswith("/local "):
+                local_models = list_local_models()
+                if not local_models:
+                    console.print(f"  [red]Local Ollama not running at {OLLAMA_LOCAL_URL}[/red]")
+                    console.print("  [dim]Start Ollama: `ollama serve`[/dim]")
+                    continue
+                if lower.startswith("/local ") and len(lower) > 7:
+                    new_model = user_input.strip().split(None, 1)[1]
+                else:
+                    # Show picker
+                    console.print(f"\n  [bold {CYAN}]Local Ollama Models[/bold {CYAN}]\n")
+                    for i, m in enumerate(local_models, 1):
+                        marker = " ←" if m == brain.model and brain.local_mode else ""
+                        console.print(f"  [{BLUE}]{i}.[/{BLUE}] {m}{marker}")
+                    choice = console.input(f"\n  [bold]Select (number or name): [/bold]").strip()
+                    try:
+                        idx = int(choice) - 1
+                        new_model = local_models[idx]
+                    except (ValueError, IndexError):
+                        new_model = choice if choice else local_models[0]
+                brain.local_mode = True
+                brain.model = new_model
+                settings["model"] = new_model
+                save_settings(settings)
+                console.print(f"  [green]✓[/green] Local mode: [bold {CYAN}]{new_model}[/bold {CYAN}] (localhost:11434)")
+                continue
+
+            if lower == "/cloud":
+                brain.local_mode = False
+                console.print(f"  [green]✓[/green] Cloud mode: [bold {CYAN}]{brain.model}[/bold {CYAN}] (ollama.com)")
+                continue
+
             if lower in ("/models", "/model", "/m") or lower.startswith("/model "):
                 if lower.startswith("/model ") and len(lower) > 7:
                     new_model = user_input.strip().split(None, 1)[1]
                 else:
-                    new_model = select_model(ollama_key, brain.model)
+                    if brain.local_mode:
+                        models = list_local_models()
+                        console.print(f"\n  [bold {CYAN}]Local Models (localhost:11434)[/bold {CYAN}]\n")
+                    else:
+                        models = list_cloud_models(ollama_key)
+                        console.print(f"\n  [bold {CYAN}]Cloud Models (ollama.com)[/bold {CYAN}]\n")
+                    if models:
+                        for i, m in enumerate(models, 1):
+                            marker = " ←" if m == brain.model else ""
+                            console.print(f"  [{BLUE}]{i}.[/{BLUE}] {m}{marker}")
+                        choice = console.input(f"\n  [bold]Select (number or name): [/bold]").strip()
+                        try:
+                            idx = int(choice) - 1
+                            new_model = models[idx]
+                        except (ValueError, IndexError):
+                            new_model = choice if choice else brain.model
+                    else:
+                        new_model = select_model(ollama_key, brain.model)
                 brain.model = new_model
                 settings["model"] = new_model
                 save_settings(settings)
-                console.print(f"  [green]✓[/green] Model: [bold {CYAN}]{new_model}[/bold {CYAN}]")
+                mode_label = "local" if brain.local_mode else "cloud"
+                console.print(f"  [green]✓[/green] Model: [bold {CYAN}]{new_model}[/bold {CYAN}] ({mode_label})")
                 continue
 
             if lower == "/briefing":

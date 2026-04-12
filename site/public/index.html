@@ -956,11 +956,13 @@ function createRecognition() {
         // If page is hidden (phone locked), don't change state — recovery handler will deal with it
         if (document.visibilityState === 'hidden') return;
         const hadText = inputEl.value.trim().length > 0;
-        if (audioMode === 'gemini' && cameraActive) {
+        if (audioMode === 'gemini') {
+            // Route all Gemini voice through send() → classic API (has search + wiki + commands)
+            // Gemini speaks the response via WebSocket
             if (hadText) {
                 send();
                 setTimeout(() => {
-                    if (isRecording && audioMode === 'gemini' && cameraActive) {
+                    if (isRecording && audioMode === 'gemini') {
                         try { recognition.start(); } catch {}
                     }
                 }, 500);
@@ -1018,14 +1020,17 @@ async function toggleMic() {
                     orb.className = 'orb listening';
                     responseEl.textContent = '';
 
-                    if (cameraActive && recognition) {
-                        // Camera + Gemini mode: use Web Speech API for transcription
-                        // so we can detect camera requests and route to vision API.
-                        // Non-camera questions get sent to Gemini WebSocket as text.
+                    // Always use Web Speech API to transcribe first, then route:
+                    // - Search/command queries → classic API (has Tavily + wiki + commands)
+                    // - Casual conversation → Gemini WebSocket (native voice)
+                    if (recognition) {
+                        createRecognition();
                         recognition.start();
-                        statusBar.textContent = 'GEMINI LIVE + CAMERA — SPEAK NATURALLY';
+                        statusBar.textContent = cameraActive
+                            ? 'GEMINI LIVE + CAMERA — SPEAK NATURALLY'
+                            : 'GEMINI LIVE — SPEAK NATURALLY';
                     } else {
-                        // No camera: stream raw audio to Gemini (speech-to-speech)
+                        // Fallback: stream raw audio to Gemini if no speech recognition
                         await startGeminiMic();
                     }
                 } else {

@@ -889,7 +889,162 @@ map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "bott
 const EMPTY = { type: "FeatureCollection", features: [] };
 const SOURCE_IDS = ["satellites","aircraft","military","cameras","earthquakes","fires","news","wxalerts","orbit","trail","terminator"];
 
+// ── Tactical icon glyphs — hand-drawn to canvas, added as map images ──
+function makeIcon(drawFn, size = 32) {
+  const c = document.createElement("canvas");
+  c.width = c.height = size;
+  const ctx = c.getContext("2d");
+  drawFn(ctx, size);
+  return ctx.getImageData(0, 0, size, size);
+}
+function drawPlane(ctx) {
+  ctx.translate(16, 16);
+  ctx.fillStyle = "#ffb547";
+  ctx.strokeStyle = "rgba(20,10,0,0.9)";
+  ctx.lineWidth = 1.2; ctx.lineJoin = "round";
+  ctx.shadowColor = "rgba(255,181,71,0.6)"; ctx.shadowBlur = 4;
+  ctx.beginPath();
+  ctx.moveTo(0, -13); ctx.lineTo(2, -3);
+  ctx.lineTo(13, 3); ctx.lineTo(13, 5); ctx.lineTo(2, 4);
+  ctx.lineTo(2, 10); ctx.lineTo(6, 12); ctx.lineTo(6, 13);
+  ctx.lineTo(-6, 13); ctx.lineTo(-6, 12); ctx.lineTo(-2, 10);
+  ctx.lineTo(-2, 4); ctx.lineTo(-13, 5); ctx.lineTo(-13, 3);
+  ctx.lineTo(-2, -3); ctx.closePath();
+  ctx.fill(); ctx.shadowBlur = 0; ctx.stroke();
+}
+function drawFighter(ctx) {
+  ctx.translate(16, 16);
+  ctx.fillStyle = "#ff3a55";
+  ctx.strokeStyle = "rgba(30,0,6,0.9)";
+  ctx.lineWidth = 1.2; ctx.lineJoin = "round";
+  ctx.shadowColor = "rgba(255,58,85,0.7)"; ctx.shadowBlur = 5;
+  ctx.beginPath();
+  ctx.moveTo(0, -14); ctx.lineTo(1.8, -6);
+  ctx.lineTo(13, 9); ctx.lineTo(13, 11); ctx.lineTo(2.5, 7);
+  ctx.lineTo(4.5, 13); ctx.lineTo(1, 13); ctx.lineTo(0, 11);
+  ctx.lineTo(-1, 13); ctx.lineTo(-4.5, 13); ctx.lineTo(-2.5, 7);
+  ctx.lineTo(-13, 11); ctx.lineTo(-13, 9); ctx.lineTo(-1.8, -6);
+  ctx.closePath();
+  ctx.fill(); ctx.shadowBlur = 0; ctx.stroke();
+}
+function drawSatellite(ctx) {
+  ctx.translate(16, 16);
+  ctx.strokeStyle = "rgba(3,30,50,0.9)";
+  ctx.lineWidth = 1;
+  ctx.shadowColor = "rgba(95,217,255,0.7)"; ctx.shadowBlur = 4;
+  // Solar panels (left, right)
+  ctx.fillStyle = "#0f3d55";
+  ctx.beginPath(); ctx.rect(-14, -4, 7, 8); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.rect(7, -4, 7, 8); ctx.fill(); ctx.stroke();
+  // Grid lines
+  ctx.strokeStyle = "rgba(95,217,255,0.6)";
+  ctx.beginPath();
+  for (let x = -13; x <= -8; x += 2) { ctx.moveTo(x, -4); ctx.lineTo(x, 4); }
+  for (let x = 8; x <= 13; x += 2) { ctx.moveTo(x, -4); ctx.lineTo(x, 4); }
+  ctx.moveTo(-14, 0); ctx.lineTo(-7, 0);
+  ctx.moveTo(7, 0); ctx.lineTo(14, 0);
+  ctx.stroke();
+  // Body (hex)
+  ctx.fillStyle = "#5fd9ff";
+  ctx.strokeStyle = "rgba(3,30,50,0.9)";
+  ctx.beginPath();
+  ctx.moveTo(-4, -5); ctx.lineTo(4, -5); ctx.lineTo(6, 0);
+  ctx.lineTo(4, 5); ctx.lineTo(-4, 5); ctx.lineTo(-6, 0);
+  ctx.closePath();
+  ctx.fill(); ctx.shadowBlur = 0; ctx.stroke();
+}
+function drawCamera(ctx) {
+  ctx.translate(16, 16);
+  ctx.fillStyle = "#39ff8f";
+  ctx.strokeStyle = "rgba(0,40,18,0.9)";
+  ctx.lineWidth = 1.2; ctx.lineJoin = "round";
+  ctx.shadowColor = "rgba(57,255,143,0.7)"; ctx.shadowBlur = 5;
+  // Mount bracket
+  ctx.beginPath();
+  ctx.moveTo(-12, 8); ctx.lineTo(-12, 3); ctx.lineTo(-8, 3);
+  ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.lineWidth = 1.2;
+  // Body
+  ctx.beginPath();
+  ctx.moveTo(-9, -5); ctx.lineTo(3, -5);
+  ctx.lineTo(3, 5); ctx.lineTo(-9, 5); ctx.closePath();
+  ctx.fill(); ctx.stroke();
+  // Lens barrel
+  ctx.beginPath();
+  ctx.moveTo(3, -3); ctx.lineTo(10, -4);
+  ctx.lineTo(10, 4); ctx.lineTo(3, 3); ctx.closePath();
+  ctx.fill(); ctx.stroke();
+  // Inner lens dot
+  ctx.fillStyle = "rgba(0,40,18,0.9)"; ctx.shadowBlur = 0;
+  ctx.beginPath(); ctx.arc(8, 0, 1.8, 0, Math.PI * 2); ctx.fill();
+}
+function drawQuake(ctx) {
+  ctx.translate(16, 16);
+  ctx.strokeStyle = "#ff5b8a";
+  ctx.fillStyle = "#ff5b8a";
+  ctx.shadowColor = "rgba(255,91,138,0.7)"; ctx.shadowBlur = 4;
+  ctx.globalAlpha = 0.35; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(0, 0, 13, 0, Math.PI * 2); ctx.stroke();
+  ctx.globalAlpha = 0.6;
+  ctx.beginPath(); ctx.arc(0, 0, 9, 0, Math.PI * 2); ctx.stroke();
+  ctx.globalAlpha = 0.85;
+  ctx.beginPath(); ctx.arc(0, 0, 5, 0, Math.PI * 2); ctx.stroke();
+  ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+  ctx.beginPath(); ctx.arc(0, 0, 2.2, 0, Math.PI * 2); ctx.fill();
+}
+function drawFire(ctx) {
+  ctx.translate(16, 16);
+  const grad = ctx.createLinearGradient(0, -13, 0, 13);
+  grad.addColorStop(0, "#ffe74c");
+  grad.addColorStop(0.45, "#ff9620");
+  grad.addColorStop(1, "#ff2a00");
+  ctx.fillStyle = grad;
+  ctx.strokeStyle = "rgba(80,20,0,0.9)";
+  ctx.lineWidth = 1;
+  ctx.shadowColor = "rgba(255,120,30,0.7)"; ctx.shadowBlur = 5;
+  ctx.beginPath();
+  ctx.moveTo(0, -13);
+  ctx.quadraticCurveTo(9, -3, 7, 6);
+  ctx.quadraticCurveTo(5, 12, 0, 13);
+  ctx.quadraticCurveTo(-5, 12, -7, 6);
+  ctx.quadraticCurveTo(-9, -3, 0, -13);
+  ctx.fill(); ctx.shadowBlur = 0; ctx.stroke();
+  // Inner flame
+  ctx.fillStyle = "rgba(255,230,60,0.9)";
+  ctx.beginPath();
+  ctx.moveTo(0, -7);
+  ctx.quadraticCurveTo(4, -1, 3, 4);
+  ctx.quadraticCurveTo(1, 8, 0, 8);
+  ctx.quadraticCurveTo(-1, 8, -3, 4);
+  ctx.quadraticCurveTo(-4, -1, 0, -7);
+  ctx.fill();
+}
+function drawAlert(ctx) {
+  ctx.translate(16, 16);
+  ctx.fillStyle = "#ff3a55";
+  ctx.strokeStyle = "rgba(30,0,6,0.9)";
+  ctx.lineWidth = 1.2; ctx.lineJoin = "round";
+  ctx.shadowColor = "rgba(255,58,85,0.7)"; ctx.shadowBlur = 4;
+  ctx.beginPath();
+  ctx.moveTo(0, -13); ctx.lineTo(13, 10); ctx.lineTo(-13, 10);
+  ctx.closePath();
+  ctx.fill(); ctx.shadowBlur = 0; ctx.stroke();
+  ctx.fillStyle = "rgba(15,0,3,0.95)";
+  ctx.fillRect(-1.3, -4, 2.6, 8);
+  ctx.beginPath(); ctx.arc(0, 7, 1.6, 0, Math.PI * 2); ctx.fill();
+}
+
+function addIcons() {
+  const defs = { plane: drawPlane, fighter: drawFighter, satellite: drawSatellite,
+    camera: drawCamera, quake: drawQuake, fire: drawFire, alert: drawAlert };
+  for (const [name, fn] of Object.entries(defs)) {
+    if (map.hasImage(name)) continue;
+    try { map.addImage(name, makeIcon(fn, 32)); } catch (e) { console.warn("icon", name, e); }
+  }
+}
+
 function installLayers() {
+  addIcons();
   for (const id of SOURCE_IDS) {
     if (!map.getSource(id)) map.addSource(id, { type: "geojson", data: EMPTY });
   }
@@ -918,60 +1073,71 @@ function installLayers() {
     "circle-color": "#ff5b8a", "circle-opacity": 0.18,
     "circle-blur": 0.6,
   }});
-  if (!map.getLayer("earthquakes-l")) map.addLayer({ id: "earthquakes-l", type: "circle", source: "earthquakes", paint: {
-    "circle-radius": ["interpolate", ["linear"], ["coalesce", ["to-number", ["get", "mag"]], 0], 0, 2, 8, 14],
-    "circle-color": "#ff5b8a", "circle-opacity": 0.85,
-    "circle-stroke-color": "#ff8aa6", "circle-stroke-width": 0.8,
+  if (!map.getLayer("earthquakes-l")) map.addLayer({ id: "earthquakes-l", type: "symbol", source: "earthquakes", layout: {
+    "icon-image": "quake",
+    "icon-size": ["interpolate", ["linear"], ["coalesce", ["to-number", ["get", "mag"]], 0], 0, 0.55, 5, 0.9, 8, 1.4],
+    "icon-allow-overlap": true,
+    "icon-ignore-placement": true,
   }});
 
-  // Fires — coalesce null frp
-  if (!map.getLayer("fires-l")) map.addLayer({ id: "fires-l", type: "circle", source: "fires", paint: {
-    "circle-radius": ["interpolate", ["linear"], ["coalesce", ["to-number", ["get", "frp"]], 0], 0, 2.5, 50, 6],
-    "circle-color": "#ff6a1a", "circle-opacity": 0.8, "circle-blur": 0.2,
+  // Fires
+  if (!map.getLayer("fires-l")) map.addLayer({ id: "fires-l", type: "symbol", source: "fires", layout: {
+    "icon-image": "fire",
+    "icon-size": ["interpolate", ["linear"], ["coalesce", ["to-number", ["get", "frp"]], 0], 0, 0.5, 50, 0.95],
+    "icon-allow-overlap": true,
+    "icon-ignore-placement": true,
   }});
 
-  // Satellites
-  if (!map.getLayer("satellites-l")) map.addLayer({ id: "satellites-l", type: "circle", source: "satellites", paint: {
-    "circle-radius": ["interpolate", ["linear"], ["zoom"], 0, 2.5, 6, 4, 10, 6],
-    "circle-color": "#5fd9ff", "circle-opacity": 0.9,
-    "circle-stroke-color": "#5fd9ff", "circle-stroke-width": 1, "circle-stroke-opacity": 0.4,
+  // Satellites — hex body + solar panels glyph
+  if (!map.getLayer("satellites-l")) map.addLayer({ id: "satellites-l", type: "symbol", source: "satellites", layout: {
+    "icon-image": "satellite",
+    "icon-size": ["interpolate", ["linear"], ["zoom"], 0, 0.55, 6, 0.85, 12, 1.15],
+    "icon-allow-overlap": true, "icon-ignore-placement": true,
   }});
 
-  // Aircraft
-  if (!map.getLayer("aircraft-l")) map.addLayer({ id: "aircraft-l", type: "circle", source: "aircraft", paint: {
-    "circle-radius": ["interpolate", ["linear"], ["zoom"], 0, 3, 6, 4.5, 12, 8],
-    "circle-color": "#ffb547",
-    "circle-stroke-color": "#fff", "circle-stroke-width": 0.6, "circle-stroke-opacity": 0.7,
+  // Aircraft — plane silhouette, rotates with OpenSky heading
+  if (!map.getLayer("aircraft-l")) map.addLayer({ id: "aircraft-l", type: "symbol", source: "aircraft", layout: {
+    "icon-image": "plane",
+    "icon-size": ["interpolate", ["linear"], ["zoom"], 0, 0.6, 6, 0.9, 12, 1.25],
+    "icon-rotate": ["coalesce", ["to-number", ["get", "heading"]], 0],
+    "icon-rotation-alignment": "map",
+    "icon-allow-overlap": true, "icon-ignore-placement": true,
   }});
 
-  // Military aircraft — distinct red pulsing ring + square-ish marker
+  // Military aircraft — red aura + fighter-jet silhouette
   if (!map.getLayer("mil-glow-l")) map.addLayer({ id: "mil-glow-l", type: "circle", source: "military", paint: {
     "circle-radius": ["interpolate", ["linear"], ["zoom"], 0, 10, 8, 22],
     "circle-color": "#ff3a55", "circle-opacity": 0.22, "circle-blur": 0.7,
   }});
-  if (!map.getLayer("military-l")) map.addLayer({ id: "military-l", type: "circle", source: "military", paint: {
-    "circle-radius": ["interpolate", ["linear"], ["zoom"], 0, 4.5, 6, 6, 12, 9],
-    "circle-color": "#ff3a55",
-    "circle-stroke-color": "#fff", "circle-stroke-width": 0.8, "circle-stroke-opacity": 0.9,
+  if (!map.getLayer("military-l")) map.addLayer({ id: "military-l", type: "symbol", source: "military", layout: {
+    "icon-image": "fighter",
+    "icon-size": ["interpolate", ["linear"], ["zoom"], 0, 0.7, 6, 1.0, 12, 1.35],
+    "icon-rotate": ["coalesce", ["to-number", ["get", "track"]], 0],
+    "icon-rotation-alignment": "map",
+    "icon-allow-overlap": true, "icon-ignore-placement": true,
   }});
 
-  // News alert dots
-  if (!map.getLayer("news-l")) map.addLayer({ id: "news-l", type: "circle", source: "news", paint: {
-    "circle-radius": 7,
+  // News alerts — severity-tinted glow backdrop + warning triangle glyph
+  if (!map.getLayer("news-bg-l")) map.addLayer({ id: "news-bg-l", type: "circle", source: "news", paint: {
+    "circle-radius": 13,
     "circle-color": ["match", ["get", "severity"], "critical", "#ff3a55", "high", "#ff7a3d", "medium", "#ffd23d", "#5fd9ff"],
-    "circle-opacity": 0.9,
-    "circle-stroke-color": "#fff", "circle-stroke-width": 0.6, "circle-stroke-opacity": 0.5,
+    "circle-opacity": 0.22, "circle-blur": 0.6,
+  }});
+  if (!map.getLayer("news-l")) map.addLayer({ id: "news-l", type: "symbol", source: "news", layout: {
+    "icon-image": "alert",
+    "icon-size": ["interpolate", ["linear"], ["zoom"], 0, 0.7, 6, 0.95, 12, 1.25],
+    "icon-allow-overlap": true, "icon-ignore-placement": true,
   }});
 
-  // Cameras (drawn on top — green pulsing)
+  // Cameras — green aura + CCTV silhouette
   if (!map.getLayer("cam-glow-l")) map.addLayer({ id: "cam-glow-l", type: "circle", source: "cameras", paint: {
     "circle-radius": ["interpolate", ["linear"], ["zoom"], 0, 12, 8, 22],
     "circle-color": "#39ff8f", "circle-opacity": 0.18, "circle-blur": 0.7,
   }});
-  if (!map.getLayer("cameras-l")) map.addLayer({ id: "cameras-l", type: "circle", source: "cameras", paint: {
-    "circle-radius": ["interpolate", ["linear"], ["zoom"], 0, 5, 6, 7, 12, 10],
-    "circle-color": "#39ff8f", "circle-opacity": 1,
-    "circle-stroke-color": "#0a3", "circle-stroke-width": 2,
+  if (!map.getLayer("cameras-l")) map.addLayer({ id: "cameras-l", type: "symbol", source: "cameras", layout: {
+    "icon-image": "camera",
+    "icon-size": ["interpolate", ["linear"], ["zoom"], 0, 0.7, 6, 0.95, 12, 1.3],
+    "icon-allow-overlap": true, "icon-ignore-placement": true,
   }});
 }
 
@@ -1491,7 +1657,7 @@ function rerender() {
   set(["aircraft-l"], state.layers.aircraft);
   set(["military-l", "mil-glow-l"], state.layers.military);
   set(["cameras-l", "cam-glow-l"], state.layers.cameras);
-  set(["news-l"], state.layers.news);
+  set(["news-l", "news-bg-l"], state.layers.news);
   set(["earthquakes-l", "eq-glow-l"], state.layers.earthquakes);
   set(["fires-l"], state.layers.fires);
   set(["terminator-l"], state.layers.terminator);

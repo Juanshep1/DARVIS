@@ -139,20 +139,27 @@ export default async (req) => {
     }
 
     const fromWindy = collected.map((w) => {
-      // Windy v3 returns timelapse player URLs keyed by duration.
-      // Prefer the shortest window ('day' = last 24 h) since that is closest
-      // to real-time. All of these are iframe-embeddable by design.
+      // Windy v3 returns:
+      //   images.current.preview — the latest snapshot from the webcam
+      //     (updated every 10 min on Windy's side). THIS is what the camera
+      //     sees right now — not a timelapse. We use it as the primary URL.
+      //   player.day/month/year — iframe-embeddable timelapse players
+      //     (nostalgia mode). Kept as "timelapseUrl" so the PIP can toggle.
       const player = w.player || {};
-      const embed = player.day || player.month || player.year || player.lifetime;
-      if (!embed) return null;
+      const snapshot = w.images?.current?.preview;
+      const timelapse = player.day || player.month || player.year || player.lifetime;
+      if (!snapshot && !timelapse) return null;
       return {
         id: `windy-${w.webcamId}`,
         label: w.title || "Webcam",
         lat: w.location?.latitude,
         lon: w.location?.longitude,
-        kind: "iframe",
-        url: embed,
-        thumb: w.images?.current?.preview || null,
+        // kind=jpg means "auto-refreshing snapshot" — the PIP viewer polls
+        // the URL with cache-busting every 4s to show the current view.
+        kind: snapshot ? "jpg" : "iframe",
+        url: snapshot || timelapse,
+        timelapseUrl: timelapse || null,
+        thumb: snapshot || null,
       };
     }).filter((w) => w && w.lat != null && w.lon != null);
 

@@ -1463,7 +1463,8 @@ async function loadCameras(near = null) {
   state.cameras = Array.from(merged.values()).filter((c) => c.lat != null && (c.lon != null || c.lng != null));
 
   refreshSource("cameras", state.cameras.map((c) => ({ ...c, lng: c.lng ?? c.lon })),
-    (c) => ({ id: c.id, label: c.label, url: c.url, kind: c.kind || "iframe", source: c.source || "", thumb: c.thumb || "" }));
+    (c) => ({ id: c.id, label: c.label, url: c.url, kind: c.kind || "iframe",
+              source: c.source || "", thumb: c.thumb || "", timelapseUrl: c.timelapseUrl || "" }));
   renderCamList();
   setStats();
   const breakdown = {};

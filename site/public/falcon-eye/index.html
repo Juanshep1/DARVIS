@@ -221,6 +221,7 @@
   }
   .layer[data-layer=satellites] .layer-swatch { background: var(--cyan); color: var(--cyan); }
   .layer[data-layer=aircraft] .layer-swatch { background: var(--amber); color: var(--amber); }
+  .layer[data-layer=military] .layer-swatch { background: #ff3a55; color: #ff3a55; }
   .layer[data-layer=cameras] .layer-swatch { background: var(--green); color: var(--green); }
   .layer[data-layer=news] .layer-swatch { background: var(--critical); color: var(--critical); }
   .layer[data-layer=earthquakes] .layer-swatch { background: #ff5b8a; color: #ff5b8a; }
@@ -650,6 +651,10 @@
       <div class="layer-row"><span class="layer-name"><span class="layer-swatch"></span>Aircraft</span><span class="layer-count" id="cntAir">0</span></div>
       <div class="layer-meta">OpenSky Network · Live ADS-B</div>
     </div>
+    <div class="layer on" data-layer="military">
+      <div class="layer-row"><span class="layer-name"><span class="layer-swatch"></span>Military Aircraft</span><span class="layer-count" id="cntMil">0</span></div>
+      <div class="layer-meta">airplanes.live · Open ADS-B · Mil-only</div>
+    </div>
     <div class="layer on" data-layer="cameras">
       <div class="layer-row"><span class="layer-name"><span class="layer-swatch"></span>Live Cameras</span><span class="layer-count" id="cntCam">0</span></div>
       <div class="layer-meta">Windy Webcams + custom feeds</div>
@@ -809,6 +814,7 @@ const API = {
   command: "/api/falcon-eye/command",
   state:   "/api/falcon-eye/state",
   air:     "/api/falcon-eye/aircraft",
+  airLive: "/api/falcon-eye/aircraft-live",
   tle:     "/api/falcon-eye/tle",
   cams:    "/api/falcon-eye/cameras",
   webcams: "/api/falcon-eye/webcams",
@@ -827,7 +833,7 @@ try { savedSources = JSON.parse(localStorage.getItem("fe-sources") || "null"); }
 const SOURCES = { ...defaultSources, ...(savedSources || {}) };
 
 const state = {
-  layers: { satellites: true, aircraft: true, cameras: true, news: true,
+  layers: { satellites: true, aircraft: true, military: true, cameras: true, news: true,
             earthquakes: true, fires: true, terminator: true, radar: true, wxalerts: true },
   sats: [],            // {name, satrec}
   satPoints: [],       // current propagated [{name, lat, lng, alt}]
@@ -881,7 +887,7 @@ map.on("error", (e) => { console.error("maplibre error:", e && e.error); });
 map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "bottom-right");
 
 const EMPTY = { type: "FeatureCollection", features: [] };
-const SOURCE_IDS = ["satellites","aircraft","cameras","earthquakes","fires","news","wxalerts","orbit","trail","terminator"];
+const SOURCE_IDS = ["satellites","aircraft","military","cameras","earthquakes","fires","news","wxalerts","orbit","trail","terminator"];
 
 function installLayers() {
   for (const id of SOURCE_IDS) {
@@ -936,6 +942,17 @@ function installLayers() {
     "circle-radius": ["interpolate", ["linear"], ["zoom"], 0, 3, 6, 4.5, 12, 8],
     "circle-color": "#ffb547",
     "circle-stroke-color": "#fff", "circle-stroke-width": 0.6, "circle-stroke-opacity": 0.7,
+  }});
+
+  // Military aircraft — distinct red pulsing ring + square-ish marker
+  if (!map.getLayer("mil-glow-l")) map.addLayer({ id: "mil-glow-l", type: "circle", source: "military", paint: {
+    "circle-radius": ["interpolate", ["linear"], ["zoom"], 0, 10, 8, 22],
+    "circle-color": "#ff3a55", "circle-opacity": 0.22, "circle-blur": 0.7,
+  }});
+  if (!map.getLayer("military-l")) map.addLayer({ id: "military-l", type: "circle", source: "military", paint: {
+    "circle-radius": ["interpolate", ["linear"], ["zoom"], 0, 4.5, 6, 6, 12, 9],
+    "circle-color": "#ff3a55",
+    "circle-stroke-color": "#fff", "circle-stroke-width": 0.8, "circle-stroke-opacity": 0.9,
   }});
 
   // News alert dots
@@ -1009,6 +1026,11 @@ function wireClicks() {
     showDossier({ type: "aircraft", ...f.properties, lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0] });
     log("track", `${f.properties.name || icao}`);
   });
+  map.on("click", "military-l", (e) => {
+    const f = e.features[0];
+    showDossier({ type: "military", ...f.properties, lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0] });
+    log("mil", `${f.properties.flight || f.properties.reg || f.properties.hex}`, "warn");
+  });
   map.on("click", "earthquakes-l", (e) => {
     const f = e.features[0];
     showDossier({ type: "earthquake", ...f.properties, lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0] });
@@ -1031,7 +1053,7 @@ function wireClicks() {
   });
 
   // Cursor pointer on hover
-  for (const layer of ["cameras-l","satellites-l","aircraft-l","earthquakes-l","news-l","fires-l"]) {
+  for (const layer of ["cameras-l","satellites-l","aircraft-l","military-l","earthquakes-l","news-l","fires-l"]) {
     map.on("mouseenter", layer, () => map.getCanvas().style.cursor = "pointer");
     map.on("mouseleave", layer, () => map.getCanvas().style.cursor = "");
   }
@@ -1204,6 +1226,25 @@ async function loadAircraft() {
     }));
     setStats();
   } catch (e) { log("ads-b", `Load failed: ${e.message}`, "warn"); }
+}
+
+// ── Military aircraft (airplanes.live, no key) ────────────────────
+async function loadMilitary() {
+  try {
+    const r = await fetch(`${API.airLive}?scope=mil`);
+    const d = await r.json();
+    const list = (d.ac || []).map((a) => ({
+      hex: a.hex, flight: a.flight, reg: a.reg, type: a.type, desc: a.desc,
+      lat: a.lat, lon: a.lon, lng: a.lon,
+      altBaro: a.altBaro, gs: a.gs, track: a.track, squawk: a.squawk, category: a.category,
+    }));
+    refreshSource("military", list, (a) => ({
+      hex: a.hex, flight: a.flight, reg: a.reg, type: a.type, desc: a.desc,
+      altBaro: a.altBaro, gs: a.gs, track: a.track, squawk: a.squawk, category: a.category,
+    }));
+    document.getElementById("cntMil").textContent = String(list.length);
+    log("mil", `${list.length} military aircraft`);
+  } catch (e) { log("mil", `Load failed: ${e.message}`, "warn"); }
 }
 
 function extrapolateAircraft() {
@@ -1448,6 +1489,7 @@ function rerender() {
   }
   set(["satellites-l"], state.layers.satellites);
   set(["aircraft-l"], state.layers.aircraft);
+  set(["military-l", "mil-glow-l"], state.layers.military);
   set(["cameras-l", "cam-glow-l"], state.layers.cameras);
   set(["news-l"], state.layers.news);
   set(["earthquakes-l", "eq-glow-l"], state.layers.earthquakes);
@@ -1657,6 +1699,22 @@ function showDossier(entity) {
       ["Velocity", entity.vel ? `${(entity.vel * 3.6).toFixed(0)} km/h` : "—"],
       ["Heading", entity.heading != null ? `${entity.heading.toFixed(0)}°` : "—"],
       ["Trail", `${state.selectedTrail?.length || 0} pings`],
+    ];
+  } else if (t === "military") {
+    title = entity.flight || entity.reg || entity.hex || "Military";
+    sub = `${entity.desc || entity.type || "Unknown"} · airplanes.live`;
+    rows = [
+      ["ICAO Hex", entity.hex || "—"],
+      ["Flight", entity.flight || "—"],
+      ["Reg", entity.reg || "—"],
+      ["Type", entity.type || "—"],
+      ["Aircraft", entity.desc || "—"],
+      ["Alt", entity.altBaro ? `${entity.altBaro} ft` : "—"],
+      ["Speed", entity.gs ? `${entity.gs} kts` : "—"],
+      ["Heading", entity.track != null ? `${entity.track}°` : "—"],
+      ["Squawk", entity.squawk || "—"],
+      ["Lat", entity.lat?.toFixed(4) + "°"],
+      ["Lon", entity.lon?.toFixed(4) + "°"],
     ];
   } else if (t === "camera") {
     title = entity.label || "Camera";
@@ -2096,6 +2154,7 @@ async function bootData() {
   propagateSats();
   setInterval(propagateSats, 1000);
   loadAircraft(); setInterval(loadAircraft, 25000);
+  loadMilitary(); setInterval(loadMilitary, 20000);
   loadCameras();
   loadNews(); setInterval(() => loadNews(), 60000);
   loadEarthquakes(); setInterval(loadEarthquakes, 5 * 60 * 1000);

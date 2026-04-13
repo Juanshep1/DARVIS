@@ -226,6 +226,7 @@
   .layer[data-layer=earthquakes] .layer-swatch { background: #ff5b8a; color: #ff5b8a; }
   .layer[data-layer=fires] .layer-swatch { background: #ff6a1a; color: #ff6a1a; }
   .layer[data-layer=terminator] .layer-swatch { background: var(--medium); color: var(--medium); }
+  .layer[data-layer=radar] .layer-swatch { background: #6ecbff; color: #6ecbff; }
   .layer-count {
     font-size: 12px; color: var(--ink-bright); font-weight: 500;
     font-variant-numeric: tabular-nums;
@@ -623,6 +624,10 @@
       <div class="layer-row"><span class="layer-name"><span class="layer-swatch"></span>Day · Night</span><span class="layer-count" id="cntTerm">●</span></div>
       <div class="layer-meta">Solar Terminator</div>
     </div>
+    <div class="layer on" data-layer="radar">
+      <div class="layer-row"><span class="layer-name"><span class="layer-swatch"></span>Weather Radar</span><span class="layer-count" id="cntRadar">—</span></div>
+      <div class="layer-meta">RainViewer · Global · 2h loop</div>
+    </div>
 
     <div class="section-title">Stream Sources</div>
     <div class="src-chips" id="srcChips">
@@ -759,7 +764,7 @@ const SOURCES = { ...defaultSources, ...(savedSources || {}) };
 
 const state = {
   layers: { satellites: true, aircraft: true, cameras: true, news: true,
-            earthquakes: true, fires: true, terminator: true },
+            earthquakes: true, fires: true, terminator: true, radar: true },
   sats: [],            // {name, satrec}
   satPoints: [],       // current propagated [{name, lat, lng, alt}]
   aircraft: [],
@@ -1249,6 +1254,58 @@ async function loadEarthquakes() {
   } catch (e) { log("seismic", `Load failed: ${e.message}`, "warn"); }
 }
 
+// ── Weather radar (RainViewer, no key) ────────────────────────────
+const radar = { frames: [], idx: 0, playing: true, timer: null };
+
+async function loadRadarFrames() {
+  try {
+    const r = await fetch("https://api.rainviewer.com/public/weather-maps.json");
+    const d = await r.json();
+    const host = d.host;
+    const past = (d.radar?.past || []).map((f) => ({ ...f, kind: "past" }));
+    const nowcast = (d.radar?.nowcast || []).map((f) => ({ ...f, kind: "forecast" }));
+    radar.frames = [...past, ...nowcast].map((f) => ({
+      ts: f.time,
+      kind: f.kind,
+      // color 2 = dBZ scheme, options "1_1" = smooth on + snow on, 256px tiles
+      tileUrl: `${host}${f.path}/256/{z}/{x}/{y}/2/1_1.png`,
+    }));
+    if (!radar.frames.length) return;
+
+    if (!map.getSource("radar")) {
+      map.addSource("radar", {
+        type: "raster",
+        tiles: [radar.frames[0].tileUrl],
+        tileSize: 256,
+      });
+      // Insert under satellites so point markers stay on top
+      const before = map.getLayer("satellites-l") ? "satellites-l" : undefined;
+      map.addLayer({
+        id: "radar-l",
+        type: "raster",
+        source: "radar",
+        paint: { "raster-opacity": 0.55, "raster-fade-duration": 0 },
+        layout: { visibility: state.layers.radar ? "visible" : "none" },
+      }, before);
+    }
+    if (!radar.timer) radar.timer = setInterval(tickRadar, 600);
+    log("radar", `${radar.frames.length} frames loaded`);
+  } catch (e) { log("radar", `load failed: ${e.message}`, "warn"); }
+}
+
+function tickRadar() {
+  if (!radar.playing || !radar.frames.length) return;
+  if (!state.layers.radar) return;
+  radar.idx = (radar.idx + 1) % radar.frames.length;
+  const frame = radar.frames[radar.idx];
+  const src = map.getSource("radar");
+  if (src && typeof src.setTiles === "function") src.setTiles([frame.tileUrl]);
+  const isForecast = frame.kind === "forecast";
+  const when = new Date(frame.ts * 1000);
+  const hhmm = when.toISOString().substr(11, 5);
+  document.getElementById("cntRadar").textContent = (isForecast ? "+" : "") + hhmm;
+}
+
 async function loadFires() {
   try {
     const r = await fetch(API.fires);
@@ -1287,6 +1344,7 @@ function rerender() {
   set(["earthquakes-l", "eq-glow-l"], state.layers.earthquakes);
   set(["fires-l"], state.layers.fires);
   set(["terminator-l"], state.layers.terminator);
+  set(["radar-l"], state.layers.radar);
   setStats();
 }
 
@@ -1823,6 +1881,7 @@ async function bootData() {
   loadNews(); setInterval(() => loadNews(), 60000);
   loadEarthquakes(); setInterval(loadEarthquakes, 5 * 60 * 1000);
   loadFires(); setInterval(loadFires, 30 * 60 * 1000);
+  loadRadarFrames(); setInterval(loadRadarFrames, 5 * 60 * 1000);
   updateTerminator(); setInterval(updateTerminator, 60 * 1000);
   setInterval(() => { extrapolateAircraft(); }, 250);
   setInterval(() => {

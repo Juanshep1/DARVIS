@@ -799,10 +799,11 @@
 
     <div class="section-title">Stream Sources</div>
     <div class="src-chips" id="srcChips">
-      <button class="chip on" data-src="windy" title="Windy · 73k timelapse cams">Windy</button>
-      <button class="chip on" data-src="earthcam" title="EarthCam live embeds">EarthCam</button>
-      <button class="chip on" data-src="dot" title="Caltrans DOT · 700+ live JPG cams">DOT Traffic</button>
-      <button class="chip on" data-src="nature" title="NASA ISS, Explore.org, NPS">Nature / Space</button>
+      <button class="chip on" data-src="usadot" title="OpenTrafficCamMap · 7,000+ live HLS US traffic cams">US Traffic</button>
+      <button class="chip on" data-src="dot" title="Caltrans · 880+ live HLS California cams">Caltrans</button>
+      <button class="chip on" data-src="windy" title="Windy · 73k global webcams">Windy</button>
+      <button class="chip on" data-src="earthcam" title="EarthCam live iframe embeds">EarthCam</button>
+      <button class="chip on" data-src="nature" title="NASA ISS, Explore.org nature cams">Nature / Space</button>
       <button class="chip on" data-src="user" title="Your custom cameras">Custom</button>
     </div>
 
@@ -950,6 +951,7 @@ const API = {
   cams:    "/api/falcon-eye/cameras",
   webcams: "/api/falcon-eye/webcams",
   dotcams: "/api/falcon-eye/dot-cams",
+  usacams: "/api/falcon-eye/usa-cams",
   naturecams: "/api/falcon-eye/nature-cams",
   news:    "/api/falcon-eye/news",
   wxalerts:"/api/falcon-eye/weather-alerts",
@@ -958,7 +960,7 @@ const API = {
 };
 
 // Default source toggles — loaded from localStorage on boot
-const defaultSources = { windy: true, earthcam: true, dot: true, nature: true, user: true };
+const defaultSources = { windy: true, earthcam: true, dot: true, usadot: true, nature: true, user: true };
 let savedSources;
 try { savedSources = JSON.parse(localStorage.getItem("fe-sources") || "null"); } catch {}
 const SOURCES = { ...defaultSources, ...(savedSources || {}) };
@@ -1619,6 +1621,10 @@ async function loadCameras(near = null) {
 
   if (SOURCES.dot) jobs.push(fetch(API.dotcams).then((r) => r.json()).then(
     (d) => (d.cams || []).map((c) => ({ ...c, source: "dot" }))
+  ).catch(() => []));
+
+  if (SOURCES.usadot) jobs.push(fetch(API.usacams).then((r) => r.json()).then(
+    (d) => (d.cams || []).map((c) => ({ ...c, source: "usadot" }))
   ).catch(() => []));
 
   if (SOURCES.nature) jobs.push(fetch(API.naturecams).then((r) => r.json()).then(

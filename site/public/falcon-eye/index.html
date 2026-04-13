@@ -282,6 +282,45 @@
   .btn:hover { border-color: var(--amber); color: var(--amber); }
   .btn.hot { color: var(--amber); border-color: var(--panel-edge-hot); }
 
+  /* Floating Picture-in-Picture camera viewer */
+  .pip {
+    position: fixed; z-index: 250;
+    width: 380px; max-width: 80vw;
+    background: var(--bg-2); border: 1px solid var(--panel-edge-hot);
+    box-shadow: 0 18px 60px rgba(0,0,0,0.7), 0 0 30px rgba(255,181,71,0.18);
+    display: none;
+    user-select: none;
+  }
+  .pip.show { display: block; }
+  .pip-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 12px; background: rgba(255,181,71,0.08);
+    border-bottom: 1px solid var(--panel-edge);
+    cursor: move; font-size: 9px; letter-spacing: 0.22em; text-transform: uppercase;
+  }
+  .pip-bar .title { color: var(--amber); }
+  .pip-bar .ctrls { display: flex; gap: 6px; }
+  .pip-bar button {
+    background: transparent; border: 1px solid var(--panel-edge);
+    color: var(--steel); cursor: pointer; font-family: var(--mono);
+    font-size: 11px; width: 22px; height: 20px; line-height: 18px; padding: 0;
+  }
+  .pip-bar button:hover { color: var(--amber); border-color: var(--amber); }
+  .pip-body {
+    background: #000; aspect-ratio: 16/9; width: 100%;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--steel); font-size: 9px; letter-spacing: 0.18em;
+  }
+  .pip-body video, .pip-body img, .pip-body iframe {
+    width: 100%; height: 100%; display: block; border: 0;
+  }
+  .pip.min .pip-body { display: none; }
+  .pip-corner { position: absolute; width: 10px; height: 10px; border: 1px solid var(--amber); }
+  .pip-corner.tl { top: -1px; left: -1px; border-right: none; border-bottom: none; }
+  .pip-corner.tr { top: -1px; right: -1px; border-left: none; border-bottom: none; }
+  .pip-corner.bl { bottom: -1px; left: -1px; border-right: none; border-top: none; }
+  .pip-corner.br { bottom: -1px; right: -1px; border-left: none; border-top: none; }
+
   /* Modal — camera viewer + add camera */
   .modal-backdrop {
     position: fixed; inset: 0; z-index: 200;
@@ -491,15 +530,18 @@
     </div>
   </div>
 
-  <!-- Camera viewer modal -->
-  <div class="modal-backdrop" id="viewerModal">
-    <div class="modal">
-      <span class="modal-corner tl"></span><span class="modal-corner tr"></span>
-      <span class="modal-corner bl"></span><span class="modal-corner br"></span>
-      <button class="close" data-close>×</button>
-      <h2 id="viewerTitle">Camera Feed</h2>
-      <video id="viewerVideo" class="cam-viewer" controls autoplay muted playsinline></video>
+  <!-- Floating PIP camera viewer (always-on, draggable) -->
+  <div class="pip" id="pip">
+    <span class="pip-corner tl"></span><span class="pip-corner tr"></span>
+    <span class="pip-corner bl"></span><span class="pip-corner br"></span>
+    <div class="pip-bar" id="pipBar">
+      <span class="title" id="pipTitle">⦿ LIVE FEED</span>
+      <span class="ctrls">
+        <button id="pipMin" title="Minimize">_</button>
+        <button id="pipClose" title="Close">×</button>
+      </span>
     </div>
+    <div class="pip-body" id="pipBody">No feed selected</div>
   </div>
 
 <script>
@@ -531,7 +573,7 @@ const state = {
 const globeEl = document.getElementById("globe");
 const Globe = window.Globe;
 const globe = Globe()(globeEl)
-  .globeImageUrl("//unpkg.com/three-globe/example/img/earth-night.jpg")
+  .globeImageUrl("//unpkg.com/three-globe/example/img/earth-blue-marble.jpg")
   .bumpImageUrl("//unpkg.com/three-globe/example/img/earth-topology.png")
   .backgroundImageUrl("//unpkg.com/three-globe/example/img/night-sky.png")
   .showAtmosphere(true)
@@ -539,8 +581,13 @@ const globe = Globe()(globeEl)
   .atmosphereAltitude(0.18)
   .pointOfView({ lat: 20, lng: 0, altitude: 2.4 });
 
-// custom subtle ambient
+// Allow deep zoom — much closer than default
 try {
+  const ctrls = globe.controls();
+  ctrls.minDistance = 101; // earth radius is 100
+  ctrls.maxDistance = 800;
+  ctrls.zoomSpeed = 1.4;
+  ctrls.rotateSpeed = 0.7;
   const scene = globe.scene();
   scene.fog = null;
 } catch {}
@@ -549,6 +596,76 @@ window.addEventListener("resize", () => {
   globe.width(window.innerWidth).height(window.innerHeight);
 });
 globe.width(window.innerWidth).height(window.innerHeight);
+
+// ── Slippy tile overlay (ESRI World Imagery) — appears as you zoom in ──
+const TILE_URL = (z, x, y) =>
+  `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`;
+const tileMatCache = new Map();
+function tileMaterial(d) {
+  const k = `${d.z}/${d.x}/${d.y}`;
+  if (tileMatCache.has(k)) return tileMatCache.get(k);
+  const tex = new THREE.TextureLoader().load(TILE_URL(d.z, d.x, d.y));
+  tex.colorSpace = THREE.SRGBColorSpace || tex.colorSpace;
+  const mat = new THREE.MeshLambertMaterial({ map: tex, transparent: true, opacity: 0.96 });
+  tileMatCache.set(k, mat);
+  return mat;
+}
+function lon2tile(lon, z) { return Math.floor((lon + 180) / 360 * (1 << z)); }
+function lat2tile(lat, z) {
+  const r = lat * Math.PI / 180;
+  return Math.floor((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * (1 << z));
+}
+function tile2lon(x, z) { return x / (1 << z) * 360 - 180; }
+function tile2lat(y, z) {
+  const n = Math.PI - 2 * Math.PI * y / (1 << z);
+  return 180 / Math.PI * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)));
+}
+function pickZoom(alt) {
+  if (alt > 1.0) return 0;
+  if (alt > 0.55) return 4;
+  if (alt > 0.30) return 6;
+  if (alt > 0.15) return 8;
+  if (alt > 0.07) return 10;
+  if (alt > 0.03) return 12;
+  return 14;
+}
+function refreshTiles() {
+  const pov = globe.pointOfView();
+  const z = pickZoom(pov.altitude);
+  if (z === 0) { globe.tilesData([]); return; }
+  // Half-extent of viewport in degrees, scaled by altitude
+  const spanLat = Math.min(80, Math.max(2, pov.altitude * 55));
+  const spanLon = spanLat / Math.max(0.2, Math.cos(pov.lat * Math.PI / 180));
+  const latMin = Math.max(-85, pov.lat - spanLat);
+  const latMax = Math.min( 85, pov.lat + spanLat);
+  const lonMin = pov.lng - spanLon;
+  const lonMax = pov.lng + spanLon;
+  const xMin = lon2tile(lonMin, z);
+  const xMax = lon2tile(lonMax, z);
+  const yMin = lat2tile(latMax, z);
+  const yMax = lat2tile(latMin, z);
+  const tiles = [];
+  const max = 1 << z;
+  const cap = z >= 12 ? 220 : z >= 10 ? 160 : 120;
+  for (let x = xMin; x <= xMax && tiles.length < cap; x++) {
+    for (let y = yMin; y <= yMax && tiles.length < cap; y++) {
+      if (y < 0 || y >= max) continue;
+      const xi = ((x % max) + max) % max;
+      tiles.push({ x: xi, y, z });
+    }
+  }
+  globe.tilesData(tiles)
+    .tileLat((d) => (tile2lat(d.y, d.z) + tile2lat(d.y + 1, d.z)) / 2)
+    .tileLng((d) => (tile2lon(d.x, d.z) + tile2lon(d.x + 1, d.z)) / 2)
+    .tileAltitude(0.001)
+    .tileWidth((d) => tile2lon(d.x + 1, d.z) - tile2lon(d.x, d.z))
+    .tileHeight((d) => Math.abs(tile2lat(d.y, d.z) - tile2lat(d.y + 1, d.z)))
+    .tileMaterial(tileMaterial)
+    .tileCurvatureResolution(5);
+}
+let tileTimer = null;
+globe.onZoom(() => { clearTimeout(tileTimer); tileTimer = setTimeout(refreshTiles, 120); });
+setTimeout(refreshTiles, 800);
 
 // ── Time / clocks ──
 function tick() {
@@ -611,20 +728,41 @@ function propagateSats() {
   rerender();
 }
 
-// ── Aircraft ──
+// ── Aircraft (with velocity-based extrapolation between updates) ──
 async function loadAircraft() {
   try {
     const r = await fetch(API.air);
     const d = await r.json();
+    const now = Date.now();
     state.aircraft = (d.states || []).map((p) => ({
-      name: p.callsign || p.icao,
-      lat: p.lat, lng: p.lon, alt: (p.alt || 0) / 6371000 * 1.5,
-      heading: p.heading, vel: p.vel, country: p.country,
+      name: (p.callsign || p.icao || "").trim(),
+      icao: p.icao,
+      baseLat: p.lat, baseLon: p.lon, baseTs: now,
+      lat: p.lat, lng: p.lon,
+      alt: Math.max(0.005, (p.alt || 0) / 6371000 * 1.4),
+      heading: p.heading || 0,
+      vel: p.vel || 0,                       // m/s
+      country: p.country,
       type: "air",
     }));
     document.getElementById("cntAir").textContent = state.aircraft.length;
     rerender();
   } catch (e) { console.warn("aircraft load failed", e); }
+}
+
+function extrapolateAircraft() {
+  if (!state.aircraft.length) return;
+  const now = Date.now();
+  for (const p of state.aircraft) {
+    if (p.baseLat == null || !p.vel) continue;
+    const dt = (now - p.baseTs) / 1000; // seconds
+    const distM = p.vel * dt;
+    const distDeg = distM / 111320;
+    const headRad = (p.heading || 0) * Math.PI / 180;
+    p.lat = p.baseLat + distDeg * Math.cos(headRad);
+    const cosLat = Math.cos(p.baseLat * Math.PI / 180) || 1;
+    p.lng = p.baseLon + (distDeg * Math.sin(headRad)) / cosLat;
+  }
 }
 
 // ── Cameras ──
@@ -721,15 +859,10 @@ document.addEventListener("mousemove", (e) => {
   pop.style.top  = (e.clientY + 14) + "px";
 });
 
-// ── Camera modal logic ──
+// ── Camera modal + floating PIP logic ──
 const camModal = document.getElementById("camModal");
-const viewerModal = document.getElementById("viewerModal");
 document.querySelectorAll("[data-close]").forEach(b => b.onclick = () => {
   camModal.classList.remove("show");
-  viewerModal.classList.remove("show");
-  const v = document.getElementById("viewerVideo");
-  if (v.hls) { v.hls.destroy(); v.hls = null; }
-  v.removeAttribute("src"); v.load();
 });
 document.getElementById("btnAddCam").onclick = () => camModal.classList.add("show");
 document.getElementById("camSave").onclick = async () => {
@@ -760,18 +893,83 @@ function renderCamList() {
     list.appendChild(el);
   }
 }
+// Floating draggable PIP viewer — works regardless of where the camera is
+const pip = document.getElementById("pip");
+const pipBar = document.getElementById("pipBar");
+const pipBody = document.getElementById("pipBody");
+const pipTitle = document.getElementById("pipTitle");
+let currentHls = null;
+function pipPositionDefault() {
+  pip.style.right = "320px";
+  pip.style.bottom = "100px";
+  pip.style.left = "auto";
+  pip.style.top = "auto";
+}
+pipPositionDefault();
+document.getElementById("pipClose").onclick = () => {
+  pip.classList.remove("show");
+  if (currentHls) { try { currentHls.destroy(); } catch {} currentHls = null; }
+  pipBody.innerHTML = "No feed selected";
+};
+document.getElementById("pipMin").onclick = () => pip.classList.toggle("min");
+
+// Drag
+let dragging = false, dragOffX = 0, dragOffY = 0;
+pipBar.addEventListener("mousedown", (e) => {
+  if (e.target.closest("button")) return;
+  dragging = true;
+  const r = pip.getBoundingClientRect();
+  dragOffX = e.clientX - r.left;
+  dragOffY = e.clientY - r.top;
+  pip.style.right = "auto"; pip.style.bottom = "auto";
+});
+window.addEventListener("mousemove", (e) => {
+  if (!dragging) return;
+  pip.style.left = (e.clientX - dragOffX) + "px";
+  pip.style.top  = (e.clientY - dragOffY) + "px";
+});
+window.addEventListener("mouseup", () => { dragging = false; });
+// touch drag
+pipBar.addEventListener("touchstart", (e) => {
+  if (e.target.closest("button")) return;
+  const t = e.touches[0]; dragging = true;
+  const r = pip.getBoundingClientRect();
+  dragOffX = t.clientX - r.left; dragOffY = t.clientY - r.top;
+  pip.style.right = "auto"; pip.style.bottom = "auto";
+}, { passive: true });
+window.addEventListener("touchmove", (e) => {
+  if (!dragging) return;
+  const t = e.touches[0];
+  pip.style.left = (t.clientX - dragOffX) + "px";
+  pip.style.top  = (t.clientY - dragOffY) + "px";
+}, { passive: true });
+window.addEventListener("touchend", () => { dragging = false; });
+
 function openViewer(cam) {
-  viewerModal.classList.add("show");
-  document.getElementById("viewerTitle").textContent = cam.label || "Camera Feed";
-  const v = document.getElementById("viewerVideo");
-  if (cam.kind === "hls" || /\.m3u8/i.test(cam.url)) {
+  pip.classList.add("show");
+  pip.classList.remove("min");
+  pipTitle.textContent = `⦿ ${(cam.label || "Camera Feed").toUpperCase()}`;
+  if (currentHls) { try { currentHls.destroy(); } catch {} currentHls = null; }
+  pipBody.innerHTML = "";
+  const url = cam.url;
+  const kind = cam.kind || (/\.m3u8/i.test(url) ? "hls" : /\.(jpg|mjpg|jpeg)/i.test(url) ? "mjpeg" : "iframe");
+  if (kind === "hls") {
+    const v = document.createElement("video");
+    v.controls = true; v.autoplay = true; v.muted = true; v.playsInline = true;
     if (window.Hls && Hls.isSupported()) {
-      v.hls = new Hls(); v.hls.loadSource(cam.url); v.hls.attachMedia(v);
-    } else { v.src = cam.url; }
-  } else if (cam.kind === "mjpeg") {
-    v.outerHTML = `<img id="viewerVideo" class="cam-viewer" src="${cam.url}" />`;
+      currentHls = new Hls();
+      currentHls.loadSource(url);
+      currentHls.attachMedia(v);
+    } else { v.src = url; }
+    pipBody.appendChild(v);
+  } else if (kind === "mjpeg") {
+    const img = document.createElement("img");
+    img.src = url;
+    pipBody.appendChild(img);
   } else {
-    v.outerHTML = `<iframe id="viewerVideo" class="cam-viewer" src="${cam.url}" frameborder="0" allowfullscreen></iframe>`;
+    const f = document.createElement("iframe");
+    f.src = url; f.allow = "autoplay; fullscreen";
+    pipBody.appendChild(f);
   }
 }
 
@@ -855,11 +1053,16 @@ function handleCommand(cmd) {
 }
 
 // ── Boot sequence ──
-loadSats().then(() => { propagateSats(); setInterval(propagateSats, 2000); });
-loadAircraft(); setInterval(loadAircraft, 30000);
+loadSats().then(() => { propagateSats(); setInterval(propagateSats, 250); });
+loadAircraft(); setInterval(loadAircraft, 25000);
 loadCameras();
 loadNews(); setInterval(() => loadNews(), 60000);
 pollCommands();
+
+// Smooth aircraft extrapolation between OpenSky updates
+setInterval(() => { extrapolateAircraft(); rerender(); }, 200);
+// Periodically refresh tile overlay if camera idle (zoom-in catch)
+setInterval(refreshTiles, 4000);
 
 // Mark Spectra link as live once we get any command or after 3s
 setTimeout(() => document.getElementById("spectraPill").classList.add("live"), 3000);

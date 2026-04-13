@@ -492,6 +492,8 @@
     padding: 8px 12px; background: rgba(255,181,71,0.08);
     border-bottom: 1px solid var(--panel-edge);
     cursor: move; font-size: 9px; letter-spacing: 0.22em; text-transform: uppercase;
+    touch-action: none;
+    -ms-touch-action: none;
   }
   .pip-bar .title { color: var(--amber); }
   .pip-bar .ctrls { display: flex; gap: 6px; }
@@ -1804,7 +1806,7 @@ let dragShield = null;
 function startDragShield() {
   if (dragShield) return;
   dragShield = document.createElement("div");
-  dragShield.style.cssText = "position:fixed;inset:0;z-index:9998;cursor:move;background:transparent;";
+  dragShield.style.cssText = "position:fixed;inset:0;z-index:9998;cursor:move;background:transparent;touch-action:none;-ms-touch-action:none;";
   document.body.appendChild(dragShield);
 }
 function endDragShield() {
@@ -1843,14 +1845,16 @@ pipBar.addEventListener("touchstart", (e) => {
   const r = pip.getBoundingClientRect();
   dragOffX = t.clientX - r.left; dragOffY = t.clientY - r.top;
   pip.style.right = "auto"; pip.style.bottom = "auto";
-}, { passive: true });
+  e.preventDefault();
+}, { passive: false });
 window.addEventListener("touchmove", (e) => {
   if (!dragging) return;
   const t = e.touches[0];
   const [l, tp] = clampPip(t.clientX - dragOffX, t.clientY - dragOffY);
   pip.style.left = l + "px";
   pip.style.top  = tp + "px";
-}, { passive: true });
+  e.preventDefault();
+}, { passive: false });
 window.addEventListener("touchend", endDragShield);
 window.addEventListener("touchcancel", endDragShield);
 window.addEventListener("resize", () => {

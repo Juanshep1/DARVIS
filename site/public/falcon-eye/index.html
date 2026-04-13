@@ -227,6 +227,7 @@
   .layer[data-layer=fires] .layer-swatch { background: #ff6a1a; color: #ff6a1a; }
   .layer[data-layer=terminator] .layer-swatch { background: var(--medium); color: var(--medium); }
   .layer[data-layer=radar] .layer-swatch { background: #6ecbff; color: #6ecbff; }
+  .layer[data-layer=wxalerts] .layer-swatch { background: #ff7a3d; color: #ff7a3d; }
   .layer-count {
     font-size: 12px; color: var(--ink-bright); font-weight: 500;
     font-variant-numeric: tabular-nums;
@@ -288,7 +289,7 @@
     display: flex; flex-direction: column;
   }
   .rail-tabs {
-    display: grid; grid-template-columns: 1fr 1fr;
+    display: grid; grid-template-columns: 1fr 1fr 1fr;
     border-bottom: 1px solid var(--panel-edge);
   }
   .rail-tab {
@@ -369,6 +370,49 @@
     display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
     margin-top: 10px;
   }
+
+  /* Chat pane — override default rail-pane block layout */
+  #paneChat { padding: 0; }
+  #paneChat.active { display: flex; flex-direction: column; }
+  .chat-log {
+    flex: 1; overflow-y: auto; padding: 12px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .chat-log::-webkit-scrollbar { width: 4px; }
+  .chat-log::-webkit-scrollbar-thumb { background: var(--panel-edge); }
+  .chat-msg { border-left: 2px solid var(--steel-dim); padding: 6px 10px; }
+  .chat-msg.user { border-left-color: var(--amber); background: rgba(255,181,71,0.04); }
+  .chat-msg.assistant { border-left-color: var(--cyan); background: rgba(95,217,255,0.04); }
+  .chat-msg.system { border-left-color: var(--steel-dim); font-style: italic; opacity: 0.7; }
+  .chat-who {
+    font-size: 8px; letter-spacing: 0.26em; text-transform: uppercase;
+    color: var(--steel-dim); margin-bottom: 3px;
+  }
+  .chat-msg.user .chat-who { color: var(--amber); }
+  .chat-msg.assistant .chat-who { color: var(--cyan); }
+  .chat-body { font-size: 11px; line-height: 1.5; color: var(--ink); white-space: pre-wrap; word-wrap: break-word; }
+  .chat-input-wrap {
+    display: flex; gap: 6px; padding: 10px 12px;
+    border-top: 1px solid var(--panel-edge);
+    background: rgba(0,0,0,0.4);
+  }
+  .chat-input-wrap input {
+    flex: 1; background: rgba(0,0,0,0.5); border: 1px solid var(--panel-edge);
+    color: var(--ink); font-family: var(--mono); font-size: 11px;
+    padding: 9px 11px; outline: none;
+  }
+  .chat-input-wrap input:focus { border-color: var(--amber); }
+  .chat-input-wrap button {
+    background: rgba(255,181,71,0.08); border: 1px solid var(--panel-edge-hot);
+    color: var(--amber); font-family: var(--mono); font-size: 14px;
+    padding: 0 14px; cursor: pointer;
+  }
+  .chat-input-wrap button:hover { background: rgba(255,181,71,0.18); }
+  .chat-msg.thinking .chat-body::after {
+    content: "▌"; animation: blink 1s infinite;
+    color: var(--cyan);
+  }
+  @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
 
   /* ── Footer / command bar / ops log ── */
   .footer {
@@ -628,6 +672,10 @@
       <div class="layer-row"><span class="layer-name"><span class="layer-swatch"></span>Weather Radar</span><span class="layer-count" id="cntRadar">—</span></div>
       <div class="layer-meta">RainViewer · Global · 2h loop</div>
     </div>
+    <div class="layer on" data-layer="wxalerts">
+      <div class="layer-row"><span class="layer-name"><span class="layer-swatch"></span>Severe Weather</span><span class="layer-count" id="cntWx">0</span></div>
+      <div class="layer-meta">NOAA/NWS · Active alerts (US)</div>
+    </div>
 
     <div class="section-title">Stream Sources</div>
     <div class="src-chips" id="srcChips">
@@ -665,11 +713,24 @@
     <div class="rail-tabs">
       <button class="rail-tab active" data-tab="feed">Live Intel</button>
       <button class="rail-tab" data-tab="dossier">Dossier</button>
+      <button class="rail-tab" data-tab="chat">Spectra</button>
     </div>
     <div class="rail-content">
       <div class="rail-pane active" id="paneFeed"></div>
       <div class="rail-pane" id="paneDossier">
         <div class="dossier-empty">No entity selected.<br/>Click a marker to view dossier.</div>
+      </div>
+      <div class="rail-pane" id="paneChat">
+        <div class="chat-log" id="chatLog">
+          <div class="chat-msg assistant">
+            <div class="chat-who">Spectra</div>
+            <div class="chat-body">Command center online. Ask me anything — I can search, open URLs, drive Falcon Eye, track satellites, and more.</div>
+          </div>
+        </div>
+        <div class="chat-input-wrap">
+          <input id="chatInput" type="text" placeholder="Ask Spectra…" autocomplete="off" />
+          <button id="chatSend">➤</button>
+        </div>
       </div>
     </div>
   </aside>
@@ -752,6 +813,7 @@ const API = {
   dotcams: "/api/falcon-eye/dot-cams",
   naturecams: "/api/falcon-eye/nature-cams",
   news:    "/api/falcon-eye/news",
+  wxalerts:"/api/falcon-eye/weather-alerts",
   fires:   "/api/falcon-eye/fires",
   quakes:  "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson",
 };
@@ -764,7 +826,7 @@ const SOURCES = { ...defaultSources, ...(savedSources || {}) };
 
 const state = {
   layers: { satellites: true, aircraft: true, cameras: true, news: true,
-            earthquakes: true, fires: true, terminator: true, radar: true },
+            earthquakes: true, fires: true, terminator: true, radar: true, wxalerts: true },
   sats: [],            // {name, satrec}
   satPoints: [],       // current propagated [{name, lat, lng, alt}]
   aircraft: [],
@@ -817,7 +879,7 @@ map.on("error", (e) => { console.error("maplibre error:", e && e.error); });
 map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "bottom-right");
 
 const EMPTY = { type: "FeatureCollection", features: [] };
-const SOURCE_IDS = ["satellites","aircraft","cameras","earthquakes","fires","news","orbit","trail","terminator"];
+const SOURCE_IDS = ["satellites","aircraft","cameras","earthquakes","fires","news","wxalerts","orbit","trail","terminator"];
 
 function installLayers() {
   for (const id of SOURCE_IDS) {
@@ -831,6 +893,16 @@ function installLayers() {
     paint: { "line-color": "#5fd9ff", "line-width": 1.6, "line-opacity": 0.85, "line-dasharray": [2, 1] } });
   if (!map.getLayer("trail-l")) map.addLayer({ id: "trail-l", type: "line", source: "trail",
     paint: { "line-color": "#ffb547", "line-width": 1.6, "line-opacity": 0.9 } });
+
+  // NOAA severe weather alert polygons
+  if (!map.getLayer("wx-fill-l")) map.addLayer({ id: "wx-fill-l", type: "fill", source: "wxalerts", paint: {
+    "fill-color": ["match", ["get", "severity"], "extreme", "#ff3a55", "severe", "#ff7a3d", "moderate", "#ffd23d", "minor", "#5fd9ff", "#888"],
+    "fill-opacity": 0.20,
+  }});
+  if (!map.getLayer("wx-line-l")) map.addLayer({ id: "wx-line-l", type: "line", source: "wxalerts", paint: {
+    "line-color": ["match", ["get", "severity"], "extreme", "#ff3a55", "severe", "#ff7a3d", "moderate", "#ffd23d", "minor", "#5fd9ff", "#888"],
+    "line-width": 1.2, "line-opacity": 0.75,
+  }});
 
   // Earthquake rings (background) — coalesce null mag to 0 to avoid interpolate crash
   if (!map.getLayer("eq-glow-l")) map.addLayer({ id: "eq-glow-l", type: "circle", source: "earthquakes", paint: {
@@ -949,6 +1021,11 @@ function wireClicks() {
     const f = e.features[0];
     showDossier({ type: "news", ...f.properties, lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0] });
     log("intel", f.properties.headline);
+  });
+  map.on("click", "wx-fill-l", (e) => {
+    const f = e.features[0];
+    showDossier({ type: "wx", ...f.properties });
+    log("wx", f.properties.event || f.properties.headline || "alert");
   });
 
   // Cursor pointer on hover
@@ -1254,6 +1331,29 @@ async function loadEarthquakes() {
   } catch (e) { log("seismic", `Load failed: ${e.message}`, "warn"); }
 }
 
+// ── NOAA severe weather alerts (US) ───────────────────────────────
+async function loadWeatherAlerts() {
+  try {
+    const r = await fetch(API.wxalerts);
+    const d = await r.json();
+    const alerts = d.alerts || [];
+    const features = alerts
+      .filter((a) => a.geometry && (a.geometry.type === "Polygon" || a.geometry.type === "MultiPolygon"))
+      .map((a) => ({
+        type: "Feature",
+        geometry: a.geometry,
+        properties: {
+          id: a.id, event: a.event, severity: a.severity,
+          headline: a.headline, area: a.area, sender: a.sender, expires: a.expires,
+        },
+      }));
+    const src = map.getSource("wxalerts");
+    if (src) src.setData({ type: "FeatureCollection", features });
+    document.getElementById("cntWx").textContent = String(features.length);
+    log("wx", `${features.length} active alerts (US)`);
+  } catch (e) { log("wx", `Load failed: ${e.message}`, "warn"); }
+}
+
 // ── Weather radar (RainViewer, no key) ────────────────────────────
 const radar = { frames: [], idx: 0, playing: true, timer: null };
 
@@ -1352,6 +1452,7 @@ function rerender() {
   set(["fires-l"], state.layers.fires);
   set(["terminator-l"], state.layers.terminator);
   set(["radar-l"], state.layers.radar);
+  set(["wx-fill-l", "wx-line-l"], state.layers.wxalerts);
   setStats();
 }
 
@@ -1472,8 +1573,60 @@ function renderFeed() {
 function setTab(name) {
   document.querySelectorAll(".rail-tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
   document.querySelectorAll(".rail-pane").forEach((p) => p.classList.toggle("active", p.id === ("pane" + name[0].toUpperCase() + name.slice(1))));
+  if (name === "chat") setTimeout(() => document.getElementById("chatInput")?.focus(), 50);
 }
 document.querySelectorAll(".rail-tab").forEach((b) => b.addEventListener("click", () => setTab(b.dataset.tab)));
+
+// ── Chat panel — connects to Spectra /api/chat (classic + gemini compatible) ──
+function addChatMsg(role, body, extraClass = "") {
+  const log = document.getElementById("chatLog");
+  const el = document.createElement("div");
+  el.className = `chat-msg ${role} ${extraClass}`;
+  el.innerHTML = `<div class="chat-who"></div><div class="chat-body"></div>`;
+  el.querySelector(".chat-who").textContent = role === "user" ? "You" : role === "assistant" ? "Spectra" : "System";
+  el.querySelector(".chat-body").textContent = body;
+  log.appendChild(el);
+  log.scrollTop = log.scrollHeight;
+  return el;
+}
+
+async function sendChat(text) {
+  if (!text.trim()) return;
+  addChatMsg("user", text);
+  const thinking = addChatMsg("assistant", "thinking", "thinking");
+  try {
+    const res = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: text }),
+    });
+    const data = await res.json();
+    thinking.remove();
+    if (data.reply) addChatMsg("assistant", data.reply);
+    if (Array.isArray(data.actions)) {
+      for (const act of data.actions) {
+        if (act.action === "falcon_eye" && act.command) {
+          handleCommand(act.command);
+        } else if (act.action === "open_url" && act.url) {
+          window.open(act.url, "_blank", "noopener");
+        } else if (act.action === "queued" && act.message) {
+          addChatMsg("system", act.message);
+        }
+      }
+    }
+  } catch (e) {
+    thinking.remove();
+    addChatMsg("system", `Error: ${e.message}`);
+  }
+}
+
+document.getElementById("chatSend").addEventListener("click", () => {
+  const i = document.getElementById("chatInput");
+  const v = i.value; i.value = ""; sendChat(v);
+});
+document.getElementById("chatInput").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); document.getElementById("chatSend").click(); }
+});
 
 function showDossier(entity) {
   state.selectedEntity = entity;
@@ -1528,6 +1681,15 @@ function showDossier(entity) {
       ["FRP", `${entity.frp || 0} MW`],
       ["Lat", entity.lat?.toFixed(4) + "°"],
       ["Lon", entity.lon?.toFixed(4) + "°"],
+    ];
+  } else if (t === "wx") {
+    title = entity.event || "Weather Alert";
+    sub = `NWS · ${entity.severity || "unknown"} · ${entity.sender || ""}`;
+    rows = [
+      ["Severity", entity.severity || "—"],
+      ["Headline", entity.headline || "—"],
+      ["Area", entity.area || "—"],
+      ["Expires", entity.expires ? new Date(entity.expires).toUTCString() : "—"],
     ];
   } else if (t === "news") {
     title = entity.headline || "Intel";
@@ -1889,6 +2051,7 @@ async function bootData() {
   loadEarthquakes(); setInterval(loadEarthquakes, 5 * 60 * 1000);
   loadFires(); setInterval(loadFires, 30 * 60 * 1000);
   loadRadarFrames(); setInterval(loadRadarFrames, 5 * 60 * 1000);
+  loadWeatherAlerts(); setInterval(loadWeatherAlerts, 3 * 60 * 1000);
   updateTerminator(); setInterval(updateTerminator, 60 * 1000);
   setInterval(() => { extrapolateAircraft(); }, 250);
   setInterval(() => {

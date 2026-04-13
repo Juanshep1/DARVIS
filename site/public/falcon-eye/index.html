@@ -2069,43 +2069,79 @@ async function geocodeNominatim(query) {
   return null;
 }
 
+// Safe URL parse — never throws
+function safeUrl(s) {
+  try { return new URL(s); } catch { return null; }
+}
+function safeOpen(u) {
+  if (!u || typeof u !== "string") return;
+  try { window.open(u, "_blank", "noopener"); } catch {}
+}
+
 async function sendChat(text) {
   if (!text.trim()) return;
   addChatMsg("user", text);
   const thinking = addChatMsg("assistant", "thinking", "thinking");
+
+  let data = null;
+  let httpError = null;
   try {
     const res = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message: text }),
     });
-    const data = await res.json();
-    thinking.remove();
-    if (data.reply) addChatMsg("assistant", data.reply);
-    if (Array.isArray(data.actions)) {
-      for (const act of data.actions) {
+    // Parse safely — some errors return non-JSON text
+    const raw = await res.text();
+    try { data = JSON.parse(raw); }
+    catch {
+      // Not JSON — surface as a plain-text reply so the user still gets something
+      data = { reply: raw && raw.length < 600 ? raw : "(no response)" };
+    }
+    if (!res.ok) httpError = `${res.status}`;
+  } catch (e) {
+    httpError = e.message || String(e);
+  }
+
+  thinking.remove();
+
+  // ALWAYS show a reply, even if processing later fails
+  if (data && data.reply) {
+    addChatMsg("assistant", data.reply);
+  } else if (httpError) {
+    addChatMsg("assistant", `Connection error (${httpError}). Retrying won't hurt, sir.`);
+    return;
+  } else {
+    addChatMsg("assistant", "No response.");
+    return;
+  }
+
+  // Action processing is wrapped so a bad URL or bad command never
+  // breaks the chat reply that already rendered above.
+  if (data && Array.isArray(data.actions)) {
+    for (const act of data.actions) {
+      try {
         if (act.action === "falcon_eye" && act.command) {
           const c = act.command;
-          // Browser-side fallback geocode if server didn't resolve
           if (c.intent === "focus_region" && (c.lat == null || c.lon == null) && c.region) {
-            const ll = await geocodeNominatim(c.region);
-            if (ll) { c.lon = ll[0]; c.lat = ll[1]; }
+            try {
+              const ll = await geocodeNominatim(c.region);
+              if (ll) { c.lon = ll[0]; c.lat = ll[1]; }
+            } catch {}
           }
-          handleCommand(c);
-          // Auto-close the mobile sheet so the user actually sees the result
+          try { await handleCommand(c); } catch (e) { console.warn("handleCommand:", e); }
           if (window.innerWidth <= 980 && currentSheet) {
             setTimeout(closeSheet, 400);
           }
         } else if (act.action === "open_url" && act.url) {
-          window.open(act.url, "_blank", "noopener");
+          safeOpen(act.url);
         } else if (act.action === "queued" && act.message) {
           addChatMsg("system", act.message);
         }
+      } catch (e) {
+        console.warn("action error:", e, act);
       }
     }
-  } catch (e) {
-    thinking.remove();
-    addChatMsg("system", `Error: ${e.message}`);
   }
 }
 

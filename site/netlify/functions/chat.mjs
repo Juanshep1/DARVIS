@@ -480,13 +480,13 @@ For Falcon Eye requests you MUST emit a \`\`\`command ... \`\`\` block — do NO
           // Falls through to the hotspot table for common hits and as a
           // cache for rate-limit-friendly performance.
           async function geocodeRegion(query) {
-            if (!query) return null;
-            const key = query.toLowerCase().trim();
-            if (FE_HOTSPOTS[key]) return FE_HOTSPOTS[key];
-            for (const [k, v] of Object.entries(FE_HOTSPOTS)) {
-              if (key.includes(k)) return v;
-            }
             try {
+              if (!query || typeof query !== "string") return null;
+              const key = query.toLowerCase().trim();
+              if (FE_HOTSPOTS[key]) return FE_HOTSPOTS[key];
+              for (const [k, v] of Object.entries(FE_HOTSPOTS)) {
+                if (key.includes(k)) return v;
+              }
               const u = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`;
               const r = await fetch(u, {
                 headers: {
@@ -498,9 +498,13 @@ For Falcon Eye requests you MUST emit a \`\`\`command ... \`\`\` block — do NO
               if (!r.ok) return null;
               const arr = await r.json();
               if (Array.isArray(arr) && arr.length) {
-                return [parseFloat(arr[0].lat), parseFloat(arr[0].lon)];
+                const la = parseFloat(arr[0].lat);
+                const lo = parseFloat(arr[0].lon);
+                if (!isNaN(la) && !isNaN(lo)) return [la, lo];
               }
-            } catch {}
+            } catch (e) {
+              console.warn("geocodeRegion:", e?.message || e);
+            }
             return null;
           }
           // Geocode region → lat/lon so the LLM only needs to name the place
@@ -539,14 +543,14 @@ For Falcon Eye requests you MUST emit a \`\`\`command ... \`\`\` block — do NO
             cairo:[30.04,31.24],kyiv:[50.45,30.52],kiev:[50.45,30.52],
             tehran:[35.69,51.39],baghdad:[33.31,44.36],riyadh:[24.71,46.68],
           };
-          // If the LLM supplied coords we trust them ONLY if they look sane
-          // (some models hallucinate plausible but wrong coordinates). If a
-          // region name was provided, always prefer the geocoded result.
+          // Always prefer the geocoded result over LLM-supplied coords
           let lat = null, lon = null;
-          if (cmd.region) {
-            const hit = await geocodeRegion(cmd.region);
-            if (hit) { lat = hit[0]; lon = hit[1]; }
-          }
+          try {
+            if (cmd.region) {
+              const hit = await geocodeRegion(cmd.region);
+              if (hit) { lat = hit[0]; lon = hit[1]; }
+            }
+          } catch (e) { console.warn("fe geocode:", e?.message || e); }
           if (lat == null && typeof cmd.lat === "number") lat = cmd.lat;
           if (lon == null && typeof cmd.lon === "number") lon = cmd.lon;
 

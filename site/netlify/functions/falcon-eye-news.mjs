@@ -316,12 +316,14 @@ export default async (req) => {
         if (tv.ok) {
           const tvData = await tv.json();
           for (const r of tvData.results || []) {
+            let host = "";
+            try { if (r.url) host = new URL(r.url).hostname.replace(/^www\./, ""); } catch {}
             raw.push({
-              headline: r.title,
-              title: r.title,
-              link: r.url,
+              headline: r.title || "",
+              title: r.title || "",
+              link: r.url || "",
               description: r.content || "",
-              source: r.url ? new URL(r.url).hostname.replace(/^www\./, "") : "",
+              source: host,
               ts: Date.now(),
             });
           }
@@ -342,11 +344,16 @@ export default async (req) => {
         ? (HOTSPOTS[region.toLowerCase().replace(/[^a-z]/g, "")] || geocode(text))
         : geocode(text);
 
+      let derivedSource = item.source;
+      if (!derivedSource && item.link) {
+        try { derivedSource = new URL(item.link).hostname.replace(/^www\./, ""); }
+        catch { derivedSource = ""; }
+      }
       alerts.push({
         headline: item.headline,
-        snippet: item.description.slice(0, 280),
-        url: item.link,
-        source: item.source || (item.link ? new URL(item.link).hostname.replace(/^www\./, "") : ""),
+        snippet: (item.description || "").slice(0, 280),
+        url: item.link || "",
+        source: derivedSource || "",
         lat: loc ? loc.lat : null,
         lon: loc ? loc.lon : null,
         region: loc ? loc.label : (region || "Global"),

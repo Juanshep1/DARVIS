@@ -73,7 +73,7 @@ body::after{content:'';position:fixed;top:-50%;left:-50%;width:200%;height:200%;
 </style>
 </head>
 <body>
-<div class="header"><div class="header-brand">S.P.E.C.T.R.A.</div><div class="header-actions"><button class="header-btn" id="ambientBtn" onclick="toggleAmbient()" title="Ambient Mode">&#x1F4A4;</button><button class="header-btn" id="wikiBtn" onclick="toggleWiki()" title="Wiki">&#x1F4D6;</button><button class="header-btn" id="situationBtn" onclick="toggleSituation()" title="Situation Room">&#x1F4CA;</button><button class="header-btn" id="fixBtn" onclick="fixYourself()" title="Fix Yourself">&#x1F527;</button><button class="header-btn" id="agentToggle" onclick="toggleAgentView()">&#x1F441;</button><button class="header-btn" onclick="toggleSettings()">&#9881;</button></div></div>
+<div class="header"><div class="header-brand">S.P.E.C.T.R.A.</div><div class="header-actions"><button class="header-btn" id="ambientBtn" onclick="toggleAmbient()" title="Ambient Mode">&#x1F4A4;</button><button class="header-btn" id="wikiBtn" onclick="toggleWiki()" title="Wiki">&#x1F4D6;</button><button class="header-btn" id="situationBtn" onclick="toggleSituation()" title="Situation Room">&#x1F4CA;</button><button class="header-btn" id="falconEyeBtn" onclick="fe_open()" title="Falcon Eye — 3D Globe">&#x1F985;</button><button class="header-btn" id="fixBtn" onclick="fixYourself()" title="Fix Yourself">&#x1F527;</button><button class="header-btn" id="agentToggle" onclick="toggleAgentView()">&#x1F441;</button><button class="header-btn" onclick="toggleSettings()">&#9881;</button></div></div>
 <div class="settings-panel" id="settingsPanel"><label>Audio Mode</label><select id="audioModeSelect" onchange="setAudioMode(this.value)"><option value="classic">Classic (Ollama + ElevenLabs)</option><option value="gemini">Gemini Live Audio</option><option value="gemma">Gemma 4 (Fast, Free)</option></select><div id="classicSettings"><label>Model</label><select id="modelSelect" onchange="setModel(this.value)"></select><label>Voice</label><select id="voiceSelect" onchange="setVoice(this.value)"></select><label>Custom Voice ID</label><div style="display:flex;gap:6px"><input type="text" id="voiceIdInput" placeholder="Paste ElevenLabs Voice ID..." style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:rgba(255,255,255,0.04);color:var(--text);font-family:var(--mono);font-size:0.7rem;outline:none"><button onclick="setCustomVoiceId()" style="padding:8px 12px;border:1px solid rgba(0,229,255,0.3);border-radius:8px;background:rgba(0,229,255,0.08);color:var(--cyan);font-family:var(--mono);font-size:0.7rem;font-weight:600;cursor:pointer">Set</button></div></div><div id="geminiVoiceSettings" style="display:none"><label>Gemini Voice</label><select id="geminiVoiceSelect" onchange="setGeminiVoice(this.value)"><option value="Kore">Kore (Default, calm female)</option><option value="Puck">Puck (warm male)</option><option value="Charon">Charon (deep male)</option><option value="Fenrir">Fenrir (bold male)</option><option value="Aoede">Aoede (bright female)</option><option value="Leda">Leda (soft female)</option><option value="Orus">Orus (clear male)</option><option value="Zephyr">Zephyr (breezy female)</option></select></div><div class="settings-status" id="settingsStatus"></div></div>
 <div class="agent-panel" id="agentPanel"><div class="agent-header"><span class="agent-title">Agent Browser</span><button class="agent-close" onclick="toggleAgentView()">&times;</button></div><div class="agent-screen-wrap"><img id="agentScreen" style="display:none" alt="Agent browser view"><div class="agent-no-feed" id="agentNoFeed">No active session<br>Ask SPECTRA to browse something</div></div><div class="agent-footer"><div class="agent-status" id="agentStatus">Idle</div><div class="agent-step" id="agentStep"></div></div></div>
 <div class="orb-area"><div class="orb-wrap" id="orbWrap"><canvas id="orbCanvas" width="600" height="600" onclick="if(!orb.classList.contains('speaking'))toggleMic()"></canvas><div class="orb" id="orb"></div></div><div class="response-area"><div id="response"></div></div></div>
@@ -1245,6 +1245,7 @@ async function send() {
                             else if (act.action === 'open_maps') handleMaps(act);
                             else if (act.action === 'play_music' && act.query) handlePlayMusic(act.query);
                             else if (act.action === 'music_control' && act.command) handleMusicControl(act.command);
+                            else if (act.action === 'falcon_eye') handleFalconEyeAction(act);
                         });
                     }
                     // If there's a follow-up, show and speak it after a delay
@@ -1294,7 +1295,10 @@ async function send() {
                 });
                 const data = await res.json();
                 responseEl.textContent = data.reply || 'No results.';
-                if (data.actions) data.actions.forEach(a => { if (a.action === 'open_url' && a.url) window.open(a.url, '_blank'); });
+                if (data.actions) data.actions.forEach(a => {
+                    if (a.action === 'open_url' && a.url) window.open(a.url, '_blank');
+                    else if (a.action === 'falcon_eye') handleFalconEyeAction(a);
+                });
                 orb.className = 'orb';
             } catch (err) {
                 responseEl.textContent = 'Search error: ' + err.message;
@@ -1411,6 +1415,8 @@ async function send() {
                     responseEl.textContent += '\n⏳ ' + act.message;
                 } else if (act.action === 'scheduled') {
                     responseEl.textContent += '\n⏰ Scheduled: ' + act.task;
+                } else if (act.action === 'falcon_eye') {
+                    handleFalconEyeAction(act);
                 }
             });
             if (pendingTab && !usedPending) pendingTab.close();
@@ -1921,6 +1927,45 @@ async function fixYourself() {
 // AMBIENT MODE
 // ══════════════════════════════════════════════════════════════════════════════
 let ambientMode = false;
+
+// ── Falcon Eye helpers ─────────────────────────────────────────────────────
+const FALCON_EYE_URL = '/falcon-eye/';
+let falconEyeWin = null;
+
+function needsFalconEye(msg) {
+    const l = msg.toLowerCase();
+    const triggers = [
+        'falcon eye', 'falcon-eye', 'open the globe', 'show me the globe',
+        'track the iss', 'track iss', 'track satellite', 'track satellites',
+        'track plane', 'track planes', 'track aircraft', 'track flight',
+        'satellites over', 'satellites above', 'planes over', 'planes above',
+        'flights over', 'aircraft over', 'show me ukraine', 'show me iran',
+        'show me israel', 'show me russia', 'show me china', 'show me taiwan',
+        'show me gaza', 'show me lebanon', 'show me syria', 'war alerts',
+        'war breaks out', 'breaking news in', 'add a camera', 'add this camera',
+        'add webcam', 'show cameras on map', 'global surveillance', '3d earth',
+        '3d globe', 'world view',
+    ];
+    return triggers.some(t => l.includes(t));
+}
+
+function fe_post(intent, extra = {}) {
+    return fetch('/api/falcon-eye/command', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ intent, ...extra }),
+    }).catch(() => {});
+}
+
+function fe_open() {
+    if (falconEyeWin && !falconEyeWin.closed) { try { falconEyeWin.focus(); return; } catch {} }
+    falconEyeWin = window.open(FALCON_EYE_URL, 'falcon-eye');
+}
+
+function handleFalconEyeAction(act) {
+    if (act.open) fe_open();
+    // Command was already queued server-side; nothing more to do.
+}
 
 // Client-side search detection (mirrors server needsSearch)
 function needsSearchLocal(msg) {

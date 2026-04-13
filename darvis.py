@@ -94,6 +94,32 @@ def _open_url_in_browser(url: str):
     else:
         subprocess.Popen(["xdg-open", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
+
+# ── Falcon Eye — 3D global surveillance grid ────────────────────────────────
+FALCON_EYE_URL = "https://darvis1.netlify.app/falcon-eye/"
+FALCON_EYE_API = "https://darvis1.netlify.app/api/falcon-eye/command"
+
+def falcon_eye_command(intent: str, **kwargs):
+    """Queue a command for the Falcon Eye page (cross-device)."""
+    try:
+        body = {"intent": intent}
+        for k in ("region", "lat", "lon", "zoom", "query", "layer", "url", "label"):
+            if k in kwargs and kwargs[k] is not None:
+                body[k] = kwargs[k]
+        data = json.dumps(body).encode()
+        req = urllib.request.Request(
+            FALCON_EYE_API, data=data, method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        urllib.request.urlopen(req, timeout=5).read()
+        return True
+    except Exception as e:
+        return f"Falcon Eye error: {e}"
+
+def open_falcon_eye():
+    """Open the Falcon Eye page in the browser."""
+    _open_url_in_browser(FALCON_EYE_URL)
+
 # ── Config ────────────────────────────────────────────────────────────────────
 
 WAKE_WORD = "spectra"
@@ -1547,6 +1573,26 @@ def extract_and_run_commands(response_text: str) -> list[str]:
                 results.append(output)
                 console.print(f"  [dim]{output}[/dim]")
 
+            elif action == "falcon_eye" and "intent" in data:
+                intent = data["intent"]
+                console.print(f"  [{BLUE}]Falcon Eye:[/{BLUE}] {intent} {data.get('region') or data.get('query') or ''}")
+                falcon_eye_command(
+                    intent,
+                    region=data.get("region"),
+                    lat=data.get("lat"),
+                    lon=data.get("lon"),
+                    zoom=data.get("zoom"),
+                    query=data.get("query"),
+                    layer=data.get("layer"),
+                    url=data.get("url"),
+                    label=data.get("label"),
+                )
+                if data.get("open", True):
+                    open_falcon_eye()
+                output = f"Falcon Eye: {intent}"
+                results.append(output)
+                console.print(f"  [green]✓ {output}[/green]")
+
             elif action == "music_control" and "command" in data:
                 cmd_map = {
                     "pause": 'tell application "Music" to pause',
@@ -2296,6 +2342,16 @@ def main():
                                     url = "maps://"
                                 subprocess.run(["open", url], timeout=5)
                                 console.print(f"  [dim]Maps opened[/dim]")
+                            elif action == "falcon_eye" and cmd.get("intent"):
+                                falcon_eye_command(
+                                    cmd["intent"],
+                                    region=cmd.get("region"), lat=cmd.get("lat"), lon=cmd.get("lon"),
+                                    zoom=cmd.get("zoom"), query=cmd.get("query"), layer=cmd.get("layer"),
+                                    url=cmd.get("url"), label=cmd.get("label"),
+                                )
+                                if cmd.get("open", True):
+                                    open_falcon_eye()
+                                console.print(f"  [dim]Falcon Eye: {cmd['intent']}[/dim]")
                             else:
                                 console.print(f"  [dim]Unknown action: {action}[/dim]")
                         except Exception as e:

@@ -354,7 +354,31 @@ Common shortcuts:
 - "open Gmail" → open_url https://mail.google.com
 - "Google X" → open_search with the query
 - "remind me in 30 min" → schedule with delay_minutes
-- "alert me when Tesla hits $300" → alert_add price_threshold${memoryContext}${wikiContext}${searchContext}`;
+- "alert me when Tesla hits $300" → alert_add price_threshold
+
+### Falcon Eye (3D global surveillance grid):
+\`\`\`command
+{"action": "falcon_eye", "intent": "focus_region", "region": "Ukraine", "lat": 50.45, "lon": 30.52, "zoom": 4, "open": true}
+\`\`\`
+\`\`\`command
+{"action": "falcon_eye", "intent": "track_satellite", "query": "ISS"}
+\`\`\`
+\`\`\`command
+{"action": "falcon_eye", "intent": "track_aircraft", "query": "UAL123"}
+\`\`\`
+\`\`\`command
+{"action": "falcon_eye", "intent": "show_news", "region": "Iran"}
+\`\`\`
+\`\`\`command
+{"action": "falcon_eye", "intent": "show_cameras"}
+\`\`\`
+\`\`\`command
+{"action": "falcon_eye", "intent": "add_camera", "url": "https://camlist.net/.../stream.m3u8", "label": "Tokyo Shibuya", "lat": 35.66, "lon": 139.70}
+\`\`\`
+\`\`\`command
+{"action": "falcon_eye", "intent": "reset"}
+\`\`\`
+Use Falcon Eye when the user mentions: "falcon eye", "show me <country>", "track planes/satellites over X", "what's happening in <region>", "war alerts", "track the ISS", "open the globe", "satellites above", or asks to add a camera/webcam to the map. Always include lat/lon when you know them. Set "open": true to also open the Falcon Eye page in a new tab when it's not already open.${memoryContext}${wikiContext}${searchContext}`;
 
   const userMsg = { role: "user", content: `${timeBlock}\n${message}` };
   const messages = [
@@ -449,6 +473,24 @@ Common shortcuts:
           memories.forEach((m, i) => (m.id = i));
           await memoryStore.setJSON("all", memories);
           cmdResults.push(`Forgotten memory #${cmd.id}`);
+        } else if (cmd.action === "falcon_eye" && cmd.intent) {
+          // Queue command for Falcon Eye page (cross-device)
+          const feStore = getStore("darvis-falcon-eye");
+          const command = {
+            id: crypto.randomUUID(),
+            intent: cmd.intent,
+            region: cmd.region || null,
+            lat: typeof cmd.lat === "number" ? cmd.lat : null,
+            lon: typeof cmd.lon === "number" ? cmd.lon : null,
+            zoom: typeof cmd.zoom === "number" ? cmd.zoom : null,
+            query: cmd.query || null,
+            layer: cmd.layer || null,
+            url: cmd.url || null,
+            label: cmd.label || null,
+            ts: Date.now(),
+          };
+          await feStore.setJSON("pending_command", { command, ts: command.ts });
+          clientActions.push({ action: "falcon_eye", intent: cmd.intent, open: cmd.open !== false, command });
         } else if (cmd.action === "open_url" && cmd.url) {
           clientActions.push({ action: "open_url", url: cmd.url });
         } else if (cmd.action === "open_file" && cmd.path) {

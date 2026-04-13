@@ -1,0 +1,868 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+<meta name="theme-color" content="#05080a" />
+<title>FALCON EYE — Global Surveillance Grid</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Unica+One&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/globe.gl@2.34.4/dist/globe.gl.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/satellite.js@5.0.0/dist/satellite.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js"></script>
+<style>
+  :root {
+    --bg: #05080a;
+    --bg-2: #0a1015;
+    --panel: rgba(10,16,21,0.78);
+    --panel-edge: rgba(125,138,150,0.22);
+    --panel-edge-hot: rgba(255,181,71,0.55);
+    --steel: #7d8a96;
+    --steel-dim: #4a5560;
+    --steel-bright: #b9c4cf;
+    --ink: #e6edf3;
+    --amber: #ffb547;
+    --amber-glow: rgba(255,181,71,0.45);
+    --cyan: #5fd9ff;
+    --phosphor: #7dffaf;
+    --critical: #ff3838;
+    --high: #ff7a3d;
+    --medium: #ffd23d;
+    --low: #5fd9ff;
+    --grid: rgba(125,138,150,0.07);
+    --mono: 'JetBrains Mono', ui-monospace, monospace;
+    --display: 'Unica One', 'JetBrains Mono', sans-serif;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0; height: 100%; width: 100%;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 12px;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  body::before {
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 9000;
+    background:
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.018) 0 1px, transparent 1px 3px),
+      radial-gradient(circle at 50% 50%, transparent 55%, rgba(0,0,0,0.55) 100%);
+    mix-blend-mode: screen;
+  }
+  body::after {
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 9001;
+    background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.06 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+    opacity: 0.6;
+  }
+
+  #globe {
+    position: fixed; inset: 0; z-index: 1;
+    background:
+      radial-gradient(ellipse at 30% 20%, #0d1620 0%, transparent 60%),
+      radial-gradient(ellipse at 70% 80%, #0a1318 0%, transparent 60%),
+      var(--bg);
+  }
+  #globe canvas { display: block; }
+
+  /* Crosshair center reticle */
+  .reticle {
+    position: fixed; left: 50%; top: 50%; width: 0; height: 0;
+    pointer-events: none; z-index: 50; opacity: 0.32;
+  }
+  .reticle::before, .reticle::after {
+    content: ""; position: absolute; background: var(--amber);
+  }
+  .reticle::before { left: -22px; top: -0.5px; width: 18px; height: 1px; }
+  .reticle::after  { left: 4px;   top: -0.5px; width: 18px; height: 1px; }
+  .reticle .v::before, .reticle .v::after {
+    content: ""; position: absolute; background: var(--amber);
+  }
+  .reticle .v::before { left: -0.5px; top: -22px; width: 1px; height: 18px; }
+  .reticle .v::after  { left: -0.5px; top: 4px;   width: 1px; height: 18px; }
+
+  /* Corner brackets framing the viewport */
+  .corner {
+    position: fixed; width: 28px; height: 28px; z-index: 60; pointer-events: none;
+    border: 1px solid var(--amber); opacity: 0.7;
+  }
+  .corner.tl { top: 14px; left: 14px;   border-right: none; border-bottom: none; }
+  .corner.tr { top: 14px; right: 14px;  border-left: none;  border-bottom: none; }
+  .corner.bl { bottom: 14px; left: 14px;border-right: none; border-top: none; }
+  .corner.br { bottom: 14px; right: 14px;border-left: none; border-top: none; }
+
+  /* Header */
+  .header {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    display: grid; grid-template-columns: auto 1fr auto;
+    align-items: center; gap: 24px;
+    padding: 18px 38px 12px 38px;
+    pointer-events: none;
+  }
+  .brand {
+    display: flex; align-items: baseline; gap: 14px;
+    pointer-events: auto;
+  }
+  .brand .mark {
+    font-family: var(--display);
+    font-size: 32px; letter-spacing: 0.18em;
+    color: var(--ink);
+    line-height: 0.9;
+  }
+  .brand .mark .eye { color: var(--amber); text-shadow: 0 0 18px var(--amber-glow); }
+  .brand .sub {
+    font-size: 9px; letter-spacing: 0.32em; color: var(--steel);
+    text-transform: uppercase;
+    border-left: 1px solid var(--panel-edge);
+    padding-left: 14px;
+  }
+  .header-mid {
+    text-align: center; font-size: 9px; letter-spacing: 0.28em;
+    color: var(--steel); text-transform: uppercase;
+  }
+  .header-mid .row1 { color: var(--steel-bright); }
+  .header-mid .row2 { color: var(--steel-dim); margin-top: 3px; font-size: 8px; }
+
+  .status-cluster {
+    display: flex; align-items: center; gap: 16px;
+    pointer-events: auto;
+    font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase;
+  }
+  .pill {
+    display: flex; align-items: center; gap: 6px;
+    padding: 5px 10px; border: 1px solid var(--panel-edge);
+    background: var(--panel); color: var(--steel);
+  }
+  .pill .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--steel-dim);
+    box-shadow: 0 0 6px currentColor;
+  }
+  .pill.live .dot { background: var(--phosphor); animation: pulse 1.6s infinite; }
+  .pill.warn .dot { background: var(--amber); }
+  .pill.crit .dot { background: var(--critical); animation: pulse 0.8s infinite; }
+  @keyframes pulse {
+    0%,100% { opacity: 1; transform: scale(1); }
+    50%     { opacity: 0.45; transform: scale(0.85); }
+  }
+
+  /* Left rail — layer controls */
+  .rail-left {
+    position: fixed; left: 38px; top: 50%; transform: translateY(-50%);
+    z-index: 100; width: 220px;
+    display: flex; flex-direction: column; gap: 10px;
+    pointer-events: auto;
+  }
+  .rail-title {
+    font-size: 9px; letter-spacing: 0.32em; color: var(--steel-dim);
+    text-transform: uppercase;
+    display: flex; align-items: center; gap: 8px;
+    padding-bottom: 6px;
+  }
+  .rail-title::after {
+    content: ""; flex: 1; height: 1px; background: var(--panel-edge);
+  }
+  .layer {
+    background: var(--panel); border: 1px solid var(--panel-edge);
+    padding: 12px 14px;
+    cursor: pointer;
+    transition: all 0.15s;
+    position: relative;
+  }
+  .layer::before {
+    content: ""; position: absolute; left: -1px; top: -1px; width: 6px; height: 6px;
+    border-left: 1px solid var(--amber); border-top: 1px solid var(--amber);
+    opacity: 0;
+  }
+  .layer.on::before { opacity: 1; }
+  .layer.on { border-color: var(--panel-edge-hot); }
+  .layer:hover { background: rgba(20,28,36,0.85); }
+  .layer-row {
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .layer-name {
+    font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--steel-bright);
+  }
+  .layer.on .layer-name { color: var(--amber); }
+  .layer-count {
+    font-size: 14px; color: var(--ink); font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+  .layer.on .layer-count { color: var(--amber); }
+  .layer-meta {
+    font-size: 8px; letter-spacing: 0.2em; color: var(--steel-dim);
+    text-transform: uppercase; margin-top: 4px;
+  }
+
+  /* Right rail — alert feed */
+  .rail-right {
+    position: fixed; right: 38px; top: 84px; bottom: 84px;
+    z-index: 100; width: 280px;
+    display: flex; flex-direction: column; gap: 8px;
+    pointer-events: auto;
+  }
+  .feed {
+    flex: 1; overflow-y: auto; overflow-x: hidden;
+    display: flex; flex-direction: column; gap: 6px;
+    padding-right: 4px;
+  }
+  .feed::-webkit-scrollbar { width: 4px; }
+  .feed::-webkit-scrollbar-thumb { background: var(--panel-edge); }
+  .alert {
+    background: var(--panel); border: 1px solid var(--panel-edge);
+    padding: 10px 12px;
+    border-left: 2px solid var(--steel-dim);
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .alert:hover { background: rgba(20,28,36,0.85); }
+  .alert.crit { border-left-color: var(--critical); }
+  .alert.high { border-left-color: var(--high); }
+  .alert.medium { border-left-color: var(--medium); }
+  .alert.low { border-left-color: var(--low); }
+  .alert-head {
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 8px; letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--steel); margin-bottom: 5px;
+  }
+  .alert-head .sev {
+    padding: 1px 5px; border: 1px solid currentColor;
+  }
+  .alert.crit .sev { color: var(--critical); }
+  .alert.high .sev { color: var(--high); }
+  .alert.medium .sev { color: var(--medium); }
+  .alert.low .sev { color: var(--low); }
+  .alert-title {
+    font-size: 11px; line-height: 1.35; color: var(--ink);
+    font-weight: 400;
+  }
+  .alert-snippet {
+    font-size: 9px; line-height: 1.4; color: var(--steel);
+    margin-top: 4px;
+  }
+
+  /* Footer / command bar */
+  .footer {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 100;
+    padding: 14px 38px 18px 38px;
+    display: grid; grid-template-columns: auto 1fr auto;
+    align-items: center; gap: 24px;
+    pointer-events: none;
+  }
+  .footer > * { pointer-events: auto; }
+  .footer-left {
+    display: flex; align-items: center; gap: 14px;
+    font-size: 9px; letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--steel);
+  }
+  .footer-left .label { color: var(--steel-dim); }
+  .footer-left .val { color: var(--steel-bright); font-variant-numeric: tabular-nums; }
+  .last-cmd {
+    text-align: center; font-size: 9px; letter-spacing: 0.22em;
+    color: var(--steel); text-transform: uppercase;
+  }
+  .last-cmd .val {
+    color: var(--amber); margin-left: 8px;
+    text-shadow: 0 0 8px var(--amber-glow);
+  }
+  .footer-right {
+    display: flex; gap: 8px;
+  }
+  .btn {
+    background: var(--panel); border: 1px solid var(--panel-edge);
+    color: var(--steel-bright); font-family: var(--mono);
+    font-size: 9px; letter-spacing: 0.22em; text-transform: uppercase;
+    padding: 7px 12px; cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn:hover { border-color: var(--amber); color: var(--amber); }
+  .btn.hot { color: var(--amber); border-color: var(--panel-edge-hot); }
+
+  /* Modal — camera viewer + add camera */
+  .modal-backdrop {
+    position: fixed; inset: 0; z-index: 200;
+    background: rgba(5,8,10,0.72);
+    backdrop-filter: blur(4px);
+    display: none; align-items: center; justify-content: center;
+  }
+  .modal-backdrop.show { display: flex; }
+  .modal {
+    background: var(--bg-2); border: 1px solid var(--panel-edge-hot);
+    width: min(92vw, 720px); max-height: 86vh; overflow: auto;
+    position: relative; padding: 28px;
+  }
+  .modal-corner {
+    position: absolute; width: 14px; height: 14px;
+    border: 1px solid var(--amber);
+  }
+  .modal-corner.tl { top: -1px; left: -1px; border-right: none; border-bottom: none; }
+  .modal-corner.tr { top: -1px; right: -1px; border-left: none; border-bottom: none; }
+  .modal-corner.bl { bottom: -1px; left: -1px; border-right: none; border-top: none; }
+  .modal-corner.br { bottom: -1px; right: -1px; border-left: none; border-top: none; }
+  .modal h2 {
+    font-family: var(--display); font-size: 22px; letter-spacing: 0.18em;
+    margin: 0 0 18px 0; color: var(--amber); text-transform: uppercase;
+  }
+  .modal .close {
+    position: absolute; top: 14px; right: 14px;
+    width: 26px; height: 26px; border: 1px solid var(--panel-edge);
+    background: transparent; color: var(--steel); cursor: pointer;
+    font-family: var(--mono); font-size: 14px;
+  }
+  .modal .close:hover { color: var(--amber); border-color: var(--amber); }
+  .modal label {
+    display: block; font-size: 9px; letter-spacing: 0.24em;
+    text-transform: uppercase; color: var(--steel); margin: 12px 0 4px;
+  }
+  .modal input[type=text], .modal input[type=number] {
+    width: 100%; background: rgba(0,0,0,0.4); border: 1px solid var(--panel-edge);
+    color: var(--ink); font-family: var(--mono); font-size: 11px;
+    padding: 8px 10px; outline: none;
+  }
+  .modal input:focus { border-color: var(--amber); }
+  .modal .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .modal .actions { margin-top: 18px; display: flex; gap: 8px; justify-content: flex-end; }
+  .cam-list { margin-top: 14px; display: flex; flex-direction: column; gap: 6px; max-height: 240px; overflow-y: auto; }
+  .cam-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 12px; border: 1px solid var(--panel-edge);
+    font-size: 10px; color: var(--steel-bright);
+  }
+  .cam-item .x {
+    background: transparent; border: none; color: var(--steel-dim);
+    cursor: pointer; font-family: var(--mono);
+  }
+  .cam-item .x:hover { color: var(--critical); }
+  .cam-viewer { background: #000; aspect-ratio: 16/9; width: 100%; }
+
+  /* Critical alert banner */
+  .banner {
+    position: fixed; top: 70px; left: 50%; transform: translateX(-50%);
+    z-index: 150; max-width: 70vw;
+    background: rgba(255,56,56,0.12); border: 1px solid var(--critical);
+    color: #fff; padding: 10px 22px;
+    font-size: 10px; letter-spacing: 0.28em; text-transform: uppercase;
+    animation: bannerFlash 1.4s infinite;
+    display: none;
+  }
+  .banner.show { display: block; }
+  @keyframes bannerFlash {
+    0%,100% { background: rgba(255,56,56,0.12); }
+    50%     { background: rgba(255,56,56,0.28); }
+  }
+
+  /* Mobile */
+  @media (max-width: 860px) {
+    .header { padding: 10px 16px 8px; gap: 10px; }
+    .brand .mark { font-size: 22px; }
+    .brand .sub { display: none; }
+    .header-mid { display: none; }
+    .corner { width: 18px; height: 18px; }
+    .corner.tl, .corner.tr { top: 6px; }
+    .corner.tl { left: 6px; } .corner.tr { right: 6px; }
+    .corner.bl, .corner.br { bottom: 6px; }
+    .corner.bl { left: 6px; } .corner.br { right: 6px; }
+    .rail-left { left: 10px; right: 10px; top: auto; bottom: 130px; transform: none; width: auto;
+      flex-direction: row; flex-wrap: wrap; gap: 6px; }
+    .rail-left .rail-title { display: none; }
+    .layer { flex: 1 1 calc(50% - 3px); padding: 8px 10px; }
+    .layer-meta { display: none; }
+    .rail-right { right: 10px; left: 10px; top: 60px; bottom: auto; width: auto; max-height: 38vh; }
+    .footer { padding: 8px 12px 12px; grid-template-columns: 1fr; text-align: center; gap: 6px; }
+    .footer-left, .footer-right { justify-content: center; }
+  }
+
+  /* Globe info popup on hover */
+  .info-pop {
+    position: fixed; pointer-events: none; z-index: 80;
+    background: var(--panel); border: 1px solid var(--panel-edge-hot);
+    padding: 8px 10px; font-size: 9px; letter-spacing: 0.12em;
+    color: var(--ink); text-transform: uppercase;
+    display: none;
+  }
+  .info-pop.show { display: block; }
+  .info-pop .k { color: var(--steel-dim); margin-right: 6px; }
+  .info-pop .v { color: var(--amber); }
+</style>
+</head>
+<body>
+  <div id="globe"></div>
+
+  <div class="reticle"><div class="v"></div></div>
+  <div class="corner tl"></div><div class="corner tr"></div>
+  <div class="corner bl"></div><div class="corner br"></div>
+
+  <header class="header">
+    <div class="brand">
+      <div class="mark">FALCON<span class="eye">·EYE</span></div>
+      <div class="sub">Global<br/>Surveillance Grid</div>
+    </div>
+    <div class="header-mid">
+      <div class="row1" id="hdrTime">— · — · —</div>
+      <div class="row2" id="hdrCoords">LAT 00.00°  LON 000.00°  ALT —— KM</div>
+    </div>
+    <div class="status-cluster">
+      <div class="pill live"><span class="dot"></span><span>Grid Live</span></div>
+      <div class="pill" id="spectraPill"><span class="dot"></span><span>Spectra Link</span></div>
+    </div>
+  </header>
+
+  <div class="banner" id="banner">⚠ CRITICAL ALERT — <span id="bannerText"></span></div>
+
+  <aside class="rail-left">
+    <div class="rail-title">Layers · Tactical</div>
+    <div class="layer on" data-layer="satellites">
+      <div class="layer-row">
+        <span class="layer-name">Satellites</span>
+        <span class="layer-count" id="cntSats">0</span>
+      </div>
+      <div class="layer-meta">CelesTrak · TLE · SGP4</div>
+    </div>
+    <div class="layer on" data-layer="aircraft">
+      <div class="layer-row">
+        <span class="layer-name">Aircraft</span>
+        <span class="layer-count" id="cntAir">0</span>
+      </div>
+      <div class="layer-meta">OpenSky Network</div>
+    </div>
+    <div class="layer on" data-layer="cameras">
+      <div class="layer-row">
+        <span class="layer-name">Cameras</span>
+        <span class="layer-count" id="cntCam">0</span>
+      </div>
+      <div class="layer-meta">User Feeds · HLS / MJPEG</div>
+    </div>
+    <div class="layer on" data-layer="news">
+      <div class="layer-row">
+        <span class="layer-name">News & Alerts</span>
+        <span class="layer-count" id="cntNews">0</span>
+      </div>
+      <div class="layer-meta">Tavily · Geo-tagged</div>
+    </div>
+  </aside>
+
+  <aside class="rail-right">
+    <div class="rail-title">Live Intel Feed</div>
+    <div class="feed" id="feed"></div>
+  </aside>
+
+  <footer class="footer">
+    <div class="footer-left">
+      <span class="label">UTC</span><span class="val" id="utc">--:--:--</span>
+      <span class="label">FOCUS</span><span class="val" id="focus">GLOBAL</span>
+      <span class="label">CMD</span><span class="val" id="cmdCount">000</span>
+    </div>
+    <div class="last-cmd">
+      ↳ Last directive <span class="val" id="lastCmd">awaiting Spectra…</span>
+    </div>
+    <div class="footer-right">
+      <button class="btn" id="btnAddCam">+ Camera</button>
+      <button class="btn" id="btnReset">Reset View</button>
+      <button class="btn hot" id="btnTrackISS">Track ISS</button>
+    </div>
+  </footer>
+
+  <div class="info-pop" id="info"></div>
+
+  <!-- Add camera modal -->
+  <div class="modal-backdrop" id="camModal">
+    <div class="modal">
+      <span class="modal-corner tl"></span><span class="modal-corner tr"></span>
+      <span class="modal-corner bl"></span><span class="modal-corner br"></span>
+      <button class="close" data-close>×</button>
+      <h2>Custom Camera Feed</h2>
+      <label>Stream URL (HLS .m3u8, MJPEG, or page)</label>
+      <input type="text" id="camUrl" placeholder="https://camlist.net/…/stream.m3u8" />
+      <label>Label / Location Name</label>
+      <input type="text" id="camLabel" placeholder="Tokyo Shibuya" />
+      <div class="row">
+        <div><label>Latitude</label><input type="number" id="camLat" step="0.0001" placeholder="35.6595" /></div>
+        <div><label>Longitude</label><input type="number" id="camLon" step="0.0001" placeholder="139.7004" /></div>
+      </div>
+      <div class="actions">
+        <button class="btn" data-close>Cancel</button>
+        <button class="btn hot" id="camSave">Save Feed</button>
+      </div>
+      <div class="cam-list" id="camList"></div>
+    </div>
+  </div>
+
+  <!-- Camera viewer modal -->
+  <div class="modal-backdrop" id="viewerModal">
+    <div class="modal">
+      <span class="modal-corner tl"></span><span class="modal-corner tr"></span>
+      <span class="modal-corner bl"></span><span class="modal-corner br"></span>
+      <button class="close" data-close>×</button>
+      <h2 id="viewerTitle">Camera Feed</h2>
+      <video id="viewerVideo" class="cam-viewer" controls autoplay muted playsinline></video>
+    </div>
+  </div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────
+// FALCON EYE — single-file SPA
+// ─────────────────────────────────────────────────────────────────────
+
+const API = {
+  command: "/api/falcon-eye/command",
+  state:   "/api/falcon-eye/state",
+  air:     "/api/falcon-eye/aircraft",
+  tle:     "/api/falcon-eye/tle",
+  cams:    "/api/falcon-eye/cameras",
+  news:    "/api/falcon-eye/news",
+};
+
+const state = {
+  layers: { satellites: true, aircraft: true, cameras: true, news: true },
+  sats: [],            // {name, satrec}
+  satPoints: [],       // current propagated points
+  aircraft: [],        // OpenSky records
+  cameras: [],
+  alerts: [],
+  cmdCount: 0,
+  tracked: null,       // { type: 'sat'|'air', id, name }
+};
+
+// ── Globe init ──
+const globeEl = document.getElementById("globe");
+const Globe = window.Globe;
+const globe = Globe()(globeEl)
+  .globeImageUrl("//unpkg.com/three-globe/example/img/earth-night.jpg")
+  .bumpImageUrl("//unpkg.com/three-globe/example/img/earth-topology.png")
+  .backgroundImageUrl("//unpkg.com/three-globe/example/img/night-sky.png")
+  .showAtmosphere(true)
+  .atmosphereColor("#5fd9ff")
+  .atmosphereAltitude(0.18)
+  .pointOfView({ lat: 20, lng: 0, altitude: 2.4 });
+
+// custom subtle ambient
+try {
+  const scene = globe.scene();
+  scene.fog = null;
+} catch {}
+
+window.addEventListener("resize", () => {
+  globe.width(window.innerWidth).height(window.innerHeight);
+});
+globe.width(window.innerWidth).height(window.innerHeight);
+
+// ── Time / clocks ──
+function tick() {
+  const d = new Date();
+  document.getElementById("utc").textContent = d.toISOString().substr(11, 8);
+  document.getElementById("hdrTime").textContent =
+    d.toUTCString().replace("GMT", "Z").replace(",", " ·");
+  const pov = globe.pointOfView();
+  document.getElementById("hdrCoords").textContent =
+    `LAT ${pov.lat.toFixed(2)}°  LON ${pov.lng.toFixed(2)}°  ALT ${(pov.altitude*6371).toFixed(0)} KM`;
+}
+setInterval(tick, 1000); tick();
+
+// ── Layer toggles ──
+document.querySelectorAll(".layer").forEach((el) => {
+  el.addEventListener("click", () => {
+    const k = el.dataset.layer;
+    state.layers[k] = !state.layers[k];
+    el.classList.toggle("on", state.layers[k]);
+    rerender();
+  });
+});
+
+// ── Satellites: load TLE, propagate every 2s ──
+async function loadSats() {
+  try {
+    const r = await fetch(`${API.tle}?group=stations`);
+    const d = await r.json();
+    const r2 = await fetch(`${API.tle}?group=active`);
+    const d2 = await r2.json();
+    const all = [...(d.sats || []), ...(d2.sats || [])].slice(0, 450);
+    state.sats = all.map((s) => {
+      try { return { name: s.name, satrec: satellite.twoline2satrec(s.tle1, s.tle2) }; }
+      catch { return null; }
+    }).filter(Boolean);
+    document.getElementById("cntSats").textContent = state.sats.length;
+  } catch (e) { console.warn("TLE load failed", e); }
+}
+
+function propagateSats() {
+  if (!state.sats.length) return;
+  const now = new Date();
+  const gmst = satellite.gstime(now);
+  const out = [];
+  for (const s of state.sats) {
+    try {
+      const pv = satellite.propagate(s.satrec, now);
+      if (!pv.position) continue;
+      const geo = satellite.eciToGeodetic(pv.position, gmst);
+      out.push({
+        name: s.name,
+        lat: satellite.degreesLat(geo.latitude),
+        lng: satellite.degreesLong(geo.longitude),
+        alt: geo.height / 6371,
+        type: "sat",
+      });
+    } catch {}
+  }
+  state.satPoints = out;
+  rerender();
+}
+
+// ── Aircraft ──
+async function loadAircraft() {
+  try {
+    const r = await fetch(API.air);
+    const d = await r.json();
+    state.aircraft = (d.states || []).map((p) => ({
+      name: p.callsign || p.icao,
+      lat: p.lat, lng: p.lon, alt: (p.alt || 0) / 6371000 * 1.5,
+      heading: p.heading, vel: p.vel, country: p.country,
+      type: "air",
+    }));
+    document.getElementById("cntAir").textContent = state.aircraft.length;
+    rerender();
+  } catch (e) { console.warn("aircraft load failed", e); }
+}
+
+// ── Cameras ──
+async function loadCameras() {
+  try {
+    const r = await fetch(API.cams);
+    state.cameras = await r.json();
+    document.getElementById("cntCam").textContent = state.cameras.length;
+    renderCamList();
+    rerender();
+  } catch {}
+}
+
+// ── News ──
+async function loadNews(region = "") {
+  try {
+    const r = await fetch(API.news + (region ? `?region=${encodeURIComponent(region)}` : ""));
+    const d = await r.json();
+    state.alerts = d.alerts || [];
+    document.getElementById("cntNews").textContent = state.alerts.length;
+    renderFeed();
+    rerender();
+    const crit = state.alerts.find((a) => a.severity === "critical");
+    if (crit) {
+      document.getElementById("bannerText").textContent = crit.headline;
+      document.getElementById("banner").classList.add("show");
+    } else {
+      document.getElementById("banner").classList.remove("show");
+    }
+  } catch {}
+}
+
+// ── Render feeds + globe layers ──
+function renderFeed() {
+  const feed = document.getElementById("feed");
+  feed.innerHTML = "";
+  for (const a of state.alerts.slice(0, 40)) {
+    const el = document.createElement("div");
+    el.className = `alert ${a.severity}`;
+    el.innerHTML = `
+      <div class="alert-head"><span>${a.region || ""} · ${a.source || ""}</span><span class="sev">${a.severity}</span></div>
+      <div class="alert-title">${a.headline || ""}</div>
+      <div class="alert-snippet">${(a.snippet || "").replace(/</g, "&lt;")}</div>`;
+    el.onclick = () => {
+      if (a.lat != null) globe.pointOfView({ lat: a.lat, lng: a.lon, altitude: 1.4 }, 1500);
+      if (a.url) window.open(a.url, "_blank", "noopener");
+    };
+    feed.appendChild(el);
+  }
+}
+
+function rerender() {
+  const points = [];
+  if (state.layers.satellites) points.push(...state.satPoints);
+  if (state.layers.aircraft) points.push(...state.aircraft);
+  if (state.layers.cameras)
+    for (const c of state.cameras)
+      if (c.lat != null) points.push({ ...c, type: "cam", name: c.label });
+  globe
+    .pointsData(points)
+    .pointLat("lat").pointLng("lng").pointAltitude("alt")
+    .pointRadius((d) => d.type === "sat" ? 0.18 : d.type === "air" ? 0.22 : 0.4)
+    .pointColor((d) => d.type === "sat" ? "#5fd9ff" : d.type === "air" ? "#ffb547" : "#7dffaf")
+    .pointResolution(6)
+    .onPointHover((d) => {
+      const pop = document.getElementById("info");
+      if (!d) return pop.classList.remove("show");
+      pop.innerHTML = `<span class="k">${d.type.toUpperCase()}</span><span class="v">${d.name || "—"}</span>`;
+      pop.classList.add("show");
+    })
+    .onPointClick((d) => {
+      if (d.type === "cam") openViewer(d);
+      else globe.pointOfView({ lat: d.lat, lng: d.lng, altitude: 1.2 }, 1200);
+    });
+
+  // News rings
+  const rings = state.layers.news ? state.alerts.filter((a) => a.lat != null).map((a) => ({
+    lat: a.lat, lng: a.lon,
+    color: a.severity === "critical" ? "#ff3838"
+         : a.severity === "high"     ? "#ff7a3d"
+         : a.severity === "medium"   ? "#ffd23d" : "#5fd9ff",
+    maxR: a.severity === "critical" ? 7 : 4,
+  })) : [];
+  globe.ringsData(rings)
+    .ringColor((r) => () => r.color)
+    .ringMaxRadius("maxR")
+    .ringPropagationSpeed(2)
+    .ringRepeatPeriod(1400);
+}
+
+document.addEventListener("mousemove", (e) => {
+  const pop = document.getElementById("info");
+  pop.style.left = (e.clientX + 14) + "px";
+  pop.style.top  = (e.clientY + 14) + "px";
+});
+
+// ── Camera modal logic ──
+const camModal = document.getElementById("camModal");
+const viewerModal = document.getElementById("viewerModal");
+document.querySelectorAll("[data-close]").forEach(b => b.onclick = () => {
+  camModal.classList.remove("show");
+  viewerModal.classList.remove("show");
+  const v = document.getElementById("viewerVideo");
+  if (v.hls) { v.hls.destroy(); v.hls = null; }
+  v.removeAttribute("src"); v.load();
+});
+document.getElementById("btnAddCam").onclick = () => camModal.classList.add("show");
+document.getElementById("camSave").onclick = async () => {
+  const url = document.getElementById("camUrl").value.trim();
+  if (!url) return;
+  const body = {
+    url,
+    label: document.getElementById("camLabel").value.trim() || url,
+    lat: parseFloat(document.getElementById("camLat").value) || null,
+    lon: parseFloat(document.getElementById("camLon").value) || null,
+  };
+  await fetch(API.cams, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  ["camUrl","camLabel","camLat","camLon"].forEach(id => document.getElementById(id).value = "");
+  loadCameras();
+};
+function renderCamList() {
+  const list = document.getElementById("camList");
+  list.innerHTML = "";
+  for (const c of state.cameras) {
+    const el = document.createElement("div");
+    el.className = "cam-item";
+    el.innerHTML = `<span>${c.label} <span style="color:var(--steel-dim)">[${c.kind}]</span></span><button class="x">×</button>`;
+    el.querySelector(".x").onclick = async () => {
+      await fetch(`${API.cams}?id=${c.id}`, { method: "DELETE" });
+      loadCameras();
+    };
+    el.onclick = (e) => { if (!e.target.closest(".x")) openViewer(c); };
+    list.appendChild(el);
+  }
+}
+function openViewer(cam) {
+  viewerModal.classList.add("show");
+  document.getElementById("viewerTitle").textContent = cam.label || "Camera Feed";
+  const v = document.getElementById("viewerVideo");
+  if (cam.kind === "hls" || /\.m3u8/i.test(cam.url)) {
+    if (window.Hls && Hls.isSupported()) {
+      v.hls = new Hls(); v.hls.loadSource(cam.url); v.hls.attachMedia(v);
+    } else { v.src = cam.url; }
+  } else if (cam.kind === "mjpeg") {
+    v.outerHTML = `<img id="viewerVideo" class="cam-viewer" src="${cam.url}" />`;
+  } else {
+    v.outerHTML = `<iframe id="viewerVideo" class="cam-viewer" src="${cam.url}" frameborder="0" allowfullscreen></iframe>`;
+  }
+}
+
+// ── Footer buttons ──
+document.getElementById("btnReset").onclick = () => {
+  globe.pointOfView({ lat: 20, lng: 0, altitude: 2.4 }, 1500);
+  state.tracked = null;
+  document.getElementById("focus").textContent = "GLOBAL";
+};
+document.getElementById("btnTrackISS").onclick = () => trackByName("ISS");
+
+function trackByName(q) {
+  const target = state.satPoints.find((s) => s.name.toUpperCase().includes(q.toUpperCase()))
+              || state.aircraft.find((a) => (a.name || "").toUpperCase().includes(q.toUpperCase()));
+  if (target) {
+    state.tracked = { name: target.name, type: target.type };
+    globe.pointOfView({ lat: target.lat, lng: target.lng, altitude: 1.0 }, 2000);
+    document.getElementById("focus").textContent = target.name.trim().toUpperCase();
+  }
+}
+
+// ── Spectra command bus ──
+async function pollCommands() {
+  try {
+    const r = await fetch(API.command);
+    const d = await r.json();
+    if (d?.command) handleCommand(d.command);
+  } catch {}
+}
+setInterval(pollCommands, 1500);
+
+function handleCommand(cmd) {
+  state.cmdCount++;
+  document.getElementById("cmdCount").textContent = String(state.cmdCount).padStart(3, "0");
+  document.getElementById("lastCmd").textContent = `${cmd.intent} ${cmd.region || cmd.query || ""}`.trim().toUpperCase();
+  document.getElementById("spectraPill").classList.add("warn");
+  setTimeout(() => document.getElementById("spectraPill").classList.remove("warn"), 1200);
+
+  switch (cmd.intent) {
+    case "focus_region":
+      if (cmd.lat != null && cmd.lon != null) {
+        globe.pointOfView({ lat: cmd.lat, lng: cmd.lon, altitude: cmd.zoom != null ? Math.max(0.4, 3 / Math.max(1, cmd.zoom)) : 1.2 }, 1800);
+        document.getElementById("focus").textContent = (cmd.region || `${cmd.lat.toFixed(2)},${cmd.lon.toFixed(2)}`).toUpperCase();
+        if (cmd.region) loadNews(cmd.region);
+      }
+      break;
+    case "track_satellite":
+    case "track_aircraft":
+      if (cmd.query) trackByName(cmd.query);
+      break;
+    case "show_cameras":
+      state.layers.cameras = true;
+      document.querySelector('[data-layer=cameras]').classList.add("on");
+      rerender();
+      break;
+    case "show_news":
+      loadNews(cmd.region || "");
+      state.layers.news = true;
+      document.querySelector('[data-layer=news]').classList.add("on");
+      break;
+    case "toggle_layer":
+      if (cmd.layer && state.layers.hasOwnProperty(cmd.layer)) {
+        state.layers[cmd.layer] = !state.layers[cmd.layer];
+        document.querySelector(`[data-layer=${cmd.layer}]`).classList.toggle("on", state.layers[cmd.layer]);
+        rerender();
+      }
+      break;
+    case "add_camera":
+      if (cmd.url) {
+        fetch(API.cams, { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: cmd.url, label: cmd.label || cmd.region || cmd.url, lat: cmd.lat, lon: cmd.lon })
+        }).then(loadCameras);
+      }
+      break;
+    case "reset":
+      globe.pointOfView({ lat: 20, lng: 0, altitude: 2.4 }, 1500);
+      state.tracked = null;
+      document.getElementById("focus").textContent = "GLOBAL";
+      break;
+  }
+}
+
+// ── Boot sequence ──
+loadSats().then(() => { propagateSats(); setInterval(propagateSats, 2000); });
+loadAircraft(); setInterval(loadAircraft, 30000);
+loadCameras();
+loadNews(); setInterval(() => loadNews(), 60000);
+pollCommands();
+
+// Mark Spectra link as live once we get any command or after 3s
+setTimeout(() => document.getElementById("spectraPill").classList.add("live"), 3000);
+</script>
+</body>
+</html>

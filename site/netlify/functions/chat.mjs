@@ -378,7 +378,9 @@ Common shortcuts:
 \`\`\`command
 {"action": "falcon_eye", "intent": "reset"}
 \`\`\`
-Use Falcon Eye when the user mentions: "falcon eye", "show me <country>", "track planes/satellites over X", "what's happening in <region>", "war alerts", "track the ISS", "open the globe", "satellites above", or asks to add a camera/webcam to the map. Always include lat/lon when you know them. Set "open": true to also open the Falcon Eye page in a new tab when it's not already open.${memoryContext}${wikiContext}${searchContext}`;
+CRITICAL — Use Falcon Eye when the user mentions anything like: "falcon eye", "show me <country/city>", "take me to <place>", "zoom into X", "track planes/satellites over X", "what's happening in <region>", "war alerts", "track the ISS / Hubble / Starlink", "follow that satellite", "open the globe", "satellites above", "earthquakes", "wildfires", "severe weather", or any request to add a camera/webcam to the map.
+
+For Falcon Eye requests you MUST emit a \`\`\`command ... \`\`\` block — do NOT respond with only prose like "Tracking the ISS, sir". The prose reply is fine but the command block is REQUIRED or nothing actually happens on the globe. You do NOT need to know coordinates; the server auto-geocodes region names. Just use the region field with the country/city name (e.g. "region": "Ukraine", "region": "Tokyo"). For satellites/aircraft use the query field (e.g. "query": "ISS", "query": "UAL123"). Set "open": true to open Falcon Eye in a new tab if it isn't already.${memoryContext}${wikiContext}${searchContext}`;
 
   const userMsg = { role: "user", content: `${timeBlock}\n${message}` };
   const messages = [
@@ -474,15 +476,57 @@ Use Falcon Eye when the user mentions: "falcon eye", "show me <country>", "track
           await memoryStore.setJSON("all", memories);
           cmdResults.push(`Forgotten memory #${cmd.id}`);
         } else if (cmd.action === "falcon_eye" && cmd.intent) {
-          // Queue command for Falcon Eye page (cross-device)
+          // Geocode region → lat/lon so the LLM only needs to name the place
+          const FE_HOTSPOTS = {
+            ukraine:[50.45,30.52],russia:[55.75,37.62],israel:[31.78,35.22],
+            gaza:[31.50,34.47],lebanon:[33.89,35.50],iran:[35.69,51.39],
+            syria:[33.51,36.29],yemen:[15.37,44.19],taiwan:[25.03,121.57],
+            china:[39.90,116.40],japan:[35.68,139.69],"north korea":[39.02,125.75],
+            "south korea":[37.57,126.98],india:[28.61,77.21],pakistan:[33.68,73.05],
+            afghanistan:[34.53,69.17],turkey:[39.93,32.85],iraq:[33.31,44.36],
+            "saudi arabia":[24.71,46.68],egypt:[30.04,31.24],libya:[32.89,13.19],
+            sudan:[15.50,32.56],ethiopia:[9.03,38.74],nigeria:[9.07,7.48],
+            "south africa":[-25.75,28.19],kenya:[-1.29,36.82],somalia:[2.05,45.32],
+            morocco:[34.02,-6.83],france:[48.85,2.35],germany:[52.52,13.40],
+            uk:[51.51,-0.13],"united kingdom":[51.51,-0.13],england:[51.51,-0.13],
+            london:[51.51,-0.13],ireland:[53.35,-6.26],spain:[40.42,-3.70],
+            italy:[41.90,12.50],greece:[37.98,23.73],poland:[52.23,21.01],
+            sweden:[59.33,18.07],norway:[59.91,10.75],finland:[60.17,24.94],
+            denmark:[55.68,12.57],netherlands:[52.37,4.90],belgium:[50.85,4.35],
+            switzerland:[46.95,7.45],austria:[48.21,16.37],hungary:[47.50,19.04],
+            romania:[44.43,26.10],bulgaria:[42.70,23.32],serbia:[44.79,20.46],
+            croatia:[45.81,15.98],portugal:[38.72,-9.14],brazil:[-15.78,-47.93],
+            argentina:[-34.61,-58.38],chile:[-33.45,-70.67],mexico:[19.43,-99.13],
+            venezuela:[10.49,-66.88],colombia:[4.71,-74.07],peru:[-12.05,-77.04],
+            canada:[45.42,-75.69],"united states":[38.90,-77.04],usa:[38.90,-77.04],
+            america:[38.90,-77.04],"new york":[40.71,-74.00],washington:[38.90,-77.04],
+            california:[37.77,-122.42],"los angeles":[34.05,-118.24],chicago:[41.88,-87.63],
+            miami:[25.76,-80.19],texas:[30.27,-97.74],australia:[-35.28,149.13],
+            "new zealand":[-41.29,174.78],singapore:[1.35,103.82],thailand:[13.76,100.50],
+            vietnam:[21.03,105.85],philippines:[14.60,120.98],indonesia:[-6.21,106.85],
+            malaysia:[3.14,101.69],"hong kong":[22.32,114.17],dubai:[25.20,55.27],
+            uae:[24.45,54.38],qatar:[25.29,51.53],kuwait:[29.38,47.99],
+            jordan:[31.95,35.93],tokyo:[35.68,139.69],beijing:[39.90,116.40],
+            moscow:[55.75,37.62],paris:[48.85,2.35],berlin:[52.52,13.40],
+            rome:[41.90,12.50],madrid:[40.42,-3.70],istanbul:[41.01,28.98],
+            cairo:[30.04,31.24],kyiv:[50.45,30.52],kiev:[50.45,30.52],
+            tehran:[35.69,51.39],baghdad:[33.31,44.36],riyadh:[24.71,46.68],
+          };
+          let lat = typeof cmd.lat === "number" ? cmd.lat : null;
+          let lon = typeof cmd.lon === "number" ? cmd.lon : null;
+          if ((lat == null || lon == null) && cmd.region) {
+            const key = cmd.region.toLowerCase().trim();
+            const hit = FE_HOTSPOTS[key] || Object.entries(FE_HOTSPOTS).find(([k]) => key.includes(k))?.[1];
+            if (hit) { lat = hit[0]; lon = hit[1]; }
+          }
+
           const feStore = getStore("darvis-falcon-eye");
           const command = {
             id: crypto.randomUUID(),
             intent: cmd.intent,
             region: cmd.region || null,
-            lat: typeof cmd.lat === "number" ? cmd.lat : null,
-            lon: typeof cmd.lon === "number" ? cmd.lon : null,
-            zoom: typeof cmd.zoom === "number" ? cmd.zoom : null,
+            lat, lon,
+            zoom: typeof cmd.zoom === "number" ? cmd.zoom : (cmd.region ? 4 : null),
             query: cmd.query || null,
             layer: cmd.layer || null,
             url: cmd.url || null,

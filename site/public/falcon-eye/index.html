@@ -2028,6 +2028,13 @@ setInterval(pollCommands, 1500);
 pollCommands();
 
 function handleCommand(cmd) {
+  // Client-side fallback geocoding in case the server didn't resolve region→coords
+  if (cmd.intent === "focus_region" && (cmd.lat == null || cmd.lon == null) && cmd.region) {
+    const key = cmd.region.toLowerCase().trim();
+    const hit = REGIONS[key] || Object.entries(REGIONS).find(([k]) => key.includes(k))?.[1];
+    if (hit) { cmd.lon = hit[0]; cmd.lat = hit[1]; }
+  }
+
   state.cmdCount++;
   document.getElementById("lastCmd").textContent = `${cmd.intent} ${cmd.region || cmd.query || ""}`.trim().toUpperCase();
   document.getElementById("spectraPill").classList.add("warn");
@@ -2039,6 +2046,8 @@ function handleCommand(cmd) {
       if (cmd.lat != null && cmd.lon != null) {
         map.flyTo({ center: [cmd.lon, cmd.lat], zoom: cmd.zoom != null ? Math.min(15, cmd.zoom + 2) : 5, duration: 2000 });
         if (cmd.region) loadNews(cmd.region);
+      } else {
+        log("spectra", `focus_region missed — no coords for "${cmd.region}"`, "warn");
       }
       break;
     case "track_satellite":

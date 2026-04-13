@@ -1968,6 +1968,22 @@ function fe_post(intent, extra = {}) {
 function fe_open() {
     if (falconEyeWin && !falconEyeWin.closed) { try { falconEyeWin.focus(); return; } catch {} }
     falconEyeWin = window.open(FALCON_EYE_URL, 'falcon-eye');
+    // If the browser blocked the popup (async context after a chat response),
+    // show a prominent toast with a user-gesture link so they can click it.
+    if (!falconEyeWin) {
+        const existing = document.getElementById('feOpenToast');
+        if (existing) existing.remove();
+        const toast = document.createElement('div');
+        toast.id = 'feOpenToast';
+        toast.style.cssText = 'position:fixed;top:70px;left:50%;transform:translateX(-50%);background:rgba(14,18,26,0.96);border:1px solid rgba(255,181,71,0.55);border-radius:12px;padding:12px 18px;font-family:var(--mono);font-size:0.72rem;color:#ffb547;z-index:400;backdrop-filter:blur(20px);box-shadow:0 10px 40px rgba(0,0,0,0.6);cursor:pointer;letter-spacing:0.12em;text-transform:uppercase';
+        toast.textContent = '🦅 Tap to open Falcon Eye';
+        toast.onclick = () => {
+            window.open(FALCON_EYE_URL, 'falcon-eye');
+            toast.remove();
+        };
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 10000);
+    }
 }
 
 function handleFalconEyeAction(act) {

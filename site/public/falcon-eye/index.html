@@ -1330,11 +1330,18 @@ function refreshSource(id, items, propsFn) {
 }
 
 // ── Master rerender (toggles layer visibility) ────────────────────
+// Only flip visibility when it actually changes — otherwise repeated
+// setLayoutProperty calls (every 200ms from aircraft extrapolation) cause
+// raster layers like the radar to flicker.
+const _lastVis = {};
 function rerender() {
   function set(layerIds, on) {
     for (const id of layerIds) {
+      if (_lastVis[id] === on) continue;
       const lyr = map.getLayer(id);
-      if (lyr) map.setLayoutProperty(id, "visibility", on ? "visible" : "none");
+      if (!lyr) continue;
+      map.setLayoutProperty(id, "visibility", on ? "visible" : "none");
+      _lastVis[id] = on;
     }
   }
   set(["satellites-l"], state.layers.satellites);

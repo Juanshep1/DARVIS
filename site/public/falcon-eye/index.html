@@ -235,6 +235,23 @@
     font-size: 8px; letter-spacing: 0.16em; color: var(--steel-dim);
     text-transform: uppercase; margin-top: 3px;
   }
+  .src-chips {
+    display: flex; flex-wrap: wrap; gap: 5px;
+    margin-bottom: 4px;
+  }
+  .src-chips .chip {
+    background: rgba(0,0,0,0.3); border: 1px solid var(--panel-edge);
+    color: var(--steel-dim); font-family: var(--mono);
+    font-size: 8px; letter-spacing: 0.18em; text-transform: uppercase;
+    padding: 5px 9px; cursor: pointer;
+    transition: all 0.12s;
+  }
+  .src-chips .chip:hover { color: var(--cyan); border-color: var(--cyan); }
+  .src-chips .chip.on {
+    color: var(--green); border-color: var(--green);
+    background: rgba(57,255,143,0.06);
+    box-shadow: 0 0 8px rgba(57,255,143,0.15);
+  }
 
   /* Cursor coordinate readout (overlaid on map) */
   .cursor-readout {
@@ -607,6 +624,15 @@
       <div class="layer-meta">Solar Terminator</div>
     </div>
 
+    <div class="section-title">Stream Sources</div>
+    <div class="src-chips" id="srcChips">
+      <button class="chip on" data-src="windy" title="Windy · 73k timelapse cams">Windy</button>
+      <button class="chip on" data-src="earthcam" title="EarthCam live embeds">EarthCam</button>
+      <button class="chip on" data-src="dot" title="Caltrans DOT · 700+ live JPG cams">DOT Traffic</button>
+      <button class="chip on" data-src="nature" title="NASA ISS, Explore.org, NPS">Nature / Space</button>
+      <button class="chip on" data-src="user" title="Your custom cameras">Custom</button>
+    </div>
+
     <div class="section-title">Tracked</div>
     <div class="layer" data-layer="orbit">
       <div class="layer-row"><span class="layer-name"><span class="layer-swatch" style="background:#5fd9ff;color:#5fd9ff"></span>Selected Orbit</span><span class="layer-count" id="cntOrb">—</span></div>
@@ -718,10 +744,18 @@ const API = {
   tle:     "/api/falcon-eye/tle",
   cams:    "/api/falcon-eye/cameras",
   webcams: "/api/falcon-eye/webcams",
+  dotcams: "/api/falcon-eye/dot-cams",
+  naturecams: "/api/falcon-eye/nature-cams",
   news:    "/api/falcon-eye/news",
   fires:   "/api/falcon-eye/fires",
   quakes:  "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson",
 };
+
+// Default source toggles — loaded from localStorage on boot
+const defaultSources = { windy: true, earthcam: true, dot: true, nature: true, user: true };
+let savedSources;
+try { savedSources = JSON.parse(localStorage.getItem("fe-sources") || "null"); } catch {}
+const SOURCES = { ...defaultSources, ...(savedSources || {}) };
 
 const state = {
   layers: { satellites: true, aircraft: true, cameras: true, news: true,
@@ -1107,23 +1141,61 @@ function extrapolateAircraft() {
 }
 
 async function loadCameras(near = null) {
-  let user = [], curated = [];
-  try { user = await fetch(API.cams).then((r) => r.json()); if (!Array.isArray(user)) user = []; } catch {}
-  try {
+  const jobs = [];
+  // Each job tags its cams with a `source` so we can filter via SOURCES toggles
+  if (SOURCES.user) jobs.push(fetch(API.cams).then((r) => r.json()).then(
+    (arr) => (Array.isArray(arr) ? arr : []).map((c) => ({ ...c, source: "user" }))
+  ).catch(() => []));
+
+  if (SOURCES.windy || SOURCES.earthcam) {
     const q = near ? `?near=${near.lat.toFixed(3)},${near.lon.toFixed(3)}` : "";
-    const w = await fetch(API.webcams + q).then((r) => r.json());
-    curated = w.webcams || [];
-  } catch {}
-  const seen = new Map();
-  for (const c of curated) seen.set(c.id, c);
-  for (const c of user) seen.set(c.id, c);
-  state.cameras = Array.from(seen.values()).filter((c) => c.lat != null && (c.lon != null || c.lng != null));
+    jobs.push(fetch(API.webcams + q).then((r) => r.json()).then((w) => {
+      const cams = (w.webcams || []).map((c) => ({
+        ...c,
+        source: c.id?.startsWith("ec-") ? "earthcam" : "windy",
+      }));
+      return cams.filter((c) => SOURCES[c.source]);
+    }).catch(() => []));
+  }
+
+  if (SOURCES.dot) jobs.push(fetch(API.dotcams).then((r) => r.json()).then(
+    (d) => (d.cams || []).map((c) => ({ ...c, source: "dot" }))
+  ).catch(() => []));
+
+  if (SOURCES.nature) jobs.push(fetch(API.naturecams).then((r) => r.json()).then(
+    (d) => (d.cams || []).map((c) => ({ ...c, source: "nature" }))
+  ).catch(() => []));
+
+  const results = await Promise.allSettled(jobs);
+  const merged = new Map();
+  for (const r of results) if (r.status === "fulfilled") for (const c of r.value) merged.set(c.id, c);
+  state.cameras = Array.from(merged.values()).filter((c) => c.lat != null && (c.lon != null || c.lng != null));
+
   refreshSource("cameras", state.cameras.map((c) => ({ ...c, lng: c.lng ?? c.lon })),
-    (c) => ({ id: c.id, label: c.label, url: c.url, kind: c.kind || "iframe", thumb: c.thumb || "" }));
+    (c) => ({ id: c.id, label: c.label, url: c.url, kind: c.kind || "iframe", source: c.source || "", thumb: c.thumb || "" }));
   renderCamList();
   setStats();
-  log("cams", `${state.cameras.length} feeds${near ? " (nearby)" : ""}`);
+  const breakdown = {};
+  for (const c of state.cameras) breakdown[c.source] = (breakdown[c.source] || 0) + 1;
+  const parts = Object.entries(breakdown).map(([k, v]) => `${k}:${v}`).join(" ");
+  log("cams", `${state.cameras.length} feeds ${parts}${near ? " [local]" : ""}`);
 }
+
+// Source toggle chips
+function wireSourceChips() {
+  for (const btn of document.querySelectorAll(".src-chips .chip")) {
+    const k = btn.dataset.src;
+    btn.classList.toggle("on", SOURCES[k]);
+    btn.addEventListener("click", () => {
+      SOURCES[k] = !SOURCES[k];
+      btn.classList.toggle("on", SOURCES[k]);
+      try { localStorage.setItem("fe-sources", JSON.stringify(SOURCES)); } catch {}
+      log("source", `${k} ${SOURCES[k] ? "enabled" : "disabled"}`);
+      loadCameras();
+    });
+  }
+}
+wireSourceChips();
 
 // Reload cams near the map center when the user moves significantly
 let lastCamCenter = null;
@@ -1493,6 +1565,7 @@ let currentHls = null;
 document.getElementById("pipClose").onclick = () => {
   pip.classList.remove("show");
   if (currentHls) { try { currentHls.destroy(); } catch {} currentHls = null; }
+  if (pipBody._cleanup) { try { pipBody._cleanup(); } catch {} pipBody._cleanup = null; }
   pipBody.innerHTML = "No feed selected";
 };
 document.getElementById("pipMin").onclick = () => pip.classList.toggle("min");
@@ -1560,6 +1633,15 @@ function openViewer(cam) {
     v.src = url;
     v.controls = true; v.autoplay = true; v.muted = true; v.loop = true; v.playsInline = true;
     pipBody.appendChild(v);
+  } else if (kind === "jpg") {
+    // Auto-refreshing JPG snapshot (DOT traffic cams)
+    const img = document.createElement("img");
+    img.style.cssText = "width:100%;height:100%;object-fit:cover;";
+    const load = () => { img.src = `${url}${url.includes("?") ? "&" : "?"}_t=${Date.now()}`; };
+    load();
+    pipBody.appendChild(img);
+    const timer = setInterval(load, 4000);
+    pipBody._cleanup = () => clearInterval(timer);
   } else if (kind === "mjpeg") {
     const img = document.createElement("img");
     img.src = url;

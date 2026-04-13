@@ -1,0 +1,65 @@
+import { getStore } from "@netlify/blobs";
+
+const CACHE_MS = 10 * 60 * 1000;
+
+// Free, no-key US DOT traffic camera sources. All return JPG snapshots that
+// refresh every 5-15 seconds — not true HLS, but "live now" in practical
+// terms. Each district has ~700 cams.
+const CALTRANS_DISTRICTS = ["d3", "d4", "d5", "d6", "d7", "d8", "d10", "d11", "d12"];
+
+async function fetchCaltrans(district) {
+  try {
+    const r = await fetch(`https://cwwp2.dot.ca.gov/data/${district}/cctv/cctvStatus${district.toUpperCase()}.json`, {
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!r.ok) return [];
+    const data = await r.json();
+    return (data.data || []).map((item) => {
+      const c = item.cctv;
+      if (!c) return null;
+      const loc = c.location || {};
+      const lat = parseFloat(loc.latitude);
+      const lon = parseFloat(loc.longitude);
+      if (isNaN(lat) || isNaN(lon) || (lat === 0 && lon === 0)) return null;
+      const img = c.imageData?.static?.currentImageURL;
+      if (!img) return null;
+      return {
+        id: `caltrans-${district}-${c.index || loc.locationName}`,
+        label: `${loc.locationName || "Caltrans CCTV"} (${district.toUpperCase()})`,
+        lat, lon,
+        kind: "jpg",
+        url: img,
+        source: "caltrans",
+      };
+    }).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+export default async (req) => {
+  if (req.method !== "GET") return new Response("Method not allowed", { status: 405 });
+
+  const store = getStore("darvis-falcon-eye");
+  try {
+    const cached = await store.get("dot-cams", { type: "json" });
+    if (cached && Date.now() - cached.ts < CACHE_MS) {
+      return Response.json(cached.data, { headers: { "X-Cache": "HIT" } });
+    }
+  } catch {}
+
+  const results = await Promise.allSettled(CALTRANS_DISTRICTS.map(fetchCaltrans));
+  const cams = results.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
+
+  // Thin to every Nth cam per district for initial load performance.
+  // Full list is available via ?all=1
+  const url = new URL(req.url);
+  const all = url.searchParams.get("all") === "1";
+  const out = all ? cams : cams.filter((_, i) => i % 6 === 0);
+
+  const payload = { cams: out, total: cams.length, shown: out.length, source: "caltrans", ts: Date.now() };
+  try { await store.setJSON("dot-cams", { data: payload, ts: Date.now() }); } catch {}
+  return Response.json(payload);
+};
+
+export const config = { path: "/api/falcon-eye/dot-cams" };

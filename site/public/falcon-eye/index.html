@@ -982,7 +982,9 @@ const API = {
 };
 
 // Default source toggles — loaded from localStorage on boot
-const defaultSources = { windy: true, earthcam: true, dot: true, usadot: true, nature: true, user: true };
+// usadot (OpenTrafficCamMap static JSON) is disabled by default — most URLs
+// in that dataset are stale. Caltrans (dot) is the reliable live-HLS source.
+const defaultSources = { windy: true, earthcam: true, dot: true, usadot: false, nature: true, user: true };
 let savedSources;
 try { savedSources = JSON.parse(localStorage.getItem("fe-sources") || "null"); } catch {}
 const SOURCES = { ...defaultSources, ...(savedSources || {}) };
@@ -1660,7 +1662,8 @@ async function loadCameras(near = null) {
 
   refreshSource("cameras", state.cameras.map((c) => ({ ...c, lng: c.lng ?? c.lon })),
     (c) => ({ id: c.id, label: c.label, url: c.url, kind: c.kind || "iframe",
-              source: c.source || "", thumb: c.thumb || "", timelapseUrl: c.timelapseUrl || "" }));
+              source: c.source || "", thumb: c.thumb || "",
+              timelapseUrl: c.timelapseUrl || "", snapshotUrl: c.snapshotUrl || "" }));
   renderCamList();
   setStats();
   const breakdown = {};
@@ -2397,25 +2400,36 @@ function renderPip() {
     v.controls = true; v.autoplay = true; v.muted = true; v.playsInline = true;
     pipBody.appendChild(v);
 
-    // Prefer Safari native <video> HLS playback — it bypasses CORS entirely
-    // because it goes through the media loading system, not fetch/XHR.
     const canNative = v.canPlayType("application/vnd.apple.mpegurl") !== "";
+    const snapshot = cam.snapshotUrl;
+    let failed = false;
+    const onFail = (reason) => {
+      if (failed) return;
+      failed = true;
+      if (currentHls) { try { currentHls.destroy(); } catch {} currentHls = null; }
+      // If we have a snapshot fallback, switch the PIP to that instead
+      if (snapshot) {
+        currentCam = { ...cam, kind: "jpg", url: snapshot };
+        currentMode = "snapshot";
+        renderPip();
+      } else {
+        showCameraOfflineError(cam.url, reason);
+      }
+    };
 
     if (canNative) {
+      // Safari native HLS
+      v.addEventListener("error", () => onFail("native video error"));
       v.src = url;
     } else if (window.Hls && Hls.isSupported()) {
-      // Chrome / Firefox — most DOT HLS streams have no CORS headers, so
-      // route through our same-origin proxy which rewrites segments.
+      // Chrome / Firefox — route through the same-origin HLS proxy that
+      // rewrites segments and adds CORS headers.
       const proxied = `/api/falcon-eye/hls-proxy?url=${encodeURIComponent(url)}`;
-      currentHls = new Hls({ enableWorker: true, lowLatencyMode: false });
+      currentHls = new Hls({ enableWorker: true, lowLatencyMode: false, fragLoadingMaxRetry: 2, manifestLoadingMaxRetry: 2 });
       currentHls.loadSource(proxied);
       currentHls.attachMedia(v);
       currentHls.on(Hls.Events.ERROR, (_ev, data) => {
-        if (data.fatal) {
-          try { currentHls.destroy(); } catch {}
-          currentHls = null;
-          showIframeError(url);
-        }
+        if (data.fatal) onFail(`${data.type}/${data.details}`);
       });
     } else {
       v.src = url;
@@ -2464,6 +2478,15 @@ function showIframeError(url) {
       FEED BLOCKED EMBED<br/>
       <span style="color:var(--steel-dim)">Host denied iframe via X-Frame-Options</span><br/><br/>
       <a href="${url}" target="_blank" rel="noopener" style="color:var(--amber);text-decoration:none;border:1px solid var(--amber);padding:6px 12px">Open in New Tab ↗</a>
+    </div>`;
+}
+function showCameraOfflineError(url, reason = "") {
+  pipBody.innerHTML = `
+    <div style="padding:22px;text-align:center;font-size:9px;letter-spacing:0.18em;color:var(--steel);line-height:1.7">
+      <div style="color:var(--critical);font-weight:500">◉ STREAM OFFLINE</div>
+      <div style="color:var(--steel-dim);margin-top:6px">Camera did not respond${reason ? " — " + escape(reason) : ""}</div>
+      <br/>
+      <a href="${url}" target="_blank" rel="noopener" style="color:var(--amber);text-decoration:none;border:1px solid var(--amber);padding:6px 12px">Try Direct ↗</a>
     </div>`;
 }
 

@@ -54,11 +54,11 @@ export default async (req) => {
   const results = await Promise.allSettled(CALTRANS_DISTRICTS.map(fetchCaltrans));
   const cams = results.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
 
-  // Thin to every Nth cam per district for initial load performance.
-  // Full list is available via ?all=1
+  // Show ALL Caltrans cams by default now — they are mostly live and the
+  // user needs a good chance of clicking one that works. ?thin=1 reduces.
   const url = new URL(req.url);
-  const all = url.searchParams.get("all") === "1";
-  const out = all ? cams : cams.filter((_, i) => i % 6 === 0);
+  const thin = url.searchParams.get("thin") === "1";
+  const out = thin ? cams.filter((_, i) => i % 4 === 0) : cams;
 
   const payload = { cams: out, total: cams.length, shown: out.length, source: "caltrans", ts: Date.now() };
   try { await store.setJSON("dot-cams", { data: payload, ts: Date.now() }); } catch {}

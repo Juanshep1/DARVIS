@@ -1798,22 +1798,48 @@ document.getElementById("pipClose").onclick = () => {
 document.getElementById("pipMin").onclick = () => pip.classList.toggle("min");
 
 let dragging = false, dragOffX = 0, dragOffY = 0;
+// Transparent full-screen shield prevents the map canvas and camera iframe
+// from swallowing pointer events during a drag (classic drag-over-iframe fix).
+let dragShield = null;
+function startDragShield() {
+  if (dragShield) return;
+  dragShield = document.createElement("div");
+  dragShield.style.cssText = "position:fixed;inset:0;z-index:9998;cursor:move;background:transparent;";
+  document.body.appendChild(dragShield);
+}
+function endDragShield() {
+  dragging = false;
+  if (dragShield) { dragShield.remove(); dragShield = null; }
+}
+
 pipBar.addEventListener("mousedown", (e) => {
   if (e.target.closest("button")) return;
   dragging = true;
+  startDragShield();
   const r = pip.getBoundingClientRect();
   dragOffX = e.clientX - r.left; dragOffY = e.clientY - r.top;
   pip.style.right = "auto"; pip.style.bottom = "auto";
+  e.preventDefault();
 });
+function clampPip(left, top) {
+  const w = pip.offsetWidth, h = pip.offsetHeight;
+  const minTop = 58, minLeft = 8;
+  const maxLeft = Math.max(minLeft, window.innerWidth - w - 8);
+  const maxTop  = Math.max(minTop,  window.innerHeight - 40);
+  return [Math.min(Math.max(left, minLeft), maxLeft), Math.min(Math.max(top, minTop), maxTop)];
+}
 window.addEventListener("mousemove", (e) => {
   if (!dragging) return;
-  pip.style.left = (e.clientX - dragOffX) + "px";
-  pip.style.top  = (e.clientY - dragOffY) + "px";
+  const [l, t] = clampPip(e.clientX - dragOffX, e.clientY - dragOffY);
+  pip.style.left = l + "px";
+  pip.style.top  = t + "px";
 });
-window.addEventListener("mouseup", () => { dragging = false; });
+window.addEventListener("mouseup", endDragShield);
+
 pipBar.addEventListener("touchstart", (e) => {
   if (e.target.closest("button")) return;
   const t = e.touches[0]; dragging = true;
+  startDragShield();
   const r = pip.getBoundingClientRect();
   dragOffX = t.clientX - r.left; dragOffY = t.clientY - r.top;
   pip.style.right = "auto"; pip.style.bottom = "auto";
@@ -1821,10 +1847,21 @@ pipBar.addEventListener("touchstart", (e) => {
 window.addEventListener("touchmove", (e) => {
   if (!dragging) return;
   const t = e.touches[0];
-  pip.style.left = (t.clientX - dragOffX) + "px";
-  pip.style.top  = (t.clientY - dragOffY) + "px";
+  const [l, tp] = clampPip(t.clientX - dragOffX, t.clientY - dragOffY);
+  pip.style.left = l + "px";
+  pip.style.top  = tp + "px";
 }, { passive: true });
-window.addEventListener("touchend", () => { dragging = false; });
+window.addEventListener("touchend", endDragShield);
+window.addEventListener("touchcancel", endDragShield);
+window.addEventListener("resize", () => {
+  if (!pip.classList.contains("show")) return;
+  const r = pip.getBoundingClientRect();
+  if (r.left < 0 || r.top < 0 || r.right > window.innerWidth || r.top > window.innerHeight - 40) {
+    const [l, t] = clampPip(r.left, r.top);
+    pip.style.left = l + "px"; pip.style.top = t + "px";
+    pip.style.right = "auto"; pip.style.bottom = "auto";
+  }
+});
 
 function openViewer(cam) {
   if (!cam || !cam.url) return;

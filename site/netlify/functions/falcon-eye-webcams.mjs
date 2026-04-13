@@ -2,10 +2,11 @@ import { getStore } from "@netlify/blobs";
 
 const CACHE_MS = 20 * 60 * 1000;
 
-// Curated public webcams — works without any API key. Mix of Skyline Webcams,
-// EarthCam, and public DOT / tourism iframes. Supplemented by Windy API when
-// WINDY_API_KEY is set.
-const FALLBACK_WEBCAMS = [
+// Curated EarthCam embeds — these specifically allow iframe embedding via
+// the /cams/embed/ URL pattern. Skyline Webcams pages block X-Frame-Options
+// so we don't ship them. Supplemented by Windy API timelapse players when
+// WINDY_API_KEY is set (which returns 200+ real, working embed URLs).
+const _UNUSED_FALLBACK_WEBCAMS = [
   // North America
   { id: "fb-times-square", label: "Times Square, New York", lat: 40.7580, lon: -73.9855, kind: "iframe", url: "https://www.earthcam.com/cams/embed/?cam=tsrobo1" },
   { id: "fb-vegas", label: "Las Vegas Strip", lat: 36.1147, lon: -115.1728, kind: "iframe", url: "https://www.earthcam.com/cams/embed/?cam=lasvegas_strip" },
@@ -77,6 +78,22 @@ const FALLBACK_WEBCAMS = [
   { id: "fb-santiago", label: "Santiago, Chile", lat: -33.4489, lon: -70.6693, kind: "iframe", url: "https://www.skylinewebcams.com/en/webcam/chile/region-metropolitana/santiago/santiago.html" },
 ];
 
+// Known-embeddable EarthCam feeds (/cams/embed/ pattern allows iframe embedding).
+const FALLBACK_WEBCAMS = [
+  { id: "ec-times-square",   label: "Times Square, New York",        lat: 40.7580, lon: -73.9855, kind: "iframe", url: "https://www.earthcam.com/cams/embed/?cam=tsrobo1" },
+  { id: "ec-vegas-strip",    label: "Las Vegas Strip",               lat: 36.1147, lon: -115.1728,kind: "iframe", url: "https://www.earthcam.com/cams/embed/?cam=lasvegas_strip" },
+  { id: "ec-niagara",        label: "Niagara Falls",                 lat: 43.0962, lon: -79.0377, kind: "iframe", url: "https://www.earthcam.com/cams/embed/?cam=niagarafalls_str" },
+  { id: "ec-bourbon",        label: "Bourbon Street, New Orleans",   lat: 29.9584, lon: -90.0653, kind: "iframe", url: "https://www.earthcam.com/cams/embed/?cam=catsmeow" },
+  { id: "ec-pier39",         label: "Pier 39, San Francisco",        lat: 37.8087, lon: -122.4098,kind: "iframe", url: "https://www.earthcam.com/cams/embed/?cam=pier39" },
+  { id: "ec-western-wall",   label: "Jerusalem Western Wall",        lat: 31.7767, lon: 35.2345,  kind: "iframe", url: "https://www.earthcam.com/cams/embed/?cam=westernwall" },
+  { id: "ec-abbey-road",     label: "Abbey Road, London",            lat: 51.5320, lon: -0.1779,  kind: "iframe", url: "https://www.earthcam.com/cams/embed/?cam=abbeyroad" },
+  { id: "ec-dublin",         label: "Temple Bar, Dublin",            lat: 53.3455, lon: -6.2644,  kind: "iframe", url: "https://www.earthcam.com/cams/embed/?cam=templebarpub" },
+  { id: "ec-nola-frenchmen", label: "Frenchmen St, New Orleans",     lat: 29.9635, lon: -90.0572, kind: "iframe", url: "https://www.earthcam.com/cams/embed/?cam=frenchmenst" },
+  { id: "ec-key-west-sloppy",label: "Sloppy Joes, Key West",         lat: 24.5551, lon: -81.8014, kind: "iframe", url: "https://www.earthcam.com/cams/embed/?cam=sloppyjoes" },
+  { id: "ec-beach-fl",       label: "Fort Lauderdale Beach",         lat: 26.1224, lon: -80.1373, kind: "iframe", url: "https://www.earthcam.com/cams/embed/?cam=ftlauderdale" },
+  { id: "ec-world-trade",    label: "World Trade Center, NYC",       lat: 40.7127, lon: -74.0134, kind: "iframe", url: "https://www.earthcam.com/cams/embed/?cam=worldtradecenter" },
+];
+
 export default async (req) => {
   if (req.method !== "GET") return new Response("Method not allowed", { status: 405 });
 
@@ -122,18 +139,22 @@ export default async (req) => {
     }
 
     const fromWindy = collected.map((w) => {
-      const live = w.player?.live || w.player?.day || w.player?.month || w.player?.year;
-      const isHls = typeof live === "string" && /\.m3u8/i.test(live);
+      // Windy v3 returns timelapse player URLs keyed by duration.
+      // Prefer the shortest window ('day' = last 24 h) since that is closest
+      // to real-time. All of these are iframe-embeddable by design.
+      const player = w.player || {};
+      const embed = player.day || player.month || player.year || player.lifetime;
+      if (!embed) return null;
       return {
         id: `windy-${w.webcamId}`,
         label: w.title || "Webcam",
         lat: w.location?.latitude,
         lon: w.location?.longitude,
-        kind: isHls ? "hls" : "iframe",
-        url: live || `https://www.windy.com/webcams/${w.webcamId}`,
+        kind: "iframe",
+        url: embed,
         thumb: w.images?.current?.preview || null,
       };
-    }).filter((w) => w.lat != null && w.lon != null);
+    }).filter((w) => w && w.lat != null && w.lon != null);
 
     const merged = [...fromWindy, ...FALLBACK_WEBCAMS];
     const out = { webcams: merged, source: "windy", count: merged.length, ts: Date.now() };

@@ -1529,11 +1529,23 @@ window.addEventListener("touchend", () => { dragging = false; });
 function openViewer(cam) {
   if (!cam || !cam.url) return;
   pip.classList.add("show"); pip.classList.remove("min");
-  pipTitle.textContent = `⦿ ${(cam.label || "Camera Feed").toUpperCase()}`;
+  pipTitle.innerHTML = "";
+  const titleSpan = document.createElement("span");
+  titleSpan.textContent = `⦿ ${(cam.label || "Camera Feed").toUpperCase()}`;
+  pipTitle.appendChild(titleSpan);
+  // "Open in new tab" fallback link (for sites that block iframe embedding)
+  const extLink = document.createElement("a");
+  extLink.href = cam.url; extLink.target = "_blank"; extLink.rel = "noopener";
+  extLink.textContent = " ↗";
+  extLink.style.cssText = "color:var(--amber);text-decoration:none;margin-left:8px;";
+  extLink.title = "Open in new tab";
+  pipTitle.appendChild(extLink);
+
   if (currentHls) { try { currentHls.destroy(); } catch {} currentHls = null; }
   pipBody.innerHTML = "";
   const url = cam.url;
-  const kind = cam.kind || (/\.m3u8/i.test(url) ? "hls" : /\.(jpg|mjpg|jpeg)/i.test(url) ? "mjpeg" : "iframe");
+  const kind = cam.kind || (/\.m3u8/i.test(url) ? "hls" : /\.(mp4|webm)/i.test(url) ? "mp4" : /\.(jpg|mjpg|jpeg)/i.test(url) ? "mjpeg" : "iframe");
+
   if (kind === "hls") {
     const v = document.createElement("video");
     v.controls = true; v.autoplay = true; v.muted = true; v.playsInline = true;
@@ -1543,16 +1555,42 @@ function openViewer(cam) {
       currentHls.attachMedia(v);
     } else { v.src = url; }
     pipBody.appendChild(v);
+  } else if (kind === "mp4") {
+    const v = document.createElement("video");
+    v.src = url;
+    v.controls = true; v.autoplay = true; v.muted = true; v.loop = true; v.playsInline = true;
+    pipBody.appendChild(v);
   } else if (kind === "mjpeg") {
     const img = document.createElement("img");
     img.src = url;
     pipBody.appendChild(img);
   } else {
     const f = document.createElement("iframe");
-    f.src = url; f.allow = "autoplay; fullscreen";
-    f.referrerPolicy = "no-referrer";
+    f.src = url;
+    f.allow = "autoplay; fullscreen; picture-in-picture";
+    f.allowFullscreen = true;
+    f.referrerPolicy = "no-referrer-when-downgrade";
     pipBody.appendChild(f);
+    // If blocked by X-Frame-Options, show a fallback message after 2s
+    setTimeout(() => {
+      try {
+        if (!f.contentDocument && !f.contentWindow) {
+          showIframeError(url);
+        }
+      } catch {
+        // Cross-origin — can't introspect, but that usually means it loaded fine.
+      }
+    }, 2500);
   }
+}
+
+function showIframeError(url) {
+  pipBody.innerHTML = `
+    <div style="padding:22px;text-align:center;font-size:9px;letter-spacing:0.18em;color:var(--steel);line-height:1.7">
+      FEED BLOCKED EMBED<br/>
+      <span style="color:var(--steel-dim)">Host denied iframe via X-Frame-Options</span><br/><br/>
+      <a href="${url}" target="_blank" rel="noopener" style="color:var(--amber);text-decoration:none;border:1px solid var(--amber);padding:6px 12px">Open in New Tab ↗</a>
+    </div>`;
 }
 
 // ── Add-camera modal ──────────────────────────────────────────────

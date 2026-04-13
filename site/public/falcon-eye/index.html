@@ -8,8 +8,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Unica+One&family=Barlow+Condensed:wght@300;500;700&display=swap" rel="stylesheet">
-<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
-<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<link href="https://unpkg.com/maplibre-gl@5.6.1/dist/maplibre-gl.css" rel="stylesheet">
+<script src="https://unpkg.com/maplibre-gl@5.6.1/dist/maplibre-gl.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/satellite.js@5.0.0/dist/satellite.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js"></script>
 <style>
@@ -749,19 +749,16 @@ const BASEMAPS = {
     version: 8,
     sources: { esri: { type: "raster", tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"], tileSize: 256, maxzoom: 19, attribution: "© Esri" } },
     layers: [{ id: "esri", type: "raster", source: "esri" }],
-    glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
   },
   dark: {
     version: 8,
     sources: { carto: { type: "raster", tiles: ["https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png", "https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png", "https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png"], tileSize: 256, maxzoom: 19, attribution: "© CARTO" } },
     layers: [{ id: "carto", type: "raster", source: "carto" }],
-    glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
   },
   topo: {
     version: 8,
     sources: { topo: { type: "raster", tiles: ["https://a.tile.opentopomap.org/{z}/{x}/{y}.png", "https://b.tile.opentopomap.org/{z}/{x}/{y}.png", "https://c.tile.opentopomap.org/{z}/{x}/{y}.png"], tileSize: 256, maxzoom: 17, attribution: "© OpenTopoMap" } },
     layers: [{ id: "topo", type: "raster", source: "topo" }],
-    glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
   },
 };
 
@@ -777,57 +774,59 @@ const map = new maplibregl.Map({
   attributionControl: false,
   fadeDuration: 0,
 });
-try { map.setProjection({ type: "globe" }); } catch {}
+map.on("error", (e) => { console.error("maplibre error:", e && e.error); });
 map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "bottom-right");
 
 const EMPTY = { type: "FeatureCollection", features: [] };
 const SOURCE_IDS = ["satellites","aircraft","cameras","earthquakes","fires","news","orbit","trail","terminator"];
 
-map.on("load", () => {
-  for (const id of SOURCE_IDS) map.addSource(id, { type: "geojson", data: EMPTY });
+function installLayers() {
+  for (const id of SOURCE_IDS) {
+    if (!map.getSource(id)) map.addSource(id, { type: "geojson", data: EMPTY });
+  }
 
   // Path layers (drawn first so points are on top)
-  map.addLayer({ id: "terminator-l", type: "line", source: "terminator",
+  if (!map.getLayer("terminator-l")) map.addLayer({ id: "terminator-l", type: "line", source: "terminator",
     paint: { "line-color": "#ffd23d", "line-width": 1, "line-opacity": 0.5, "line-dasharray": [2, 2] } });
-  map.addLayer({ id: "orbit-l", type: "line", source: "orbit",
+  if (!map.getLayer("orbit-l")) map.addLayer({ id: "orbit-l", type: "line", source: "orbit",
     paint: { "line-color": "#5fd9ff", "line-width": 1.6, "line-opacity": 0.85, "line-dasharray": [2, 1] } });
-  map.addLayer({ id: "trail-l", type: "line", source: "trail",
+  if (!map.getLayer("trail-l")) map.addLayer({ id: "trail-l", type: "line", source: "trail",
     paint: { "line-color": "#ffb547", "line-width": 1.6, "line-opacity": 0.9 } });
 
-  // Earthquake rings (background)
-  map.addLayer({ id: "eq-glow-l", type: "circle", source: "earthquakes", paint: {
-    "circle-radius": ["interpolate", ["linear"], ["get", "mag"], 0, 4, 8, 28],
+  // Earthquake rings (background) — coalesce null mag to 0 to avoid interpolate crash
+  if (!map.getLayer("eq-glow-l")) map.addLayer({ id: "eq-glow-l", type: "circle", source: "earthquakes", paint: {
+    "circle-radius": ["interpolate", ["linear"], ["coalesce", ["to-number", ["get", "mag"]], 0], 0, 4, 8, 28],
     "circle-color": "#ff5b8a", "circle-opacity": 0.18,
     "circle-blur": 0.6,
   }});
-  map.addLayer({ id: "earthquakes-l", type: "circle", source: "earthquakes", paint: {
-    "circle-radius": ["interpolate", ["linear"], ["get", "mag"], 0, 2, 8, 14],
+  if (!map.getLayer("earthquakes-l")) map.addLayer({ id: "earthquakes-l", type: "circle", source: "earthquakes", paint: {
+    "circle-radius": ["interpolate", ["linear"], ["coalesce", ["to-number", ["get", "mag"]], 0], 0, 2, 8, 14],
     "circle-color": "#ff5b8a", "circle-opacity": 0.85,
     "circle-stroke-color": "#ff8aa6", "circle-stroke-width": 0.8,
   }});
 
-  // Fires
-  map.addLayer({ id: "fires-l", type: "circle", source: "fires", paint: {
-    "circle-radius": ["interpolate", ["linear"], ["get", "frp"], 0, 2.5, 50, 6],
+  // Fires — coalesce null frp
+  if (!map.getLayer("fires-l")) map.addLayer({ id: "fires-l", type: "circle", source: "fires", paint: {
+    "circle-radius": ["interpolate", ["linear"], ["coalesce", ["to-number", ["get", "frp"]], 0], 0, 2.5, 50, 6],
     "circle-color": "#ff6a1a", "circle-opacity": 0.8, "circle-blur": 0.2,
   }});
 
   // Satellites
-  map.addLayer({ id: "satellites-l", type: "circle", source: "satellites", paint: {
+  if (!map.getLayer("satellites-l")) map.addLayer({ id: "satellites-l", type: "circle", source: "satellites", paint: {
     "circle-radius": ["interpolate", ["linear"], ["zoom"], 0, 2.5, 6, 4, 10, 6],
     "circle-color": "#5fd9ff", "circle-opacity": 0.9,
     "circle-stroke-color": "#5fd9ff", "circle-stroke-width": 1, "circle-stroke-opacity": 0.4,
   }});
 
   // Aircraft
-  map.addLayer({ id: "aircraft-l", type: "circle", source: "aircraft", paint: {
+  if (!map.getLayer("aircraft-l")) map.addLayer({ id: "aircraft-l", type: "circle", source: "aircraft", paint: {
     "circle-radius": ["interpolate", ["linear"], ["zoom"], 0, 3, 6, 4.5, 12, 8],
     "circle-color": "#ffb547",
     "circle-stroke-color": "#fff", "circle-stroke-width": 0.6, "circle-stroke-opacity": 0.7,
   }});
 
   // News alert dots
-  map.addLayer({ id: "news-l", type: "circle", source: "news", paint: {
+  if (!map.getLayer("news-l")) map.addLayer({ id: "news-l", type: "circle", source: "news", paint: {
     "circle-radius": 7,
     "circle-color": ["match", ["get", "severity"], "critical", "#ff3a55", "high", "#ff7a3d", "medium", "#ffd23d", "#5fd9ff"],
     "circle-opacity": 0.9,
@@ -835,15 +834,37 @@ map.on("load", () => {
   }});
 
   // Cameras (drawn on top — green pulsing)
-  map.addLayer({ id: "cam-glow-l", type: "circle", source: "cameras", paint: {
+  if (!map.getLayer("cam-glow-l")) map.addLayer({ id: "cam-glow-l", type: "circle", source: "cameras", paint: {
     "circle-radius": ["interpolate", ["linear"], ["zoom"], 0, 12, 8, 22],
     "circle-color": "#39ff8f", "circle-opacity": 0.18, "circle-blur": 0.7,
   }});
-  map.addLayer({ id: "cameras-l", type: "circle", source: "cameras", paint: {
+  if (!map.getLayer("cameras-l")) map.addLayer({ id: "cameras-l", type: "circle", source: "cameras", paint: {
     "circle-radius": ["interpolate", ["linear"], ["zoom"], 0, 5, 6, 7, 12, 10],
     "circle-color": "#39ff8f", "circle-opacity": 1,
     "circle-stroke-color": "#0a3", "circle-stroke-width": 2,
   }});
+}
+
+let layersInstalled = false;
+let clicksWired = false;
+function installAll() {
+  installLayers();
+  if (!clicksWired) wireClicks();
+  // Push current data into the fresh sources (in case we re-init on style swap)
+  refreshSource("satellites", state.satPoints, (s) => ({ name: s.name, altKm: s.altKm }));
+  refreshSource("aircraft", state.aircraft, (a) => ({ name: a.name, icao: a.icao, country: a.country, altM: a.altM, vel: a.vel, heading: a.heading }));
+  refreshSource("cameras", state.cameras.map((c) => ({ ...c, lng: c.lng ?? c.lon })),
+    (c) => ({ id: c.id, label: c.label, url: c.url, kind: c.kind || "iframe", thumb: c.thumb || "" }));
+  refreshSource("earthquakes", state.earthquakes, (q) => ({ mag: q.mag, place: q.place, url: q.url, time: q.time }));
+  refreshSource("fires", state.fires, (f) => ({ frp: f.frp }));
+  refreshSource("news", state.alerts.filter((a) => a.lat != null).map((a) => ({ ...a, lng: a.lon })),
+    (a) => ({ severity: a.severity, headline: a.headline, snippet: a.snippet, region: a.region, source: a.source, url: a.url }));
+  refreshOrbit(); refreshTrail(); updateTerminator();
+  rerender();
+}
+
+function wireClicks() {
+  clicksWired = true;
 
   // Click handlers
   map.on("click", "cameras-l", (e) => {
@@ -896,10 +917,20 @@ map.on("load", () => {
     map.on("mouseenter", layer, () => map.getCanvas().style.cursor = "pointer");
     map.on("mouseleave", layer, () => map.getCanvas().style.cursor = "");
   }
+}
 
-  // Boot data
+map.on("load", () => {
+  installAll();
+  // Globe projection (MapLibre v5+)
+  try { map.setProjection({ type: "globe" }); } catch (e) { console.warn("globe projection unavailable:", e); }
   bootData();
   log("system", "Command center online");
+});
+
+// Re-install after basemap style swap (setStyle wipes custom sources/layers)
+map.on("style.load", () => {
+  if (layersInstalled) installAll();
+  layersInstalled = true;
 });
 
 // ── Cursor coordinate readout ─────────────────────────────────────
@@ -910,6 +941,7 @@ map.on("mousemove", (e) => {
 map.on("zoom", () => {
   document.getElementById("curZoom").textContent = map.getZoom().toFixed(1);
 });
+map.on("moveend", () => { maybeReloadCamsNearCenter(); });
 
 function formatLat(v) { return (v >= 0 ? "+" : "") + v.toFixed(4) + "°"; }
 function formatLon(v) { return (v >= 0 ? "+" : "") + v.toFixed(4) + "°"; }
@@ -1074,10 +1106,14 @@ function extrapolateAircraft() {
   }));
 }
 
-async function loadCameras() {
+async function loadCameras(near = null) {
   let user = [], curated = [];
   try { user = await fetch(API.cams).then((r) => r.json()); if (!Array.isArray(user)) user = []; } catch {}
-  try { const w = await fetch(API.webcams).then((r) => r.json()); curated = w.webcams || []; } catch {}
+  try {
+    const q = near ? `?near=${near.lat.toFixed(3)},${near.lon.toFixed(3)}` : "";
+    const w = await fetch(API.webcams + q).then((r) => r.json());
+    curated = w.webcams || [];
+  } catch {}
   const seen = new Map();
   for (const c of curated) seen.set(c.id, c);
   for (const c of user) seen.set(c.id, c);
@@ -1086,7 +1122,19 @@ async function loadCameras() {
     (c) => ({ id: c.id, label: c.label, url: c.url, kind: c.kind || "iframe", thumb: c.thumb || "" }));
   renderCamList();
   setStats();
-  log("cams", `${state.cameras.length} feeds`);
+  log("cams", `${state.cameras.length} feeds${near ? " (nearby)" : ""}`);
+}
+
+// Reload cams near the map center when the user moves significantly
+let lastCamCenter = null;
+function maybeReloadCamsNearCenter() {
+  const c = map.getCenter();
+  if (!lastCamCenter) { lastCamCenter = { lat: c.lat, lon: c.lng }; return; }
+  const dLat = Math.abs(c.lat - lastCamCenter.lat);
+  const dLon = Math.abs(c.lng - lastCamCenter.lon);
+  if (dLat < 2 && dLon < 2) return;
+  lastCamCenter = { lat: c.lat, lon: c.lng };
+  loadCameras({ lat: c.lat, lon: c.lng });
 }
 
 async function loadNews(region = "") {

@@ -476,6 +476,33 @@ For Falcon Eye requests you MUST emit a \`\`\`command ... \`\`\` block — do NO
           await memoryStore.setJSON("all", memories);
           cmdResults.push(`Forgotten memory #${cmd.id}`);
         } else if (cmd.action === "falcon_eye" && cmd.intent) {
+          // Real geocoder via Nominatim (OpenStreetMap, free, no key).
+          // Falls through to the hotspot table for common hits and as a
+          // cache for rate-limit-friendly performance.
+          async function geocodeRegion(query) {
+            if (!query) return null;
+            const key = query.toLowerCase().trim();
+            if (FE_HOTSPOTS[key]) return FE_HOTSPOTS[key];
+            for (const [k, v] of Object.entries(FE_HOTSPOTS)) {
+              if (key.includes(k)) return v;
+            }
+            try {
+              const u = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`;
+              const r = await fetch(u, {
+                headers: {
+                  "User-Agent": "FalconEye/1.0 (darvis1.netlify.app)",
+                  "Accept-Language": "en",
+                },
+                signal: AbortSignal.timeout(6000),
+              });
+              if (!r.ok) return null;
+              const arr = await r.json();
+              if (Array.isArray(arr) && arr.length) {
+                return [parseFloat(arr[0].lat), parseFloat(arr[0].lon)];
+              }
+            } catch {}
+            return null;
+          }
           // Geocode region → lat/lon so the LLM only needs to name the place
           const FE_HOTSPOTS = {
             ukraine:[50.45,30.52],russia:[55.75,37.62],israel:[31.78,35.22],
@@ -512,13 +539,16 @@ For Falcon Eye requests you MUST emit a \`\`\`command ... \`\`\` block — do NO
             cairo:[30.04,31.24],kyiv:[50.45,30.52],kiev:[50.45,30.52],
             tehran:[35.69,51.39],baghdad:[33.31,44.36],riyadh:[24.71,46.68],
           };
-          let lat = typeof cmd.lat === "number" ? cmd.lat : null;
-          let lon = typeof cmd.lon === "number" ? cmd.lon : null;
-          if ((lat == null || lon == null) && cmd.region) {
-            const key = cmd.region.toLowerCase().trim();
-            const hit = FE_HOTSPOTS[key] || Object.entries(FE_HOTSPOTS).find(([k]) => key.includes(k))?.[1];
+          // If the LLM supplied coords we trust them ONLY if they look sane
+          // (some models hallucinate plausible but wrong coordinates). If a
+          // region name was provided, always prefer the geocoded result.
+          let lat = null, lon = null;
+          if (cmd.region) {
+            const hit = await geocodeRegion(cmd.region);
             if (hit) { lat = hit[0]; lon = hit[1]; }
           }
+          if (lat == null && typeof cmd.lat === "number") lat = cmd.lat;
+          if (lon == null && typeof cmd.lon === "number") lon = cmd.lon;
 
           const feStore = getStore("darvis-falcon-eye");
           const command = {

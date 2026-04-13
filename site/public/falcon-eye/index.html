@@ -585,7 +585,120 @@
     50%     { background: rgba(255,58,85,0.30); }
   }
 
-  /* Mobile */
+  /* ══════ Mobile bottom-nav + slide sheets ══════ */
+  .mobile-nav { display: none; }
+  .mobile-sheet { display: none; }
+
+  @media (max-width: 980px) {
+    /* Collapse the header to a slim bar, hide the rail-left/right/footer,
+       add a fixed bottom tab bar with a slide-up sheet per tab. */
+    body { padding-bottom: env(safe-area-inset-bottom); }
+    .header { height: 46px; padding: 6px 10px; grid-template-columns: auto 1fr auto; gap: 8px; background: linear-gradient(180deg,rgba(11,18,25,0.98) 0%,rgba(11,18,25,0.88) 100%); }
+    .brand { padding: 0 4px; border-right: none; }
+    .brand-mark { font-size: 16px; letter-spacing: 0.14em; }
+    .brand-sub { display: none; }
+    .header-mid { padding: 0; }
+    .search input { height: 28px; padding: 0 12px 0 28px; font-size: 10px; }
+    .search::before { font-size: 12px; left: 10px; }
+    .header-pills .pill:not(#threatPill) { display: none; }
+    #threatPill { padding: 4px 8px; height: 26px; font-size: 8px; }
+    #threatPill .label { display: none; }
+
+    #map {
+      top: 46px !important; left: 0 !important; right: 0 !important;
+      bottom: calc(58px + env(safe-area-inset-bottom,0px)) !important;
+      border: none;
+    }
+    .map-corner { display: none; }
+
+    .rail-left, .rail-right, .footer { display: none !important; }
+    .cursor-readout { display: none; }
+    .basemap-ctrl {
+      right: 8px; top: 56px;
+      flex-direction: row; gap: 4px;
+    }
+    .basemap-ctrl button { min-width: 50px; padding: 5px 8px; }
+
+    .mobile-nav {
+      display: grid; grid-template-columns: repeat(5, 1fr);
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 180;
+      height: calc(58px + env(safe-area-inset-bottom,0px));
+      padding-bottom: env(safe-area-inset-bottom,0px);
+      background: linear-gradient(0deg,rgba(7,10,14,0.98) 0%,rgba(11,18,25,0.94) 100%);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-top: 1px solid var(--panel-edge);
+    }
+    .mobile-nav::before {
+      content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255,181,71,0.5), transparent);
+    }
+    .mobile-nav button {
+      background: transparent; border: none; color: var(--steel-dim);
+      font-family: var(--mono); font-size: 8px; letter-spacing: 0.18em;
+      text-transform: uppercase; cursor: pointer;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 3px; padding: 8px 0; position: relative;
+    }
+    .mobile-nav button .icon { font-size: 18px; line-height: 1; }
+    .mobile-nav button.active { color: var(--amber); }
+    .mobile-nav button.active::before {
+      content: ""; position: absolute; top: 0; left: 28%; right: 28%; height: 2px;
+      background: var(--amber); box-shadow: 0 0 8px var(--amber-glow);
+    }
+
+    .mobile-sheet {
+      display: block;
+      position: fixed; left: 0; right: 0;
+      bottom: calc(58px + env(safe-area-inset-bottom,0px));
+      z-index: 170;
+      max-height: 62vh;
+      background: var(--panel-2);
+      border-top: 1px solid var(--panel-edge-hot);
+      box-shadow: 0 -20px 60px rgba(0,0,0,0.8);
+      transform: translateY(100%);
+      transition: transform 0.28s cubic-bezier(0.4,0,0.2,1);
+      overflow: hidden;
+      display: flex; flex-direction: column;
+    }
+    .mobile-sheet.open { transform: translateY(0); }
+    .mobile-sheet-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 14px; border-bottom: 1px solid var(--panel-edge);
+      flex-shrink: 0;
+    }
+    .mobile-sheet-head .title {
+      font-family: var(--display); font-size: 16px; letter-spacing: 0.16em;
+      color: var(--amber); text-transform: uppercase;
+    }
+    .mobile-sheet-head .handle {
+      position: absolute; left: 50%; top: 6px; transform: translateX(-50%);
+      width: 40px; height: 3px; border-radius: 2px; background: var(--steel-dim);
+    }
+    .mobile-sheet-head button {
+      background: transparent; border: 1px solid var(--panel-edge);
+      color: var(--steel); width: 28px; height: 26px; font-size: 14px;
+      cursor: pointer; font-family: var(--mono);
+    }
+    .mobile-sheet-body {
+      flex: 1; overflow-y: auto; padding: 12px 14px;
+    }
+    .mobile-sheet-body::-webkit-scrollbar { width: 3px; }
+    .mobile-sheet-body::-webkit-scrollbar-thumb { background: var(--panel-edge); }
+
+    /* Reuse the existing .layer / .alert / .dossier / chat styles inside
+       the sheet body — they already look good. */
+
+    .banner { top: 52px; font-size: 9px; padding: 7px 14px; }
+
+    /* Hide old mobile overrides that conflict with the sheet pattern */
+  }
+
+  @media (max-width: 400px) {
+    .brand-mark { font-size: 14px; }
+    .search input { height: 26px; }
+  }
+
+  /* OLD mobile — keep below for non-sheet tweaks */
   @media (max-width: 980px) {
     #map { left: 0; right: 0; top: 56px; bottom: 220px; }
     .map-corner.tl { left: 0; }
@@ -770,6 +883,23 @@
     </div>
   </footer>
 
+  <!-- Mobile bottom nav + slide sheets -->
+  <nav class="mobile-nav" id="mobileNav">
+    <button data-sheet="layers"><span class="icon">⧉</span><span>Layers</span></button>
+    <button data-sheet="intel"><span class="icon">⚠</span><span>Intel</span></button>
+    <button data-sheet="chat"><span class="icon">◈</span><span>Spectra</span></button>
+    <button data-sheet="dossier"><span class="icon">▤</span><span>Dossier</span></button>
+    <button data-sheet="stats"><span class="icon">⇲</span><span>Stats</span></button>
+  </nav>
+  <div class="mobile-sheet" id="mobileSheet">
+    <div class="mobile-sheet-head">
+      <span class="handle"></span>
+      <span class="title" id="sheetTitle">Layers</span>
+      <button id="sheetClose">×</button>
+    </div>
+    <div class="mobile-sheet-body" id="sheetBody"></div>
+  </div>
+
   <!-- Floating draggable PIP camera viewer -->
   <div class="pip" id="pip">
     <span class="pip-corner tl"></span><span class="pip-corner tr"></span>
@@ -777,6 +907,7 @@
     <div class="pip-bar" id="pipBar">
       <span class="title" id="pipTitle">⦿ LIVE FEED</span>
       <span class="ctrls">
+        <button id="pipToggleMode" title="Toggle snapshot / video" style="display:none;width:auto;padding:0 7px;font-size:9px">▶ VIDEO</button>
         <button id="pipMin" title="Minimize">_</button>
         <button id="pipClose" title="Close">×</button>
       </span>
@@ -838,7 +969,8 @@ const state = {
   sats: [],            // {name, satrec}
   satPoints: [],       // current propagated [{name, lat, lng, alt}]
   aircraft: [],
-  airTrails: {},       // icao → array of [lng, lat]
+  airTrails: {},
+  milTrails: {},       // icao → array of [lng, lat]
   cameras: [],
   alerts: [],
   earthquakes: [],
@@ -887,7 +1019,7 @@ map.on("error", (e) => { console.error("maplibre error:", e && e.error); });
 map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "bottom-right");
 
 const EMPTY = { type: "FeatureCollection", features: [] };
-const SOURCE_IDS = ["satellites","aircraft","military","cameras","earthquakes","fires","news","wxalerts","orbit","trail","terminator"];
+const SOURCE_IDS = ["satellites","aircraft","military","cameras","earthquakes","fires","news","wxalerts","orbit","trail","terminator","airtrails","miltrails"];
 
 // ── Tactical icon glyphs — hand-drawn to canvas, added as map images ──
 function makeIcon(drawFn, size = 32) {
@@ -1056,6 +1188,14 @@ function installLayers() {
     paint: { "line-color": "#5fd9ff", "line-width": 1.6, "line-opacity": 0.85, "line-dasharray": [2, 1] } });
   if (!map.getLayer("trail-l")) map.addLayer({ id: "trail-l", type: "line", source: "trail",
     paint: { "line-color": "#ffb547", "line-width": 1.6, "line-opacity": 0.9 } });
+
+  // Global aircraft trails — faint amber lines showing recent flight paths
+  if (!map.getLayer("airtrails-l")) map.addLayer({ id: "airtrails-l", type: "line", source: "airtrails",
+    paint: { "line-color": "#ffb547", "line-width": 1.1, "line-opacity": 0.35 },
+    layout: { "line-cap": "round", "line-join": "round" } });
+  if (!map.getLayer("miltrails-l")) map.addLayer({ id: "miltrails-l", type: "line", source: "miltrails",
+    paint: { "line-color": "#ff3a55", "line-width": 1.2, "line-opacity": 0.4 },
+    layout: { "line-cap": "round", "line-join": "round" } });
 
   // NOAA severe weather alert polygons
   if (!map.getLayer("wx-fill-l")) map.addLayer({ id: "wx-fill-l", type: "fill", source: "wxalerts", paint: {
@@ -1390,8 +1530,28 @@ async function loadAircraft() {
       name: a.name, icao: a.icao, country: a.country,
       altM: a.altM, vel: a.vel, heading: a.heading,
     }));
+    refreshGlobalTrails();
     setStats();
   } catch (e) { log("ads-b", `Load failed: ${e.message}`, "warn"); }
+}
+
+// Build MultiLineString trails for all aircraft and military jets
+function refreshGlobalTrails() {
+  const ac = [];
+  for (const icao in state.airTrails) {
+    const t = state.airTrails[icao];
+    if (t && t.length > 1) ac.push({ type: "Feature", geometry: { type: "LineString", coordinates: t } });
+  }
+  const srcA = map.getSource("airtrails");
+  if (srcA) srcA.setData({ type: "FeatureCollection", features: ac });
+
+  const mil = [];
+  for (const hex in state.milTrails || {}) {
+    const t = state.milTrails[hex];
+    if (t && t.length > 1) mil.push({ type: "Feature", geometry: { type: "LineString", coordinates: t } });
+  }
+  const srcM = map.getSource("miltrails");
+  if (srcM) srcM.setData({ type: "FeatureCollection", features: mil });
 }
 
 // ── Military aircraft (airplanes.live, no key) ────────────────────
@@ -1404,6 +1564,14 @@ async function loadMilitary() {
       lat: a.lat, lon: a.lon, lng: a.lon,
       altBaro: a.altBaro, gs: a.gs, track: a.track, squawk: a.squawk, category: a.category,
     }));
+    for (const p of list) {
+      if (!p.hex) continue;
+      const t = state.milTrails[p.hex] || [];
+      t.push([p.lon, p.lat]);
+      if (t.length > 25) t.shift();
+      state.milTrails[p.hex] = t;
+    }
+    refreshGlobalTrails();
     refreshSource("military", list, (a) => ({
       hex: a.hex, flight: a.flight, reg: a.reg, type: a.type, desc: a.desc,
       altBaro: a.altBaro, gs: a.gs, track: a.track, squawk: a.squawk, category: a.category,
@@ -1655,8 +1823,8 @@ function rerender() {
     }
   }
   set(["satellites-l"], state.layers.satellites);
-  set(["aircraft-l"], state.layers.aircraft);
-  set(["military-l", "mil-glow-l"], state.layers.military);
+  set(["aircraft-l", "airtrails-l"], state.layers.aircraft);
+  set(["military-l", "mil-glow-l", "miltrails-l"], state.layers.military);
   set(["cameras-l", "cam-glow-l"], state.layers.cameras);
   set(["news-l", "news-bg-l"], state.layers.news);
   set(["earthquakes-l", "eq-glow-l"], state.layers.earthquakes);
@@ -2023,6 +2191,10 @@ document.getElementById("pipClose").onclick = () => {
   pipBody.innerHTML = "No feed selected";
 };
 document.getElementById("pipMin").onclick = () => pip.classList.toggle("min");
+document.getElementById("pipToggleMode").onclick = () => {
+  currentMode = currentMode === "video" ? "snapshot" : "video";
+  renderPip();
+};
 
 let dragging = false, dragOffX = 0, dragOffY = 0;
 // Transparent full-screen shield prevents the map canvas and camera iframe
@@ -2092,8 +2264,19 @@ window.addEventListener("resize", () => {
   }
 });
 
+let currentCam = null;
+let currentMode = "video"; // "video" | "snapshot"
 function openViewer(cam) {
   if (!cam || !cam.url) return;
+  currentCam = cam;
+  // Default to video if the source provides one; otherwise snapshot
+  currentMode = (cam.kind === "iframe" || cam.kind === "hls" || cam.kind === "mp4") ? "video" : "snapshot";
+  renderPip();
+}
+
+function renderPip() {
+  const cam = currentCam;
+  if (!cam) return;
   pip.classList.add("show"); pip.classList.remove("min");
   pipTitle.innerHTML = "";
   const titleSpan = document.createElement("span");
@@ -2108,9 +2291,31 @@ function openViewer(cam) {
   pipTitle.appendChild(extLink);
 
   if (currentHls) { try { currentHls.destroy(); } catch {} currentHls = null; }
+  if (pipBody._cleanup) { try { pipBody._cleanup(); } catch {} pipBody._cleanup = null; }
   pipBody.innerHTML = "";
-  const url = cam.url;
-  const kind = cam.kind || (/\.m3u8/i.test(url) ? "hls" : /\.(mp4|webm)/i.test(url) ? "mp4" : /\.(jpg|mjpg|jpeg)/i.test(url) ? "mjpeg" : "iframe");
+
+  // Pick URL + kind based on current mode. Cams that expose both a video
+  // player and a snapshot URL can be toggled between the two.
+  let url, kind;
+  if (currentMode === "snapshot" && cam.snapshotUrl) {
+    url = cam.snapshotUrl;
+    kind = "jpg";
+  } else if (currentMode === "video" && cam.url) {
+    url = cam.url;
+    kind = cam.kind || (/\.m3u8/i.test(url) ? "hls" : /\.(mp4|webm)/i.test(url) ? "mp4" : /\.(jpg|mjpg|jpeg)/i.test(url) ? "mjpeg" : "iframe");
+  } else {
+    url = cam.url;
+    kind = cam.kind || "iframe";
+  }
+
+  // Show/hide the mode toggle if this cam has both modes available
+  const toggleBtn = document.getElementById("pipToggleMode");
+  if (cam.snapshotUrl && cam.url && cam.snapshotUrl !== cam.url) {
+    toggleBtn.style.display = "";
+    toggleBtn.textContent = currentMode === "video" ? "📸 SNAP" : "▶ VIDEO";
+  } else {
+    toggleBtn.style.display = "none";
+  }
 
   if (kind === "hls") {
     const v = document.createElement("video");
@@ -2315,6 +2520,113 @@ function handleCommand(cmd) {
 }
 setTimeout(() => document.getElementById("spectraPill").classList.add("live"), 3000);
 
+// ── Mobile bottom-nav + slide-up sheet ────────────────────────────
+const mobileSheet = document.getElementById("mobileSheet");
+const sheetBody = document.getElementById("sheetBody");
+const sheetTitle = document.getElementById("sheetTitle");
+let currentSheet = null;
+
+function openSheet(kind) {
+  // If re-tapping the active tab, close the sheet
+  if (currentSheet === kind) { closeSheet(); return; }
+  currentSheet = kind;
+  document.querySelectorAll(".mobile-nav button").forEach((b) =>
+    b.classList.toggle("active", b.dataset.sheet === kind));
+
+  // Move the existing panel DOM into the sheet body so all its event
+  // handlers keep working. Remember previous parent so we can restore.
+  sheetBody.innerHTML = "";
+  let moved = null, title = "Layers";
+  if (kind === "layers") {
+    moved = document.querySelector(".rail-left");
+    title = "Layers · Sources";
+  } else if (kind === "intel") {
+    moved = document.getElementById("paneFeed");
+    title = "Live Intel";
+  } else if (kind === "chat") {
+    moved = document.getElementById("paneChat");
+    title = "Spectra Chat";
+  } else if (kind === "dossier") {
+    moved = document.getElementById("paneDossier");
+    title = "Dossier";
+  } else if (kind === "stats") {
+    title = "Telemetry";
+    sheetBody.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;font-size:11px;font-family:var(--mono)">
+        <div style="color:var(--steel-dim)">SATELLITES</div><div id="mSats" style="color:var(--cyan);text-align:right;font-variant-numeric:tabular-nums">0</div>
+        <div style="color:var(--steel-dim)">AIRCRAFT</div><div id="mAir" style="color:var(--amber);text-align:right;font-variant-numeric:tabular-nums">0</div>
+        <div style="color:var(--steel-dim)">MILITARY</div><div id="mMil" style="color:var(--critical);text-align:right;font-variant-numeric:tabular-nums">0</div>
+        <div style="color:var(--steel-dim)">CAMERAS</div><div id="mCam" style="color:var(--green);text-align:right;font-variant-numeric:tabular-nums">0</div>
+        <div style="color:var(--steel-dim)">EARTHQUAKES</div><div id="mEq" style="color:#ff5b8a;text-align:right;font-variant-numeric:tabular-nums">0</div>
+        <div style="color:var(--steel-dim)">WILDFIRES</div><div id="mFire" style="color:#ff6a1a;text-align:right;font-variant-numeric:tabular-nums">0</div>
+        <div style="color:var(--steel-dim)">NEWS ALERTS</div><div id="mAlt" style="color:var(--cyan);text-align:right;font-variant-numeric:tabular-nums">0</div>
+      </div>
+      <div style="margin-top:16px;border-top:1px solid var(--panel-edge);padding-top:12px">
+        <div style="font-size:8px;letter-spacing:0.22em;color:var(--steel-dim);text-transform:uppercase;margin-bottom:6px">Recent Operations</div>
+        <div id="mLog" style="font-family:var(--mono);font-size:9px;max-height:180px;overflow-y:auto;line-height:1.6"></div>
+      </div>`;
+    const setM = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+    setM("mSats", state.satPoints.length);
+    setM("mAir", state.aircraft.length);
+    setM("mMil", document.getElementById("cntMil")?.textContent || 0);
+    setM("mCam", state.cameras.length);
+    setM("mEq", state.earthquakes.length);
+    setM("mFire", state.fires.length);
+    setM("mAlt", state.alerts.length);
+    const opsLog = document.getElementById("opsLog");
+    const mLog = document.getElementById("mLog");
+    if (opsLog && mLog) mLog.innerHTML = opsLog.innerHTML;
+  }
+  if (moved) {
+    moved.dataset._prevParent = moved.dataset._prevParent || (moved.parentElement?.id || moved.parentElement?.className || "");
+    sheetBody.appendChild(moved);
+    moved.style.display = "";
+    moved.style.position = "static";
+    moved.style.inset = "auto";
+    moved.style.width = "auto";
+    moved.style.height = "auto";
+    moved.style.background = "transparent";
+    moved.style.border = "none";
+  }
+  sheetTitle.textContent = title;
+  mobileSheet.classList.add("open");
+}
+
+function closeSheet() {
+  mobileSheet.classList.remove("open");
+  document.querySelectorAll(".mobile-nav button").forEach((b) => b.classList.remove("active"));
+  currentSheet = null;
+}
+
+document.querySelectorAll(".mobile-nav button").forEach((b) => {
+  b.addEventListener("click", () => openSheet(b.dataset.sheet));
+});
+document.getElementById("sheetClose").addEventListener("click", closeSheet);
+
+// Swipe down on sheet head to close
+{
+  const head = document.querySelector(".mobile-sheet-head");
+  let sY = 0, swiping = false;
+  if (head) {
+    head.addEventListener("touchstart", (e) => { sY = e.touches[0].clientY; swiping = true; }, { passive: true });
+    head.addEventListener("touchmove", (e) => {
+      if (!swiping) return;
+      const dy = e.touches[0].clientY - sY;
+      if (dy > 60) { closeSheet(); swiping = false; }
+    }, { passive: true });
+    head.addEventListener("touchend", () => { swiping = false; });
+  }
+}
+
+// When an entity is clicked on the map, auto-open the Dossier sheet on mobile.
+// Done via a hook that fires after showDossier() sets the entity.
+const _dossierHook = () => { if (window.innerWidth <= 980) openSheet("dossier"); };
+// Patch by intercepting click handlers via map event already set up —
+// easiest: intercept at the click layer level.
+["cameras-l","satellites-l","aircraft-l","military-l","earthquakes-l","news-l","fires-l","wx-fill-l"].forEach((layer) => {
+  try { map.on("click", layer, () => setTimeout(_dossierHook, 20)); } catch {}
+});
+
 // ── Boot ──────────────────────────────────────────────────────────
 async function bootData() {
   await loadSats();
@@ -2329,7 +2641,7 @@ async function bootData() {
   loadRadarFrames(); setInterval(loadRadarFrames, 5 * 60 * 1000);
   loadWeatherAlerts(); setInterval(loadWeatherAlerts, 3 * 60 * 1000);
   updateTerminator(); setInterval(updateTerminator, 60 * 1000);
-  setInterval(() => { extrapolateAircraft(); }, 250);
+  setInterval(() => { extrapolateAircraft(); }, 150);
   setInterval(() => {
     if (state.selectedSatName) state.selectedOrbit = computeOrbit(state.selectedSatName);
     refreshOrbit();

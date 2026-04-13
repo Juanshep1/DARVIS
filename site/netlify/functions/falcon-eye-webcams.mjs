@@ -154,11 +154,13 @@ export default async (req) => {
         label: w.title || "Webcam",
         lat: w.location?.latitude,
         lon: w.location?.longitude,
-        // kind=jpg means "auto-refreshing snapshot" — the PIP viewer polls
-        // the URL with cache-busting every 4s to show the current view.
-        kind: snapshot ? "jpg" : "iframe",
-        url: snapshot || timelapse,
-        timelapseUrl: timelapse || null,
+        // The timelapse player actually plays moving video (compressed
+        // last-24h). The "current snapshot" is a still JPG that only
+        // updates every ~10 min, so it looks like a picture. Default to
+        // the video player; expose the snapshot URL as a secondary view.
+        kind: timelapse ? "iframe" : "jpg",
+        url: timelapse || snapshot,
+        snapshotUrl: snapshot || null,
         thumb: snapshot || null,
       };
     }).filter((w) => w && w.lat != null && w.lon != null);

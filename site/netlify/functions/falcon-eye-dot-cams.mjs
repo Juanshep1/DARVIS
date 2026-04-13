@@ -21,14 +21,17 @@ async function fetchCaltrans(district) {
       const lat = parseFloat(loc.latitude);
       const lon = parseFloat(loc.longitude);
       if (isNaN(lat) || isNaN(lon) || (lat === 0 && lon === 0)) return null;
+      const hls = c.imageData?.streamingVideoURL;
       const img = c.imageData?.static?.currentImageURL;
-      if (!img) return null;
+      if (!hls && !img) return null;
+      // Prefer HLS — truly live video. Fall back to JPG snapshot.
       return {
         id: `caltrans-${district}-${c.index || loc.locationName}`,
         label: `${loc.locationName || "Caltrans CCTV"} (${district.toUpperCase()})`,
         lat, lon,
-        kind: "jpg",
-        url: img,
+        kind: hls ? "hls" : "jpg",
+        url: hls || img,
+        snapshotUrl: img || null,
         source: "caltrans",
       };
     }).filter(Boolean);

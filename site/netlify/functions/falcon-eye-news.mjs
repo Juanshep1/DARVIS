@@ -170,26 +170,106 @@ const HOTSPOTS = {
   fiji: { lat: -18.12, lon: 178.42, label: "Fiji" },
 };
 
-const SEVERITY_KEYWORDS = [
-  { re: /\b(nuclear|missile strike|invasion|war breaks out|declared war|airstrike|bombing)\b/i, severity: "critical" },
-  { re: /\b(killed|attack|explosion|conflict|violence|strike|clash|drone)\b/i, severity: "high" },
-  { re: /\b(protest|tension|sanction|warning|threat)\b/i, severity: "medium" },
+// ── Classification tables ───────────────────────────────────────────
+// Severity: critical > high > medium > low. First matching rule wins.
+const SEVERITY_RULES = [
+  { re: /\b(nuclear (?:strike|weapon|attack)|declared war|invasion launched|carrier strike|WW3|weapons of mass destruction|genocide)\b/i, sev: "critical" },
+  { re: /\b(airstrike|air strike|bombing|missile (?:strike|attack)|drone strike|invasion|massacre|hostages? (?:killed|taken)|mass casualty|massive explosion)\b/i, sev: "critical" },
+  { re: /\b(killed|dead|deaths?|fatalities|shootout|firefight|ambush|siege|besieged|troops cross|ground offensive|paramilitary)\b/i, sev: "high" },
+  { re: /\b(attack|conflict|violence|clash|assault|raid|militants?|insurgents?|terror|militia|hostages?|combatants?|shelling|artillery)\b/i, sev: "high" },
+  { re: /\b(riot|protests? turn(?:ed)? violent|curfew|evacuated|emergency declared|state of emergency|martial law|coup)\b/i, sev: "high" },
+  { re: /\b(protest|demonstration|march|rally|tension|standoff|sanction|threat|warning|accused of|crackdown|detained|arrested)\b/i, sev: "medium" },
+  { re: /\b(earthquake|tsunami|flood|wildfire|hurricane|typhoon|cyclone|volcanic eruption|magnitude \d)\b/i, sev: "high" },
 ];
-
-function severityFor(text) {
-  for (const { re, severity } of SEVERITY_KEYWORDS) if (re.test(text)) return severity;
+function classifySeverity(text) {
+  for (const { re, sev } of SEVERITY_RULES) if (re.test(text)) return sev;
   return "low";
 }
 
+// Category tagging
+const CATEGORIES = [
+  { cat: "conflict", re: /\b(war|airstrike|missile|troops|invasion|military|combat|soldier|killed|ceasefire|militants?|insurgents?|hostages?|drone strike|frontline|artillery|shelling)\b/i },
+  { cat: "disaster", re: /\b(earthquake|tsunami|flood|wildfire|hurricane|typhoon|cyclone|volcanic|eruption|landslide|mudslide|tornado|blizzard|drought)\b/i },
+  { cat: "politics", re: /\b(election|parliament|president|prime minister|government|coup|protest|sanction|diplomat|treaty|summit|embassy|vote|party|congress|senate)\b/i },
+  { cat: "economic", re: /\b(stock|market|inflation|recession|gdp|bank|currency|trade war|tariff|oil|crude|dollar|euro|interest rate|fed|layoffs?)\b/i },
+];
+function classifyCategory(text) {
+  for (const { cat, re } of CATEGORIES) if (re.test(text)) return cat;
+  return "general";
+}
+
 function geocode(text) {
-  const t = text.toLowerCase().replace(/[^a-z]/g, "");
-  for (const [k, v] of Object.entries(HOTSPOTS)) if (t.includes(k)) return v;
+  const t = text.toLowerCase().replace(/[^a-z ]/g, " ");
+  // Try multi-word matches first (more specific)
+  const sortedKeys = Object.keys(HOTSPOTS).sort((a, b) => b.length - a.length);
+  for (const k of sortedKeys) {
+    const word = k.replace(/([a-z])([A-Z])/g, "$1 $2");
+    if (t.includes(word) || t.replace(/ /g, "").includes(k)) return HOTSPOTS[k];
+  }
   return null;
+}
+
+// Dedup by normalized title prefix (first 6 words)
+function dedupKey(title) {
+  return title.toLowerCase()
+    .replace(/[^a-z0-9\s]/g, "")
+    .trim()
+    .split(/\s+/)
+    .slice(0, 6)
+    .join(" ");
+}
+
+// ── Google News RSS (free, no key) ──────────────────────────────────
+function stripTags(s) { return (s || "").replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim(); }
+function decodeEntities(s) {
+  return (s || "")
+    .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&apos;/g, "'")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(+n));
+}
+
+async function fetchGoogleNewsRSS(query) {
+  const u = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`;
+  try {
+    const r = await fetch(u, {
+      headers: { "User-Agent": "Mozilla/5.0 (FalconEye)", Accept: "application/rss+xml, text/xml" },
+      signal: AbortSignal.timeout(12000),
+    });
+    if (!r.ok) return [];
+    const xml = await r.text();
+    const items = [];
+    const re = /<item>([\s\S]*?)<\/item>/g;
+    let m;
+    while ((m = re.exec(xml))) {
+      const block = m[1];
+      const getTag = (tag) => {
+        const rx = new RegExp(`<${tag}>(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?<\\/${tag}>`);
+        return decodeEntities(stripTags(rx.exec(block)?.[1] || ""));
+      };
+      const title = getTag("title");
+      const link = getTag("link");
+      const pubDate = getTag("pubDate");
+      const description = getTag("description");
+      // Extract the source — Google News format is "Headline - Source Name"
+      let source = "", headline = title;
+      const lastDash = title.lastIndexOf(" - ");
+      if (lastDash > 0) {
+        source = title.slice(lastDash + 3).trim();
+        headline = title.slice(0, lastDash).trim();
+      }
+      const ts = pubDate ? new Date(pubDate).getTime() : Date.now();
+      if (!isNaN(ts)) {
+        items.push({ headline, title, link, description, source, ts });
+      }
+    }
+    return items;
+  } catch {
+    return [];
+  }
 }
 
 export default async (req) => {
   if (req.method !== "GET") return new Response("Method not allowed", { status: 405 });
-  const TAVILY_KEY = Netlify.env.get("TAVILY_API_KEY");
   const store = getStore("darvis-falcon-eye");
   const url = new URL(req.url);
   const region = url.searchParams.get("region") || "";
@@ -200,41 +280,92 @@ export default async (req) => {
     if (cached && Date.now() - cached.ts < CACHE_MS) return Response.json(cached.data, { headers: { "X-Cache": "HIT" } });
   } catch {}
 
-  if (!TAVILY_KEY) return Response.json({ alerts: [], error: "no key" });
+  // Build query set — one or many, depending on region scope
+  const queries = region
+    ? [
+        `${region} breaking news`,
+        `${region} conflict war today`,
+      ]
+    : [
+        "breaking world news today",
+        "airstrike missile war today",
+        "Ukraine Russia war today",
+        "Israel Gaza Middle East today",
+        "natural disaster earthquake flood wildfire today",
+        "protest unrest world today",
+      ];
 
-  const query = region
-    ? `breaking news ${region} conflict war today`
-    : "breaking world news war conflict today";
+  const TAVILY_KEY = Netlify.env.get("TAVILY_API_KEY");
 
   try {
-    const res = await fetch("https://api.tavily.com/search", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ api_key: TAVILY_KEY, query, search_depth: "basic", max_results: 12, include_answer: false }),
-      signal: AbortSignal.timeout(15000),
-    });
-    if (!res.ok) return Response.json({ alerts: [], error: `tavily ${res.status}` });
-    const data = await res.json();
+    // Fan out Google News RSS queries in parallel
+    const gnResults = await Promise.allSettled(queries.map(fetchGoogleNewsRSS));
+    const raw = [];
+    for (const r of gnResults) if (r.status === "fulfilled") raw.push(...r.value);
 
+    // Optional Tavily augmentation (kept if key is set, as a second source)
+    if (TAVILY_KEY) {
+      try {
+        const query = region ? `breaking news ${region} today` : "breaking world news today";
+        const tv = await fetch("https://api.tavily.com/search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ api_key: TAVILY_KEY, query, search_depth: "basic", max_results: 10, include_answer: false }),
+          signal: AbortSignal.timeout(12000),
+        });
+        if (tv.ok) {
+          const tvData = await tv.json();
+          for (const r of tvData.results || []) {
+            raw.push({
+              headline: r.title,
+              title: r.title,
+              link: r.url,
+              description: r.content || "",
+              source: r.url ? new URL(r.url).hostname.replace(/^www\./, "") : "",
+              ts: Date.now(),
+            });
+          }
+        }
+      } catch {}
+    }
+
+    // Classify + geocode + dedup
+    const seen = new Set();
     const alerts = [];
-    for (const r of data.results || []) {
-      const text = `${r.title} ${r.content || ""}`;
-      const loc = region ? HOTSPOTS[region.toLowerCase().replace(/[^a-z]/g, "")] || geocode(text) : geocode(text);
-      if (!loc) continue;
+    for (const item of raw) {
+      const key = dedupKey(item.headline || item.title || "");
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+
+      const text = `${item.headline} ${item.description}`;
+      const loc = region
+        ? (HOTSPOTS[region.toLowerCase().replace(/[^a-z]/g, "")] || geocode(text))
+        : geocode(text);
+
       alerts.push({
-        headline: r.title,
-        snippet: (r.content || "").slice(0, 240),
-        url: r.url,
-        source: r.url ? new URL(r.url).hostname.replace(/^www\./, "") : "",
-        lat: loc.lat,
-        lon: loc.lon,
-        region: loc.label,
-        severity: severityFor(text),
-        ts: Date.now(),
+        headline: item.headline,
+        snippet: item.description.slice(0, 280),
+        url: item.link,
+        source: item.source || (item.link ? new URL(item.link).hostname.replace(/^www\./, "") : ""),
+        lat: loc ? loc.lat : null,
+        lon: loc ? loc.lon : null,
+        region: loc ? loc.label : (region || "Global"),
+        severity: classifySeverity(text),
+        category: classifyCategory(text),
+        ts: item.ts,
       });
     }
 
-    const out = { alerts, ts: Date.now() };
+    // Severity weight for sort ordering
+    const sevWeight = { critical: 4, high: 3, medium: 2, low: 1 };
+    alerts.sort((a, b) => {
+      const sw = (sevWeight[b.severity] || 0) - (sevWeight[a.severity] || 0);
+      if (sw !== 0) return sw;
+      return (b.ts || 0) - (a.ts || 0);
+    });
+
+    const trimmed = alerts.slice(0, 80);
+    const out = { alerts: trimmed, total: alerts.length, ts: Date.now(), sources: ["Google News RSS", TAVILY_KEY ? "Tavily" : null].filter(Boolean) };
     try { await store.setJSON(cacheKey, { data: out, ts: Date.now() }); } catch {}
     return Response.json(out);
   } catch (e) {

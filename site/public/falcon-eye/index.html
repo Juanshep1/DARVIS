@@ -331,6 +331,20 @@
   .alert.low .sev { color: var(--cyan); }
   .alert-title { font-size: 11px; line-height: 1.35; color: var(--ink); }
   .alert-snippet { font-size: 9px; line-height: 1.4; color: var(--steel); margin-top: 4px; }
+  .alert-foot {
+    font-size: 8px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--steel-dim); margin-top: 6px;
+  }
+  .alert-tags { display: flex; gap: 4px; align-items: center; }
+  .alert .cat {
+    padding: 1px 5px; border: 1px solid currentColor;
+    font-size: 7px; letter-spacing: 0.14em;
+  }
+  .alert .cat-conflict { color: var(--critical); }
+  .alert .cat-disaster { color: #ff9d42; }
+  .alert .cat-politics { color: var(--cyan); }
+  .alert .cat-economic { color: var(--amber); }
+  .alert .cat-general  { color: var(--steel); }
 
   /* Dossier (entity details) */
   .dossier-empty {
@@ -684,6 +698,29 @@
     }
     .mobile-sheet-body::-webkit-scrollbar { width: 3px; }
     .mobile-sheet-body::-webkit-scrollbar-thumb { background: var(--panel-edge); }
+
+    /* Unlock the rail-left / rail-panes when they're relocated into the
+       mobile sheet — desktop styles hide them with display:none !important
+       so we have to override specifically. */
+    .mobile-sheet-body > .rail-left {
+      display: block !important;
+      position: static !important; inset: auto !important;
+      top: auto !important; left: auto !important; right: auto !important; bottom: auto !important;
+      width: auto !important; height: auto !important;
+      background: transparent !important; border: none !important;
+      padding: 0 !important; margin: 0 !important; overflow: visible !important;
+    }
+    .mobile-sheet-body > .rail-pane {
+      display: block !important;
+      position: static !important; inset: auto !important;
+      overflow: visible !important; padding: 0 !important;
+    }
+    .mobile-sheet-body > #paneChat {
+      display: flex !important; flex-direction: column !important;
+      min-height: 48vh !important;
+    }
+    .mobile-sheet-body > #paneChat .chat-log { min-height: 36vh; max-height: 44vh; }
+    .mobile-sheet-body > #paneFeed .alert { margin-bottom: 8px; }
 
     /* Reuse the existing .layer / .alert / .dossier / chat styles inside
        the sheet body — they already look good. */
@@ -1935,18 +1972,39 @@ function refreshTrail() {
 }
 
 // ── Right-rail rendering ──────────────────────────────────────────
+function timeAgo(ts) {
+  if (!ts) return "";
+  const d = Date.now() - ts;
+  if (d < 60_000) return "just now";
+  if (d < 3_600_000) return Math.floor(d / 60_000) + "m ago";
+  if (d < 86_400_000) return Math.floor(d / 3_600_000) + "h ago";
+  return Math.floor(d / 86_400_000) + "d ago";
+}
+
 function renderFeed() {
   const feed = document.getElementById("paneFeed");
   feed.innerHTML = "";
-  for (const a of state.alerts.slice(0, 60)) {
+  for (const a of state.alerts.slice(0, 80)) {
     const el = document.createElement("div");
     el.className = `alert ${a.severity}`;
+    const cat = a.category || "general";
     el.innerHTML = `
-      <div class="alert-head"><span>${a.region || ""} · ${a.source || ""}</span><span class="sev">${a.severity}</span></div>
+      <div class="alert-head">
+        <span class="alert-meta"></span>
+        <span class="alert-tags">
+          <span class="cat cat-${cat}"></span>
+          <span class="sev"></span>
+        </span>
+      </div>
       <div class="alert-title"></div>
-      <div class="alert-snippet"></div>`;
+      <div class="alert-snippet"></div>
+      <div class="alert-foot"></div>`;
+    el.querySelector(".alert-meta").textContent = `${a.region || "Global"} · ${a.source || ""}`;
+    el.querySelector(".cat").textContent = cat;
+    el.querySelector(".sev").textContent = a.severity;
     el.querySelector(".alert-title").textContent = a.headline || "";
     el.querySelector(".alert-snippet").textContent = a.snippet || "";
+    el.querySelector(".alert-foot").textContent = timeAgo(a.ts);
     el.onclick = () => {
       if (a.lat != null) map.flyTo({ center: [a.lon, a.lat], zoom: 5, duration: 1500 });
       showDossier({ ...a, type: "news", lng: a.lon });
@@ -2326,12 +2384,31 @@ function renderPip() {
   if (kind === "hls") {
     const v = document.createElement("video");
     v.controls = true; v.autoplay = true; v.muted = true; v.playsInline = true;
-    if (window.Hls && Hls.isSupported()) {
-      currentHls = new Hls();
-      currentHls.loadSource(url);
-      currentHls.attachMedia(v);
-    } else { v.src = url; }
     pipBody.appendChild(v);
+
+    // Prefer Safari native <video> HLS playback — it bypasses CORS entirely
+    // because it goes through the media loading system, not fetch/XHR.
+    const canNative = v.canPlayType("application/vnd.apple.mpegurl") !== "";
+
+    if (canNative) {
+      v.src = url;
+    } else if (window.Hls && Hls.isSupported()) {
+      // Chrome / Firefox — most DOT HLS streams have no CORS headers, so
+      // route through our same-origin proxy which rewrites segments.
+      const proxied = `/api/falcon-eye/hls-proxy?url=${encodeURIComponent(url)}`;
+      currentHls = new Hls({ enableWorker: true, lowLatencyMode: false });
+      currentHls.loadSource(proxied);
+      currentHls.attachMedia(v);
+      currentHls.on(Hls.Events.ERROR, (_ev, data) => {
+        if (data.fatal) {
+          try { currentHls.destroy(); } catch {}
+          currentHls = null;
+          showIframeError(url);
+        }
+      });
+    } else {
+      v.src = url;
+    }
   } else if (kind === "mp4") {
     const v = document.createElement("video");
     v.src = url;
@@ -2531,16 +2608,37 @@ const mobileSheet = document.getElementById("mobileSheet");
 const sheetBody = document.getElementById("sheetBody");
 const sheetTitle = document.getElementById("sheetTitle");
 let currentSheet = null;
+// Track the DOM element currently borrowed into the sheet so we can
+// return it to its original parent before swapping in a new panel.
+let sheetMoved = null;
+let sheetMovedOriginalParent = null;
+let sheetMovedNextSibling = null;
+
+function restoreMovedPanel() {
+  if (sheetMoved && sheetMovedOriginalParent) {
+    try {
+      if (sheetMovedNextSibling && sheetMovedNextSibling.parentElement === sheetMovedOriginalParent) {
+        sheetMovedOriginalParent.insertBefore(sheetMoved, sheetMovedNextSibling);
+      } else {
+        sheetMovedOriginalParent.appendChild(sheetMoved);
+      }
+    } catch {}
+  }
+  sheetMoved = null;
+  sheetMovedOriginalParent = null;
+  sheetMovedNextSibling = null;
+}
 
 function openSheet(kind) {
-  // If re-tapping the active tab, close the sheet
+  // Re-tapping the active tab closes the sheet
   if (currentSheet === kind) { closeSheet(); return; }
+  // Return any previously-borrowed panel to its original parent first
+  restoreMovedPanel();
+
   currentSheet = kind;
   document.querySelectorAll(".mobile-nav button").forEach((b) =>
     b.classList.toggle("active", b.dataset.sheet === kind));
 
-  // Move the existing panel DOM into the sheet body so all its event
-  // handlers keep working. Remember previous parent so we can restore.
   sheetBody.innerHTML = "";
   let moved = null, title = "Layers";
   if (kind === "layers") {
@@ -2584,15 +2682,10 @@ function openSheet(kind) {
     if (opsLog && mLog) mLog.innerHTML = opsLog.innerHTML;
   }
   if (moved) {
-    moved.dataset._prevParent = moved.dataset._prevParent || (moved.parentElement?.id || moved.parentElement?.className || "");
+    sheetMoved = moved;
+    sheetMovedOriginalParent = moved.parentElement;
+    sheetMovedNextSibling = moved.nextSibling;
     sheetBody.appendChild(moved);
-    moved.style.display = "";
-    moved.style.position = "static";
-    moved.style.inset = "auto";
-    moved.style.width = "auto";
-    moved.style.height = "auto";
-    moved.style.background = "transparent";
-    moved.style.border = "none";
   }
   sheetTitle.textContent = title;
   mobileSheet.classList.add("open");
@@ -2602,6 +2695,8 @@ function closeSheet() {
   mobileSheet.classList.remove("open");
   document.querySelectorAll(".mobile-nav button").forEach((b) => b.classList.remove("active"));
   currentSheet = null;
+  // Wait for slide-down transition before returning DOM to its original spot
+  setTimeout(restoreMovedPanel, 320);
 }
 
 document.querySelectorAll(".mobile-nav button").forEach((b) => {

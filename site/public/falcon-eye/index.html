@@ -482,6 +482,27 @@
       </div>
       <div class="layer-meta">Tavily · Geo-tagged</div>
     </div>
+    <div class="layer on" data-layer="earthquakes">
+      <div class="layer-row">
+        <span class="layer-name">Earthquakes</span>
+        <span class="layer-count" id="cntEq">0</span>
+      </div>
+      <div class="layer-meta">USGS · Last 24h</div>
+    </div>
+    <div class="layer on" data-layer="fires">
+      <div class="layer-row">
+        <span class="layer-name">Wildfires</span>
+        <span class="layer-count" id="cntFire">0</span>
+      </div>
+      <div class="layer-meta">NASA FIRMS · VIIRS</div>
+    </div>
+    <div class="layer on" data-layer="terminator">
+      <div class="layer-row">
+        <span class="layer-name">Day · Night</span>
+        <span class="layer-count" id="cntTerm">●</span>
+      </div>
+      <div class="layer-meta">Solar Terminator</div>
+    </div>
   </aside>
 
   <aside class="rail-right">
@@ -556,17 +577,27 @@ const API = {
   tle:     "/api/falcon-eye/tle",
   cams:    "/api/falcon-eye/cameras",
   news:    "/api/falcon-eye/news",
+  fires:   "/api/falcon-eye/fires",
+  // External (CORS-friendly)
+  quakes:  "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson",
 };
 
 const state = {
-  layers: { satellites: true, aircraft: true, cameras: true, news: true },
+  layers: { satellites: true, aircraft: true, cameras: true, news: true,
+            earthquakes: true, fires: true, terminator: true },
   sats: [],            // {name, satrec}
   satPoints: [],       // current propagated points
   aircraft: [],        // OpenSky records
+  airTrails: {},       // icao → array of recent {lat,lng,ts}
   cameras: [],
   alerts: [],
+  earthquakes: [],
+  fires: [],
+  selectedOrbit: null, // [{lat,lng,alt}, ...] for clicked sat
+  selectedTrail: null, // [{lat,lng}, ...] for clicked plane
+  selectedSatName: "",
   cmdCount: 0,
-  tracked: null,       // { type: 'sat'|'air', id, name }
+  tracked: null,
 };
 
 // ── Globe init ──
@@ -680,6 +711,14 @@ async function loadAircraft() {
       country: p.country,
       type: "air",
     }));
+    // Append to trails (cap at 20 points each)
+    for (const p of state.aircraft) {
+      if (!p.icao) continue;
+      const t = state.airTrails[p.icao] || [];
+      t.push([p.lat, p.lng]);
+      if (t.length > 20) t.shift();
+      state.airTrails[p.icao] = t;
+    }
     document.getElementById("cntAir").textContent = state.aircraft.length;
     rerender();
   } catch (e) { console.warn("aircraft load failed", e); }
@@ -747,6 +786,86 @@ async function loadCameras() {
   rerender();
 }
 
+// ── Earthquakes (USGS, no key, CORS-friendly) ──
+async function loadEarthquakes() {
+  try {
+    const r = await fetch(API.quakes);
+    const d = await r.json();
+    state.earthquakes = (d.features || []).map((f) => ({
+      lat: f.geometry.coordinates[1],
+      lng: f.geometry.coordinates[0],
+      mag: f.properties.mag || 0,
+      place: f.properties.place || "",
+      time: f.properties.time,
+      url: f.properties.url,
+    }));
+    document.getElementById("cntEq").textContent = state.earthquakes.length;
+    rerender();
+  } catch (e) { console.warn("eq load failed", e); }
+}
+
+// ── Wildfires (NASA FIRMS via proxy, graceful no-op) ──
+async function loadFires() {
+  try {
+    const r = await fetch(API.fires);
+    const d = await r.json();
+    state.fires = (d.fires || []).map((f) => ({ lat: f.lat, lng: f.lon, frp: f.frp }));
+    document.getElementById("cntFire").textContent = state.fires.length;
+    rerender();
+  } catch (e) { console.warn("fires load failed", e); }
+}
+
+// ── Solar terminator (subsolar point + great-circle line) ──
+function subsolarPoint(date = new Date()) {
+  const start = Date.UTC(date.getUTCFullYear(), 0, 0);
+  const day = (date - start) / 86400000;
+  const decl = -23.44 * Math.cos((2 * Math.PI * (day + 10)) / 365.25);
+  const hour = date.getUTCHours() + date.getUTCMinutes() / 60 + date.getUTCSeconds() / 3600;
+  const lon = -15 * (hour - 12);
+  return { lat: decl, lon };
+}
+function terminatorPath() {
+  const ss = subsolarPoint();
+  const aLat = -ss.lat * Math.PI / 180;
+  const aLon = (ss.lon + 180) * Math.PI / 180;
+  const d = Math.PI / 2;
+  const pts = [];
+  for (let i = 0; i <= 120; i++) {
+    const brng = (i / 120) * 2 * Math.PI;
+    const lat = Math.asin(Math.sin(aLat) * Math.cos(d) + Math.cos(aLat) * Math.sin(d) * Math.cos(brng));
+    const lon = aLon + Math.atan2(
+      Math.sin(brng) * Math.sin(d) * Math.cos(aLat),
+      Math.cos(d) - Math.sin(aLat) * Math.sin(lat),
+    );
+    pts.push([lat * 180 / Math.PI, ((lon * 180 / Math.PI + 540) % 360) - 180, 0.001]);
+  }
+  return pts;
+}
+
+// ── Satellite orbit propagation (90 min forward from now) ──
+function computeOrbit(satName) {
+  const s = state.sats.find((x) => x.name === satName);
+  if (!s) return null;
+  const path = [];
+  const now = new Date();
+  for (let i = 0; i <= 90; i++) {
+    const t = new Date(now.getTime() + i * 60 * 1000);
+    try {
+      const pv = satellite.propagate(s.satrec, t);
+      if (!pv.position) continue;
+      const gmst = satellite.gstime(t);
+      const geo = satellite.eciToGeodetic(pv.position, gmst);
+      const alt = Math.min(0.12, Math.max(0.04, geo.height / 6371));
+      path.push([
+        satellite.degreesLat(geo.latitude),
+        satellite.degreesLong(geo.longitude),
+        alt,
+      ]);
+    } catch {}
+  }
+  return path.length ? path : null;
+}
+
 // ── News ──
 async function loadNews(region = "") {
   try {
@@ -786,27 +905,38 @@ function renderFeed() {
 }
 
 function rerender() {
-  // Aircraft as flat surface dots (no altitude column)
-  const airPoints = state.layers.aircraft ? state.aircraft.map(a => ({
-    ...a, alt: 0.005
-  })) : [];
-  // Satellites — use small column for orbital feel but capped
+  // Build unified points layer
+  const airPoints = state.layers.aircraft ? state.aircraft.map(a => ({ ...a, alt: 0.005 })) : [];
   const satPoints = state.layers.satellites ? state.satPoints : [];
-  // Cameras as flat green dots on the surface
   const camPoints = state.layers.cameras ? state.cameras.filter(c => c.lat != null).map(c => ({
     ...c, lng: c.lon, type: "cam", name: c.label, alt: 0.002
   })) : [];
+  const eqPoints = state.layers.earthquakes ? state.earthquakes.map(q => ({
+    ...q, type: "eq", name: `M${q.mag?.toFixed?.(1) || "?"} ${q.place}`, alt: 0.001
+  })) : [];
+  const firePoints = state.layers.fires ? state.fires.map(f => ({
+    ...f, type: "fire", name: `Fire FRP ${f.frp?.toFixed?.(0) || ""}`, alt: 0.001
+  })) : [];
 
-  const points = [...satPoints, ...airPoints, ...camPoints];
+  const points = [...satPoints, ...airPoints, ...camPoints, ...eqPoints, ...firePoints];
 
   globe
     .pointsData(points)
     .pointLat("lat").pointLng("lng").pointAltitude("alt")
-    .pointRadius((d) => d.type === "sat" ? 0.32 : d.type === "air" ? 0.28 : 0.55)
+    .pointRadius((d) =>
+        d.type === "sat"  ? 0.32
+      : d.type === "air"  ? 0.28
+      : d.type === "cam"  ? 0.55
+      : d.type === "eq"   ? Math.max(0.18, Math.min(1.4, (d.mag || 1) * 0.22))
+      : d.type === "fire" ? 0.14
+      : 0.2)
     .pointColor((d) =>
-        d.type === "sat" ? "#5fd9ff"
-      : d.type === "air" ? "#ffb547"
-      : "#39ff8f")
+        d.type === "sat"  ? "#5fd9ff"
+      : d.type === "air"  ? "#ffb547"
+      : d.type === "cam"  ? "#39ff8f"
+      : d.type === "eq"   ? "#ff5b8a"
+      : d.type === "fire" ? "#ff6a1a"
+      : "#ffffff")
     .pointResolution(8)
     .onPointHover((d) => {
       const pop = document.getElementById("info");
@@ -815,11 +945,25 @@ function rerender() {
       pop.classList.add("show");
     })
     .onPointClick((d) => {
-      if (d.type === "cam") openViewer(d);
-      else globe.pointOfView({ lat: d.lat, lng: d.lng, altitude: 0.6 }, 1200);
+      if (d.type === "cam") { openViewer(d); return; }
+      if (d.type === "sat") {
+        state.selectedSatName = d.name;
+        state.selectedOrbit = computeOrbit(d.name);
+        state.selectedTrail = null;
+        document.getElementById("focus").textContent = (d.name || "").trim().toUpperCase();
+      } else if (d.type === "air") {
+        state.selectedTrail = (state.airTrails[d.icao] || []).slice();
+        state.selectedOrbit = null;
+        state.selectedSatName = "";
+        document.getElementById("focus").textContent = (d.name || "").trim().toUpperCase();
+      } else if (d.type === "eq" && d.url) {
+        window.open(d.url, "_blank", "noopener");
+      }
+      globe.pointOfView({ lat: d.lat, lng: d.lng, altitude: 0.6 }, 1200);
+      rerender();
     });
 
-  // Pulsing rings for cameras (always on when cameras visible) + news alerts
+  // Rings — cameras + news + significant earthquakes
   const rings = [];
   if (state.layers.cameras) {
     for (const c of state.cameras) if (c.lat != null) rings.push({
@@ -836,11 +980,43 @@ function rerender() {
       period: 1400,
     });
   }
+  if (state.layers.earthquakes) {
+    for (const q of state.earthquakes) if ((q.mag || 0) >= 4.5) rings.push({
+      lat: q.lat, lng: q.lng, color: "#ff5b8a",
+      maxR: Math.max(2, (q.mag || 4) * 0.8), period: 1800
+    });
+  }
   globe.ringsData(rings)
     .ringColor((r) => () => r.color)
     .ringMaxRadius("maxR")
     .ringPropagationSpeed(2)
     .ringRepeatPeriod((r) => r.period || 1400);
+
+  // Paths — satellite orbit, aircraft trail, day/night terminator
+  const paths = [];
+  if (state.selectedOrbit) {
+    paths.push({ pts: state.selectedOrbit, color: "#5fd9ff", stroke: 1.4, dash: 0.04, gap: 0.02, anim: 2000 });
+  }
+  if (state.selectedTrail && state.selectedTrail.length > 1) {
+    paths.push({
+      pts: state.selectedTrail.map(([la, ln]) => [la, ln, 0.006]),
+      color: "#ffb547", stroke: 1.2, dash: 0, gap: 0, anim: 0
+    });
+  }
+  if (state.layers.terminator) {
+    paths.push({ pts: terminatorPath(), color: "#ffd23d", stroke: 0.6, dash: 0.02, gap: 0.015, anim: 6000 });
+  }
+  globe.pathsData(paths)
+    .pathPoints("pts")
+    .pathPointLat((p) => p[0])
+    .pathPointLng((p) => p[1])
+    .pathPointAlt((p) => p[2] || 0.001)
+    .pathColor((p) => p.color)
+    .pathStroke((p) => p.stroke)
+    .pathDashLength((p) => p.dash || 0)
+    .pathDashGap((p) => p.gap || 0)
+    .pathDashAnimateTime((p) => p.anim || 0)
+    .pathTransitionDuration(0);
 }
 
 document.addEventListener("mousemove", (e) => {
@@ -967,7 +1143,11 @@ function openViewer(cam) {
 document.getElementById("btnReset").onclick = () => {
   globe.pointOfView({ lat: 20, lng: 0, altitude: 2.4 }, 1500);
   state.tracked = null;
+  state.selectedOrbit = null;
+  state.selectedTrail = null;
+  state.selectedSatName = "";
   document.getElementById("focus").textContent = "GLOBAL";
+  rerender();
 };
 document.getElementById("btnTrackISS").onclick = () => trackByName("ISS");
 
@@ -978,6 +1158,16 @@ function trackByName(q) {
     state.tracked = { name: target.name, type: target.type };
     globe.pointOfView({ lat: target.lat, lng: target.lng, altitude: 1.0 }, 2000);
     document.getElementById("focus").textContent = target.name.trim().toUpperCase();
+    if (target.type === "sat") {
+      state.selectedSatName = target.name;
+      state.selectedOrbit = computeOrbit(target.name);
+      state.selectedTrail = null;
+    } else if (target.type === "air") {
+      state.selectedTrail = (state.airTrails[target.icao] || []).slice();
+      state.selectedOrbit = null;
+      state.selectedSatName = "";
+    }
+    rerender();
   }
 }
 
@@ -1047,10 +1237,18 @@ loadSats().then(() => { propagateSats(); setInterval(propagateSats, 250); });
 loadAircraft(); setInterval(loadAircraft, 25000);
 loadCameras();
 loadNews(); setInterval(() => loadNews(), 60000);
+loadEarthquakes(); setInterval(loadEarthquakes, 5 * 60 * 1000);
+loadFires(); setInterval(loadFires, 30 * 60 * 1000);
 pollCommands();
 
 // Smooth aircraft extrapolation between OpenSky updates
 setInterval(() => { extrapolateAircraft(); rerender(); }, 200);
+
+// Recompute selected sat orbit & re-render terminator periodically
+setInterval(() => {
+  if (state.selectedSatName) state.selectedOrbit = computeOrbit(state.selectedSatName);
+  rerender();
+}, 5000);
 
 // Mark Spectra link as live once we get any command or after 3s
 setTimeout(() => document.getElementById("spectraPill").classList.add("live"), 3000);

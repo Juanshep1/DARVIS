@@ -255,6 +255,9 @@
     background: rgba(57,255,143,0.06);
     box-shadow: 0 0 8px rgba(57,255,143,0.15);
   }
+  .src-chips .chip[data-src="windy"].on { color: var(--cyan); border-color: var(--cyan); background: rgba(95,217,255,0.08); box-shadow: 0 0 8px rgba(95,217,255,0.18); }
+  .src-chips .chip[data-src="earthcam"].on { color: var(--amber); border-color: var(--panel-edge-hot); background: rgba(255,181,71,0.08); box-shadow: 0 0 8px rgba(255,181,71,0.18); }
+  .src-chips .chip[data-src="nature"].on { color: #d586ff; border-color: #d586ff; background: rgba(213,134,255,0.08); box-shadow: 0 0 8px rgba(213,134,255,0.18); }
 
   /* Cursor coordinate readout (overlaid on map) */
   .cursor-readout {
@@ -1111,31 +1114,35 @@ function drawSatellite(ctx) {
   ctx.closePath();
   ctx.fill(); ctx.shadowBlur = 0; ctx.stroke();
 }
-function drawCamera(ctx) {
+function drawCameraCCTV(ctx, fill, glow, darkEdge) {
   ctx.translate(16, 16);
-  ctx.fillStyle = "#39ff8f";
-  ctx.strokeStyle = "rgba(0,40,18,0.9)";
+  ctx.fillStyle = fill;
+  ctx.strokeStyle = darkEdge;
   ctx.lineWidth = 1.2; ctx.lineJoin = "round";
-  ctx.shadowColor = "rgba(57,255,143,0.7)"; ctx.shadowBlur = 5;
-  // Mount bracket
+  ctx.shadowColor = glow; ctx.shadowBlur = 5;
   ctx.beginPath();
   ctx.moveTo(-12, 8); ctx.lineTo(-12, 3); ctx.lineTo(-8, 3);
   ctx.lineWidth = 1.5; ctx.stroke();
   ctx.lineWidth = 1.2;
-  // Body
   ctx.beginPath();
   ctx.moveTo(-9, -5); ctx.lineTo(3, -5);
   ctx.lineTo(3, 5); ctx.lineTo(-9, 5); ctx.closePath();
   ctx.fill(); ctx.stroke();
-  // Lens barrel
   ctx.beginPath();
   ctx.moveTo(3, -3); ctx.lineTo(10, -4);
   ctx.lineTo(10, 4); ctx.lineTo(3, 3); ctx.closePath();
   ctx.fill(); ctx.stroke();
-  // Inner lens dot
-  ctx.fillStyle = "rgba(0,40,18,0.9)"; ctx.shadowBlur = 0;
+  ctx.fillStyle = darkEdge; ctx.shadowBlur = 0;
   ctx.beginPath(); ctx.arc(8, 0, 1.8, 0, Math.PI * 2); ctx.fill();
 }
+// Default (green) — DOT traffic / user custom
+function drawCamera(ctx)       { drawCameraCCTV(ctx, "#39ff8f", "rgba(57,255,143,0.7)", "rgba(0,40,18,0.9)"); }
+// Blue — Windy webcams (travel / scenic / city views)
+function drawCameraWindy(ctx)  { drawCameraCCTV(ctx, "#5fd9ff", "rgba(95,217,255,0.7)", "rgba(3,30,50,0.9)"); }
+// Amber — EarthCam curated iframes
+function drawCameraEarth(ctx)  { drawCameraCCTV(ctx, "#ffb547", "rgba(255,181,71,0.7)", "rgba(30,15,0,0.9)"); }
+// Magenta — Nature / NASA / Explore.org
+function drawCameraNature(ctx) { drawCameraCCTV(ctx, "#d586ff", "rgba(213,134,255,0.7)", "rgba(30,10,45,0.9)"); }
 function drawQuake(ctx) {
   ctx.translate(16, 16);
   ctx.strokeStyle = "#ff5b8a";
@@ -1193,8 +1200,12 @@ function drawAlert(ctx) {
 }
 
 function addIcons() {
-  const defs = { plane: drawPlane, fighter: drawFighter, satellite: drawSatellite,
-    camera: drawCamera, quake: drawQuake, fire: drawFire, alert: drawAlert };
+  const defs = {
+    plane: drawPlane, fighter: drawFighter, satellite: drawSatellite,
+    camera: drawCamera, "camera-windy": drawCameraWindy,
+    "camera-earth": drawCameraEarth, "camera-nature": drawCameraNature,
+    quake: drawQuake, fire: drawFire, alert: drawAlert,
+  };
   for (const [name, fn] of Object.entries(defs)) {
     if (map.hasImage(name)) continue;
     try { map.addImage(name, makeIcon(fn, 32)); } catch (e) { console.warn("icon", name, e); }
@@ -1215,12 +1226,18 @@ function installLayers() {
   if (!map.getLayer("trail-l")) map.addLayer({ id: "trail-l", type: "line", source: "trail",
     paint: { "line-color": "#ffb547", "line-width": 1.6, "line-opacity": 0.9 } });
 
-  // Global aircraft trails — faint amber lines showing recent flight paths
+  // Global aircraft trails — bright amber streaks showing recent flight paths
+  if (!map.getLayer("airtrails-glow-l")) map.addLayer({ id: "airtrails-glow-l", type: "line", source: "airtrails",
+    paint: { "line-color": "#ffb547", "line-width": 4, "line-opacity": 0.15, "line-blur": 3 },
+    layout: { "line-cap": "round", "line-join": "round" } });
   if (!map.getLayer("airtrails-l")) map.addLayer({ id: "airtrails-l", type: "line", source: "airtrails",
-    paint: { "line-color": "#ffb547", "line-width": 1.1, "line-opacity": 0.35 },
+    paint: { "line-color": "#ffb547", "line-width": 1.8, "line-opacity": 0.75 },
+    layout: { "line-cap": "round", "line-join": "round" } });
+  if (!map.getLayer("miltrails-glow-l")) map.addLayer({ id: "miltrails-glow-l", type: "line", source: "miltrails",
+    paint: { "line-color": "#ff3a55", "line-width": 5, "line-opacity": 0.2, "line-blur": 4 },
     layout: { "line-cap": "round", "line-join": "round" } });
   if (!map.getLayer("miltrails-l")) map.addLayer({ id: "miltrails-l", type: "line", source: "miltrails",
-    paint: { "line-color": "#ff3a55", "line-width": 1.2, "line-opacity": 0.4 },
+    paint: { "line-color": "#ff3a55", "line-width": 2, "line-opacity": 0.85 },
     layout: { "line-cap": "round", "line-join": "round" } });
 
   // NOAA severe weather alert polygons
@@ -1295,13 +1312,23 @@ function installLayers() {
     "icon-allow-overlap": true, "icon-ignore-placement": true,
   }});
 
-  // Cameras — green aura + CCTV silhouette
+  // Cameras — per-source color-coded aura + CCTV silhouette.
+  // dot/usadot/user → green  ·  windy → blue  ·  earthcam → amber  ·  nature → magenta
   if (!map.getLayer("cam-glow-l")) map.addLayer({ id: "cam-glow-l", type: "circle", source: "cameras", paint: {
     "circle-radius": ["interpolate", ["linear"], ["zoom"], 0, 12, 8, 22],
-    "circle-color": "#39ff8f", "circle-opacity": 0.18, "circle-blur": 0.7,
+    "circle-color": ["match", ["get", "source"],
+      "windy", "#5fd9ff",
+      "earthcam", "#ffb547",
+      "nature", "#d586ff",
+      "#39ff8f"],
+    "circle-opacity": 0.18, "circle-blur": 0.7,
   }});
   if (!map.getLayer("cameras-l")) map.addLayer({ id: "cameras-l", type: "symbol", source: "cameras", layout: {
-    "icon-image": "camera",
+    "icon-image": ["match", ["get", "source"],
+      "windy", "camera-windy",
+      "earthcam", "camera-earth",
+      "nature", "camera-nature",
+      "camera"],
     "icon-size": ["interpolate", ["linear"], ["zoom"], 0, 0.7, 6, 0.95, 12, 1.3],
     "icon-allow-overlap": true, "icon-ignore-placement": true,
   }});
@@ -1607,13 +1634,18 @@ async function loadMilitary() {
   } catch (e) { log("mil", `Load failed: ${e.message}`, "warn"); }
 }
 
+// Visual speed multiplier: real aircraft at cruise velocity move ~0.0001°
+// per extrapolation tick at world-view zoom, which is invisible. Multiply
+// for visible motion. Still realistic-feeling when the map is zoomed in.
+const AIR_SPEED_MULT = 3.0;
+
 function extrapolateAircraft() {
   if (!state.aircraft.length) return;
   const now = Date.now();
   for (const p of state.aircraft) {
     if (p.baseLat == null || !p.vel) continue;
     const dt = (now - p.baseTs) / 1000;
-    const distM = p.vel * dt;
+    const distM = p.vel * dt * AIR_SPEED_MULT;
     const distDeg = distM / 111320;
     const headRad = (p.heading || 0) * Math.PI / 180;
     p.lat = p.baseLat + distDeg * Math.cos(headRad);
@@ -1854,8 +1886,8 @@ function rerender() {
     }
   }
   set(["satellites-l"], state.layers.satellites);
-  set(["aircraft-l", "airtrails-l"], state.layers.aircraft);
-  set(["military-l", "mil-glow-l", "miltrails-l"], state.layers.military);
+  set(["aircraft-l", "airtrails-l", "airtrails-glow-l"], state.layers.aircraft);
+  set(["military-l", "mil-glow-l", "miltrails-l", "miltrails-glow-l"], state.layers.military);
   set(["cameras-l", "cam-glow-l"], state.layers.cameras);
   set(["news-l", "news-bg-l"], state.layers.news);
   set(["earthquakes-l", "eq-glow-l"], state.layers.earthquakes);

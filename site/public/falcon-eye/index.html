@@ -608,15 +608,32 @@
 
   /* ── Critical alert banner ── */
   .banner {
-    position: fixed; top: 64px; left: 50%; transform: translateX(-50%);
-    z-index: 150; max-width: 70vw;
+    position: fixed; top: 64px; left: 290px; right: 330px;
+    z-index: 150;
     background: rgba(255,58,85,0.14); border: 1px solid var(--critical);
-    color: #fff; padding: 9px 22px;
-    font-size: 10px; letter-spacing: 0.28em; text-transform: uppercase;
+    color: #fff; padding: 8px 14px 8px 18px;
+    font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase;
     animation: bannerFlash 1.4s infinite;
     display: none;
+    align-items: center; gap: 12px;
+    line-height: 1.3;
   }
-  .banner.show { display: block; }
+  .banner.show { display: flex; }
+  .banner-icon { color: var(--critical); font-size: 14px; flex: 0 0 auto; }
+  .banner-label { color: var(--critical); font-weight: 600; flex: 0 0 auto; }
+  .banner-text {
+    flex: 1; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    color: #fff; letter-spacing: 0.08em;
+  }
+  .banner-close {
+    flex: 0 0 auto;
+    width: 24px; height: 24px;
+    background: transparent; border: 1px solid rgba(255,255,255,0.25);
+    color: #fff; cursor: pointer; font-family: var(--mono);
+    font-size: 14px; line-height: 1; padding: 0;
+  }
+  .banner-close:hover { border-color: var(--critical); color: var(--critical); }
   @keyframes bannerFlash {
     0%,100% { background: rgba(255,58,85,0.14); }
     50%     { background: rgba(255,58,85,0.30); }
@@ -760,7 +777,22 @@
     /* Reuse the existing .layer / .alert / .dossier / chat styles inside
        the sheet body — they already look good. */
 
-    .banner { top: 52px; font-size: 9px; padding: 7px 14px; }
+    .banner {
+      top: 46px; left: 0; right: 0;
+      font-size: 8px; padding: 6px 10px 6px 12px;
+      letter-spacing: 0.12em;
+      gap: 8px;
+      border-left: none; border-right: none;
+    }
+    .banner-label { display: none; }
+    .banner-icon { font-size: 12px; }
+    .banner-text { letter-spacing: 0.06em; }
+    .banner-close { width: 22px; height: 22px; font-size: 13px; }
+    /* When the banner shows on mobile, push the basemap chips down */
+    body:has(.banner.show) .basemap-ctrl { top: calc(46px + 36px) !important; }
+    body:has(.banner.show) #map, body:has(.banner.show) #cesium {
+      top: calc(46px + 36px) !important;
+    }
 
     /* Hide old mobile overrides that conflict with the sheet pattern */
   }
@@ -779,7 +811,12 @@
   <div class="map-corner tl"></div><div class="map-corner tr"></div>
   <div class="map-corner bl"></div><div class="map-corner br"></div>
 
-  <div class="banner" id="banner">⚠ CRITICAL ALERT — <span id="bannerText"></span></div>
+  <div class="banner" id="banner">
+    <span class="banner-icon">⚠</span>
+    <span class="banner-label">CRITICAL ALERT</span>
+    <span class="banner-text" id="bannerText"></span>
+    <button class="banner-close" id="bannerClose" title="Dismiss">×</button>
+  </div>
 
   <header class="header">
     <div class="brand">
@@ -2024,9 +2061,17 @@ async function loadNews(region = "") {
     setStats();
     const crit = state.alerts.find((a) => a.severity === "critical");
     if (crit) {
-      document.getElementById("bannerText").textContent = crit.headline;
-      document.getElementById("banner").classList.add("show");
-      log("intel", crit.headline, "crit");
+      let dismissed = "";
+      try { dismissed = localStorage.getItem("fe-banner-dismissed") || ""; } catch {}
+      // Only show if not the same headline the user already dismissed
+      if (dismissed !== crit.headline) {
+        document.getElementById("bannerText").textContent = crit.headline;
+        document.getElementById("banner").classList.add("show");
+        document.getElementById("banner").dataset.headline = crit.headline;
+        log("intel", crit.headline, "crit");
+      } else {
+        document.getElementById("banner").classList.remove("show");
+      }
     } else {
       document.getElementById("banner").classList.remove("show");
     }
@@ -3000,6 +3045,14 @@ async function handleCommand(cmd) {
   }
 }
 setTimeout(() => document.getElementById("spectraPill").classList.add("live"), 3000);
+
+// Banner close — dismiss the current critical alert (per-headline)
+document.getElementById("bannerClose").addEventListener("click", () => {
+  const banner = document.getElementById("banner");
+  const head = banner.dataset.headline || "";
+  banner.classList.remove("show");
+  try { if (head) localStorage.setItem("fe-banner-dismissed", head); } catch {}
+});
 
 // ── Mobile bottom-nav + slide-up sheet ────────────────────────────
 const mobileSheet = document.getElementById("mobileSheet");

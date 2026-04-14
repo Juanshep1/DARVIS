@@ -50,6 +50,12 @@ async function drainAisStream({ apiKey, windowMs, seedVessels }) {
   let parseErrors = 0;
   let socketErrors = [];
 
+  async function readMessageData(data) {
+    if (typeof data === "string") return data;
+    if (data && typeof data.text === "function") return data.text();
+    return String(data || "");
+  }
+
   const finished = new Promise((resolve, reject) => {
     let settled = false;
     const finish = (result) => {
@@ -76,10 +82,10 @@ async function drainAisStream({ apiKey, windowMs, seedVessels }) {
       }));
     });
 
-    ws.addEventListener("message", (event) => {
+    ws.addEventListener("message", async (event) => {
       totalMessages += 1;
       try {
-        const payload = JSON.parse(event.data);
+        const payload = JSON.parse(await readMessageData(event.data));
         if (payload?.error) {
           socketErrors.push(String(payload.error));
           clearTimeout(timer);

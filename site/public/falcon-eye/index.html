@@ -1465,6 +1465,7 @@ const API = {
   news:    "/api/falcon-eye/news",
   swarm:   "/api/falcon-eye/swarm",
   broadcasts: "/api/falcon-eye/broadcasts",
+  liveVideo: "/api/falcon-eye/live-video",
   vessels: "/api/falcon-eye/vessels",
   wxalerts:"/api/falcon-eye/weather-alerts",
   fires:   "/api/falcon-eye/fires",
@@ -3823,33 +3824,111 @@ function showIframeError(url) {
       <a href="${url}" target="_blank" rel="noopener" style="color:var(--amber);text-decoration:none;border:1px solid var(--amber);padding:6px 12px">Open in New Tab ↗</a>
     </div>`;
 }
-// Open a live news broadcast iframe in the existing PIP viewer for an
-// intel item. Uses the channels mapping from /api/falcon-eye/broadcasts.
-async function openLiveBroadcast(alert) {
-  const candidate = alert.channelId || alert.source || alert.region;
+// Cache the validated HLS broadcast list once per session — it's a small
+// payload and the streams are stable enough to reuse across clicks.
+let liveVideoCache = null;
+async function getLiveVideoStreams() {
+  if (liveVideoCache) return liveVideoCache;
   try {
-    const r = await fetch(`${API.broadcasts}?source=${encodeURIComponent(candidate || "")}`);
-    if (!r.ok) throw new Error("no broadcast");
-    const data = await r.json();
-    if (!data.url) throw new Error("no url");
+    const r = await fetch(API.liveVideo);
+    const d = await r.json();
+    liveVideoCache = (d.streams || d.items || []).filter((s) => s.url);
+  } catch { liveVideoCache = []; }
+  return liveVideoCache;
+}
+
+// Score a stream against an intel item — prefer same-region matches,
+// then English-language news, then anything in the news category.
+function pickBestStream(streams, alert) {
+  if (!streams.length) return null;
+  const region = (alert.region || "").toLowerCase();
+  const source = (alert.source || "").toLowerCase();
+
+  // 1. Source-name match (e.g. "Al Jazeera Arabic" → aljazeera-ar)
+  const direct = streams.find((s) => {
+    const lab = (s.label || "").toLowerCase();
+    return source && (lab.includes(source) || source.includes(lab.split(" ")[0]));
+  });
+  if (direct) return direct;
+
+  // 2. Region match — if the intel is about the Middle East, prefer Al Jazeera
+  if (region) {
+    const REGION_MAP = {
+      "qatar":"qatar","saudi":"qatar","uae":"qatar","yemen":"qatar","iraq":"qatar",
+      "iran":"qatar","israel":"qatar","gaza":"qatar","syria":"qatar","lebanon":"qatar","jordan":"qatar",
+      "egypt":"qatar","palestine":"qatar","west bank":"qatar",
+      "germany":"germany","france":"france","russia":"germany","ukraine":"germany",
+      "uk":"germany","united kingdom":"germany","poland":"germany","spain":"germany","italy":"germany",
+      "usa":"usa","united states":"usa","mexico":"usa","canada":"usa","cuba":"usa",
+      "korea":"south korea","north korea":"south korea","japan":"south korea",
+      "china":"singapore","singapore":"singapore","taiwan":"singapore","vietnam":"singapore",
+      "thailand":"singapore","philippines":"singapore","india":"singapore","indonesia":"singapore",
+    };
+    const target = REGION_MAP[region] || region;
+    const regional = streams.find((s) => (s.region || "").toLowerCase() === target);
+    if (regional) return regional;
+  }
+
+  // 3. Default to the first English-language news stream
+  return streams.find((s) => /english|en$/i.test(s.label || "") && s.category === "news")
+      || streams.find((s) => s.category === "news")
+      || streams[0];
+}
+
+// Open a live news broadcast in the PIP. Strategy:
+//  1. Try the validated HLS feed list (/api/falcon-eye/live-video). If we
+//     find one matching the intel item's region or source, play it as
+//     direct HLS through the existing hls-proxy → guaranteed real video.
+//  2. Fall back to the YouTube channel embed mapping (/api/falcon-eye/
+//     broadcasts) which is iframe-based but covers more outlets.
+//  3. Final fallback: open the article URL itself.
+async function openLiveBroadcast(alert) {
+  const candidate = alert.channelId || alert.source || alert.region || "";
+
+  // Try the validated HLS list first
+  try {
+    const streams = await getLiveVideoStreams();
+    const pick = pickBestStream(streams, alert);
+    if (pick && pick.url) {
+      openViewer({
+        label: `${pick.label || "LIVE"} · ${alert.headline || ""}`.slice(0, 80),
+        url: pick.url,
+        kind: "hls",
+        source: "broadcast",
+      });
+      log("intel", `▶ ${pick.label}`);
+      return;
+    }
+  } catch (e) { console.warn("live-video lookup:", e); }
+
+  // Fall back to YouTube channel embed mapping
+  try {
+    const r = await fetch(`${API.broadcasts}?source=${encodeURIComponent(candidate)}`);
+    if (r.ok) {
+      const data = await r.json();
+      if (data.url) {
+        openViewer({
+          label: `${data.name || "LIVE"} · ${alert.headline || ""}`.slice(0, 80),
+          url: data.url,
+          kind: "iframe",
+          source: "broadcast",
+        });
+        log("intel", `▶ ${data.name} (yt)`);
+        return;
+      }
+    }
+  } catch (e) { console.warn("broadcasts lookup:", e); }
+
+  // Final fallback: just open the article
+  if (alert.url) {
     openViewer({
-      label: `${data.name || "LIVE"} · ${alert.headline || ""}`.slice(0, 80),
-      url: data.url,
+      label: `${alert.source || "INTEL"} · ${alert.headline || ""}`.slice(0, 80),
+      url: alert.url,
       kind: "iframe",
       source: "broadcast",
     });
-  } catch (e) {
-    // Fallback: try the original article URL or open a search
-    if (alert.url) {
-      openViewer({
-        label: `${alert.source || "INTEL"} · ${alert.headline || ""}`.slice(0, 80),
-        url: alert.url,
-        kind: "iframe",
-        source: "broadcast",
-      });
-    } else {
-      log("intel", `no live feed for ${candidate}`, "warn");
-    }
+  } else {
+    log("intel", `no live feed for ${candidate}`, "warn");
   }
 }
 

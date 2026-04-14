@@ -9,87 +9,653 @@
 <title>S.P.E.C.T.R.A.</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔵</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;400;600&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=UnifrakturCook:wght@700&family=Fraunces:opsz,wght,SOFT@9..144,300..900,0..100&family=EB+Garamond:ital,wght@0,400..800;1,400..700&family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#05060a;--bg-elev:#0a0d14;--bg-card:rgba(14,18,26,0.78);--bg-glass:rgba(18,22,32,0.6);--border:rgba(255,255,255,0.07);--border-hot:rgba(108,99,255,0.35);--text:#d5d7e0;--text-soft:#8a8f9e;--text-dim:#4a4f5c;--accent:#7b72ff;--accent-glow:rgba(123,114,255,0.35);--cyan:#5fd9ff;--green:#39ff8f;--amber:#ffb547;--orange:#ff9d42;--red:#ff5070;--font:'Outfit',sans-serif;--mono:'JetBrains Mono',monospace}
-*{margin:0;padding:0;box-sizing:border-box}
-body{background:var(--bg);color:var(--text);font-family:var(--font);height:100vh;height:100dvh;display:flex;flex-direction:column;overflow:hidden;-webkit-tap-highlight-color:transparent;padding:env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left)}
-body::before{content:'';position:fixed;inset:0;background:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");pointer-events:none;z-index:9999}
-body::after{content:'';position:fixed;top:-50%;left:-50%;width:200%;height:200%;background:radial-gradient(ellipse at 20% 10%,rgba(123,114,255,0.07),transparent 55%),radial-gradient(ellipse at 80% 90%,rgba(95,217,255,0.05),transparent 55%),radial-gradient(ellipse at 50% 50%,rgba(255,181,71,0.02),transparent 70%);pointer-events:none;z-index:-1}
-.header{position:relative;display:grid;grid-template-columns:1fr auto;align-items:center;gap:12px;padding:14px 18px 10px;flex-shrink:0;background:linear-gradient(180deg,rgba(10,13,20,0.92) 0%,rgba(10,13,20,0.35) 80%,transparent 100%);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid var(--border)}
-.header::before{content:'';position:absolute;left:0;right:0;bottom:0;height:1px;background:linear-gradient(90deg,transparent,rgba(123,114,255,0.5),rgba(95,217,255,0.3),transparent);opacity:0.6;pointer-events:none}
-.header-brand{font-family:var(--mono);font-size:0.62rem;font-weight:600;letter-spacing:0.32em;color:var(--text-soft);text-transform:uppercase;display:flex;align-items:center;gap:10px;min-width:0}
-.header-brand::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px var(--accent-glow);flex-shrink:0;animation:brandPulse 2.4s ease-in-out infinite}
-@keyframes brandPulse{0%,100%{opacity:0.9;transform:scale(1)}50%{opacity:0.5;transform:scale(0.8)}}
-.header-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;max-width:100%}
-.header-btn{width:34px;height:34px;border-radius:11px;border:1px solid var(--border);background:var(--bg-glass);color:var(--text-soft);font-size:0.9rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.18s cubic-bezier(0.4,0,0.2,1);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);position:relative}
-.header-btn::after{content:'';position:absolute;inset:-1px;border-radius:11px;background:linear-gradient(135deg,rgba(123,114,255,0),rgba(123,114,255,0));opacity:0;transition:opacity 0.2s;pointer-events:none}
-.header-btn:hover{border-color:var(--border-hot);color:var(--text);background:rgba(22,26,38,0.78);transform:translateY(-1px)}
-.header-btn:hover::after{opacity:1;background:linear-gradient(135deg,rgba(123,114,255,0.12),rgba(95,217,255,0.06))}
-.header-btn:active{transform:translateY(0)}
-.header-btn.active{border-color:var(--green);color:var(--green);background:rgba(57,255,143,0.08)}
-.header-btn.fixing{border-color:var(--orange);color:var(--orange);animation:pulse-fix 1s infinite}
-@keyframes pulse-fix{0%,100%{opacity:1}50%{opacity:0.5}}
-.orb-area{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;min-height:0}
-.orb-wrap{position:relative;width:300px;height:300px;display:flex;align-items:center;justify-content:center}
-#orbCanvas{width:300px;height:300px;cursor:pointer;position:relative;z-index:2}
-.orb{display:none}
-.response-area{width:90%;max-width:600px;text-align:center;padding:8px 16px;max-height:50vh;overflow-y:auto;scrollbar-width:none}
-.response-area::-webkit-scrollbar{display:none}
-#response{font-family:var(--font);font-size:0.9rem;font-weight:300;line-height:1.7;color:rgba(200,202,208,0.9);text-align:left}
-.input-area{padding:12px 16px calc(env(safe-area-inset-bottom,0px) + 14px);display:flex;gap:8px;align-items:center;justify-content:center;flex-shrink:0}
-.input-area input{flex:1;max-width:520px;padding:13px 20px;border:1px solid var(--border);border-radius:18px;background:var(--bg-glass);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);color:var(--text);font-family:var(--font);font-size:0.92rem;font-weight:300;outline:none;transition:all 0.25s;box-shadow:0 2px 14px rgba(0,0,0,0.3)}
-.input-area input:focus{border-color:var(--border-hot);box-shadow:0 0 0 3px rgba(123,114,255,0.1),0 2px 20px rgba(123,114,255,0.1)}
-.input-area input::placeholder{color:rgba(255,255,255,0.18);font-weight:200}
-.mic-btn,.cam-btn{width:44px;height:44px;min-width:44px;border-radius:15px;border:1px solid var(--border);background:var(--bg-glass);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);color:var(--accent);font-size:1.15rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.2s}
-.mic-btn:hover,.cam-btn:hover{border-color:var(--border-hot);transform:translateY(-1px);box-shadow:0 4px 18px rgba(123,114,255,0.15)}
-.mic-btn.recording{border-color:var(--red);color:var(--red);box-shadow:0 0 15px rgba(255,82,82,0.2)}
-.cam-btn.active{border-color:var(--green);color:var(--green)}
-#statusBar{text-align:center;padding:4px 0 6px;font-family:var(--mono);font-size:0.55rem;font-weight:400;letter-spacing:0.22em;color:rgba(255,255,255,0.18);text-transform:uppercase;flex-shrink:0}
-.settings-panel{position:fixed;top:56px;right:12px;background:var(--bg-card);border:1px solid var(--border);border-radius:16px;padding:18px;width:280px;z-index:100;display:none;backdrop-filter:blur(30px);max-height:80vh;overflow-y:auto}
-.settings-panel.open{display:block}
-.settings-panel label{display:block;font-family:var(--mono);font-size:0.6rem;font-weight:500;color:rgba(255,255,255,0.3);letter-spacing:2px;text-transform:uppercase;margin:14px 0 6px}
-.settings-panel label:first-child{margin-top:0}
-.settings-panel select{width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,0.04);color:var(--text);font-family:var(--mono);font-size:0.75rem;outline:none;-webkit-appearance:none}
-.settings-panel select:focus{border-color:rgba(108,99,255,0.4)}
-.settings-status{margin-top:12px;font-family:var(--mono);font-size:0.65rem;color:var(--green);min-height:1.2em}
-.cam-preview{position:fixed;bottom:80px;left:14px;width:140px;height:190px;border-radius:16px;border:1px solid rgba(0,230,118,0.3);object-fit:cover;z-index:90;display:none;box-shadow:0 4px 30px rgba(0,0,0,0.5)}
-.cam-preview.active{display:block}
-.agent-panel{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--bg-card);border:1px solid var(--border);border-radius:20px;width:92vw;max-width:700px;max-height:85vh;z-index:200;display:none;backdrop-filter:blur(30px);overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.6)}
-.agent-panel.open{display:flex;flex-direction:column}
-.agent-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border)}
-.agent-title{font-family:var(--mono);font-size:0.6rem;font-weight:500;letter-spacing:2px;color:rgba(255,255,255,0.3);text-transform:uppercase}
-.agent-close{width:24px;height:24px;border-radius:8px;border:1px solid rgba(255,82,82,0.3);background:transparent;color:var(--red);font-size:0.8rem;cursor:pointer;display:flex;align-items:center;justify-content:center}
-.agent-screen-wrap{flex:1;background:#000;min-height:200px;position:relative}
-.agent-screen-wrap img{width:100%;height:100%;object-fit:contain;display:block}
-.agent-no-feed{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:rgba(255,255,255,0.15);font-size:0.75rem;text-align:center}
-.agent-footer{padding:10px 16px;border-top:1px solid var(--border)}
-.agent-status{font-family:var(--mono);font-size:0.6rem;color:rgba(255,255,255,0.3)}
-.agent-step{font-family:var(--mono);font-size:0.55rem;color:rgba(255,255,255,0.15);margin-top:2px}
-.situation-panel{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--bg-card);border:1px solid var(--border);border-radius:20px;width:92vw;max-width:600px;max-height:85vh;z-index:200;display:none;backdrop-filter:blur(30px);overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.6)}
-.situation-panel.open{display:flex;flex-direction:column}
-.sit-card{background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:12px;padding:12px}
-.sit-card h3{font-family:var(--mono);font-size:0.55rem;color:rgba(255,255,255,0.3);letter-spacing:2px;text-transform:uppercase;margin:0 0 8px}
-.sit-card .val{font-family:var(--mono);font-size:0.85rem;color:var(--text)}
-.sit-card .sub{font-family:var(--mono);font-size:0.6rem;color:rgba(255,255,255,0.2);margin-top:4px}
-.header-btn.ambient-on{border-color:var(--green);color:var(--green);box-shadow:0 0 10px rgba(0,230,118,0.2)}
-.alert-toast{position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(255,82,82,0.15);border:1px solid var(--red);border-radius:12px;padding:10px 20px;font-family:var(--mono);font-size:0.75rem;color:var(--red);z-index:300;backdrop-filter:blur(20px);animation:fadeIn 0.3s}
-@keyframes fadeIn{from{opacity:0;transform:translateX(-50%) translateY(-10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
-@media(max-width:520px){.header{padding:10px 12px 8px;grid-template-columns:1fr}.header-brand{font-size:0.55rem;letter-spacing:0.24em;justify-self:center}.header-actions{justify-self:center;justify-content:center;gap:5px}.header-btn{width:32px;height:32px;border-radius:10px;font-size:0.82rem}}
-@media(max-width:400px){.header-btn{width:30px;height:30px}.header-brand{display:none}}
-@media(max-width:480px){.orb-wrap{width:220px;height:220px}#orbCanvas{width:220px;height:220px}.response-area{max-height:25vh}.settings-panel{width:calc(100vw - 24px);top:90px}.cam-preview{width:110px;height:150px}}
+/* ═══════════════════════════════════════════════════════════════════
+   THE SPECTRA ALMANAC
+   A printed-manuscript / observatory-journal aesthetic.
+   Parchment ground, iron-gall ink, blackletter masthead,
+   Fraunces + EB Garamond typography, ornamental marginalia.
+   ═══════════════════════════════════════════════════════════════════ */
+:root {
+  /* Paper */
+  --paper:        #f0e6d2;
+  --paper-warm:   #ece0c3;
+  --paper-cool:   #e8dec6;
+  --paper-edge:   #c8b88a;
+  --paper-fold:   #a8997a;
+
+  /* Ink */
+  --ink:          #1a1f2e;
+  --ink-soft:     #3d4456;
+  --ink-faint:    #6a7285;
+  --ink-ghost:    #8d8770;
+
+  /* Rubrication + ornaments */
+  --rubric:       #7a1b1b;
+  --rubric-deep:  #541010;
+  --gilt:         #a2791c;
+  --gilt-dark:    #6e4f10;
+  --seal:         #4a0d0d;
+
+  /* Status colors — muted to fit the paper aesthetic */
+  --state-live:   #2b5b2b;
+  --state-warn:   #a2791c;
+  --state-alarm:  #7a1b1b;
+
+  /* Type stack */
+  --masthead:     'UnifrakturCook', 'Fraunces', serif;
+  --display:      'Fraunces', 'Times New Roman', serif;
+  --body:         'EB Garamond', Georgia, serif;
+  --mono:         'IBM Plex Mono', ui-monospace, monospace;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  height: 100%; height: 100dvh;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 18px;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
+  position: relative;
+}
+
+/* Paper fiber noise + aged vignette — makes it look scanned */
+body::before {
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 9998;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.2' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.10  0 0 0 0 0.07  0 0 0 0 0.02  0 0 0 0.10 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23f)'/%3E%3C/svg%3E");
+  mix-blend-mode: multiply;
+  opacity: 0.55;
+}
+body::after {
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 9999;
+  background:
+    radial-gradient(ellipse at 50% 40%, transparent 45%, rgba(80, 60, 20, 0.08) 75%, rgba(60, 40, 10, 0.18) 100%),
+    linear-gradient(180deg, rgba(120, 90, 40, 0.04) 0%, transparent 20%, transparent 80%, rgba(120, 90, 40, 0.04) 100%);
+}
+
+/* Faint ledger ruling across the whole page */
+.rule-underlay {
+  position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  background-image: repeating-linear-gradient(0deg, transparent 0 31px, rgba(26, 31, 46, 0.04) 31px 32px);
+  mix-blend-mode: multiply;
+}
+
+/* ── MASTHEAD ─────────────────────────────────────────────────────── */
+.header {
+  position: relative;
+  padding: 28px 40px 12px;
+  text-align: center;
+  border-bottom: 3px double var(--ink);
+  background: transparent;
+  flex-shrink: 0;
+}
+.header::before, .header::after {
+  content: ""; position: absolute; left: 40px; right: 40px;
+}
+.header::before { top: 22px; height: 1px; background: var(--ink); opacity: 0.35; }
+.header::after  { bottom: 5px; height: 1px; background: var(--ink); opacity: 0.35; }
+
+.masthead {
+  display: flex; align-items: flex-end; justify-content: center; gap: 28px;
+  position: relative;
+}
+.masthead-flank {
+  font-family: var(--mono);
+  font-size: 9px; font-weight: 400; letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  padding-bottom: 14px;
+  min-width: 80px;
+}
+.masthead-flank.left { text-align: right; }
+.masthead-flank.right { text-align: left; }
+.masthead-flank em {
+  display: block; font-style: normal;
+  font-family: var(--display); font-size: 13px; letter-spacing: 0.06em;
+  color: var(--rubric); font-weight: 500;
+  margin-top: 2px;
+}
+
+.header-brand {
+  font-family: var(--masthead);
+  font-size: clamp(38px, 5.4vw, 68px);
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 0.95;
+  letter-spacing: 0.01em;
+  text-shadow: 0 1px 0 rgba(255,255,255,0.35);
+  padding: 0 6px;
+  position: relative;
+}
+.header-brand .amp {
+  font-family: var(--display); font-style: italic;
+  font-size: 0.55em; color: var(--rubric);
+  font-weight: 400;
+  vertical-align: 0.15em;
+  margin: 0 0.12em;
+}
+
+.sub-masthead {
+  margin-top: 10px;
+  font-family: var(--display); font-style: italic;
+  font-size: 13px; font-weight: 400;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  display: flex; justify-content: center; align-items: center; gap: 14px;
+  flex-wrap: wrap;
+}
+.sub-masthead .folio-sep {
+  color: var(--rubric); font-style: normal;
+  font-family: var(--display); font-weight: 600;
+}
+.sub-masthead .folio-mid {
+  font-family: var(--display); font-variation-settings: "opsz" 96, "SOFT" 50;
+  font-size: 14px;
+}
+.sub-masthead .folio-left, .sub-masthead .folio-right {
+  font-family: var(--mono); font-size: 9px; font-style: normal;
+  letter-spacing: 0.22em; text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+/* ── HEADER BUTTONS — stamped engravings ──────────────────────────── */
+.header-actions {
+  display: flex; justify-content: center;
+  gap: 6px; margin-top: 14px;
+  flex-wrap: wrap;
+}
+.header-btn {
+  background: transparent; border: none;
+  padding: 6px 12px 4px;
+  cursor: pointer;
+  display: flex; flex-direction: column; align-items: center;
+  gap: 3px;
+  font-family: var(--mono);
+  font-size: 7px; letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  position: relative;
+  transition: color 0.15s ease;
+  min-width: 68px;
+}
+.header-btn .glyph {
+  font-family: var(--display);
+  font-size: 22px; line-height: 1;
+  color: var(--ink);
+  transition: color 0.15s ease, transform 0.15s ease;
+}
+.header-btn:hover { color: var(--rubric); }
+.header-btn:hover .glyph { color: var(--rubric); transform: translateY(-1px); }
+.header-btn::after {
+  content: ""; position: absolute; bottom: 0; left: 20%; right: 20%;
+  height: 1px; background: var(--rubric); transform: scaleX(0); transform-origin: center;
+  transition: transform 0.18s ease;
+}
+.header-btn:hover::after { transform: scaleX(1); }
+.header-btn.active,
+.header-btn.ambient-on {
+  color: var(--rubric);
+}
+.header-btn.active .glyph,
+.header-btn.ambient-on .glyph { color: var(--rubric); }
+.header-btn.active::after,
+.header-btn.ambient-on::after { transform: scaleX(1); }
+.header-btn.fixing .glyph { animation: inkFix 1s ease-in-out infinite; }
+@keyframes inkFix { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+/* ── ORB AREA — compass rose frame around the canvas ─────────────── */
+.orb-area {
+  flex: 1;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  position: relative; min-height: 0;
+  padding: 10px 20px;
+}
+.orb-wrap {
+  position: relative;
+  width: 320px; height: 320px;
+  display: flex; align-items: center; justify-content: center;
+}
+/* Outer rule — a printed circle around the orb */
+.orb-wrap::before {
+  content: ""; position: absolute; inset: -36px;
+  border: 1px solid var(--ink);
+  border-radius: 50%;
+  opacity: 0.55;
+  pointer-events: none;
+}
+.orb-wrap::after {
+  content: ""; position: absolute; inset: -52px;
+  border: 1px solid var(--rubric);
+  border-radius: 50%;
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+/* Compass rose cardinal marks via SVG background on a wrapper */
+.orb-compass {
+  position: absolute; inset: -68px;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 400' fill='none' stroke='%231a1f2e' stroke-width='1'><circle cx='200' cy='200' r='198' opacity='0.35'/><g font-family='serif' font-size='16' fill='%237a1b1b' stroke='none' text-anchor='middle' font-style='italic'><text x='200' y='18'>N</text><text x='200' y='396'>S</text><text x='10' y='206'>W</text><text x='390' y='206'>E</text></g><g opacity='0.55'><line x1='200' y1='0' x2='200' y2='20'/><line x1='200' y1='380' x2='200' y2='400'/><line x1='0' y1='200' x2='20' y2='200'/><line x1='380' y1='200' x2='400' y2='200'/><line x1='60' y1='60' x2='74' y2='74'/><line x1='340' y1='60' x2='326' y2='74'/><line x1='60' y1='340' x2='74' y2='326'/><line x1='340' y1='340' x2='326' y2='326'/></g><g opacity='0.25'><line x1='200' y1='30' x2='200' y2='46'/><line x1='200' y1='354' x2='200' y2='370'/><line x1='30' y1='200' x2='46' y2='200'/><line x1='354' y1='200' x2='370' y2='200'/></g></svg>");
+  background-size: contain; background-repeat: no-repeat; background-position: center;
+  opacity: 0.75;
+}
+
+#orbCanvas {
+  width: 320px; height: 320px;
+  cursor: pointer; position: relative; z-index: 2;
+  /* The orb canvas is a 3D particle sphere — leave it alone, just shift
+     the hue toward warmer tones to sit on parchment */
+  filter: sepia(0.1) hue-rotate(-10deg) contrast(1.05);
+  mix-blend-mode: multiply;
+}
+.orb { display: none; }
+
+/* "Plate" caption under the orb — pure almanac touch */
+.orb-wrap + .plate-caption {
+  margin-top: 18px;
+  font-family: var(--display); font-style: italic;
+  font-size: 13px; color: var(--ink-soft);
+  text-align: center;
+  letter-spacing: 0.02em;
+}
+.plate-caption .plate-num {
+  font-variant: small-caps; letter-spacing: 0.14em;
+  color: var(--rubric); margin-right: 6px;
+  font-style: normal;
+}
+
+/* ── RESPONSE COLUMN — newspaper column with drop cap ────────────── */
+.response-area {
+  width: 100%; max-width: 640px;
+  margin: 22px auto 0;
+  padding: 0 40px;
+  max-height: 32vh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--paper-edge) transparent;
+  position: relative;
+}
+.response-area::-webkit-scrollbar { width: 4px; }
+.response-area::-webkit-scrollbar-thumb { background: var(--paper-edge); border-radius: 2px; }
+
+#response {
+  font-family: var(--body);
+  font-size: 17px;
+  line-height: 1.62;
+  color: var(--ink);
+  text-align: left;
+  text-indent: 0;
+  font-weight: 400;
+  column-count: 1;
+  position: relative;
+  padding-top: 6px;
+}
+#response:not(:empty)::first-letter {
+  font-family: var(--display);
+  font-variation-settings: "opsz" 144, "wght" 700, "SOFT" 0;
+  font-size: 3.4em; line-height: 0.82;
+  float: left;
+  padding: 8px 10px 0 0;
+  color: var(--rubric);
+}
+#response:empty::before {
+  content: "The engine is idle, sir. Ask anything — a query, a directive, a quiet thought.";
+  font-family: var(--display); font-style: italic;
+  color: var(--ink-ghost);
+  font-size: 15px;
+  display: block; text-align: center;
+  padding: 30px 20px;
+}
+
+/* ── INPUT — a dip-pen underline ──────────────────────────────────── */
+.input-area {
+  padding: 18px 40px calc(env(safe-area-inset-bottom, 0px) + 16px);
+  display: flex; gap: 14px; align-items: flex-end; justify-content: center;
+  flex-shrink: 0;
+  border-top: 1px solid var(--paper-edge);
+  position: relative;
+}
+.input-area::before {
+  content: "◈"; position: absolute;
+  top: -9px; left: 50%; transform: translateX(-50%);
+  color: var(--rubric); font-size: 16px;
+  background: var(--paper); padding: 0 10px;
+  line-height: 1;
+}
+
+.input-area input {
+  flex: 1; max-width: 580px;
+  background: transparent;
+  border: none;
+  border-bottom: 1.5px solid var(--ink);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 18px; font-weight: 400;
+  padding: 10px 6px 6px;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+.input-area input:focus { border-bottom-color: var(--rubric); }
+.input-area input::placeholder {
+  color: var(--ink-ghost);
+  font-style: italic;
+  font-family: var(--display);
+}
+
+.mic-btn, .cam-btn {
+  width: 42px; height: 42px; min-width: 42px;
+  border: 1px solid var(--ink);
+  background: var(--paper-warm);
+  color: var(--ink);
+  font-family: var(--display); font-size: 18px; font-style: italic;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 0;
+  transition: all 0.2s ease;
+  position: relative;
+  box-shadow: 2px 2px 0 var(--paper-fold);
+}
+.mic-btn:hover, .cam-btn:hover {
+  background: var(--rubric); color: var(--paper);
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0 var(--paper-fold);
+}
+.mic-btn:active, .cam-btn:active {
+  transform: translate(1px, 1px);
+  box-shadow: 0 0 0 var(--paper-fold);
+}
+.mic-btn.recording {
+  background: var(--rubric); color: var(--paper);
+  animation: stampBeat 0.9s ease-in-out infinite;
+}
+@keyframes stampBeat {
+  0%,100% { box-shadow: 2px 2px 0 var(--paper-fold); }
+  50%     { box-shadow: 2px 2px 0 var(--paper-fold), 0 0 0 4px rgba(122,27,27,0.2); }
+}
+.cam-btn.active { background: var(--state-live); color: var(--paper); }
+
+/* ── STATUS BAR — ornamental colophon ─────────────────────────────── */
+#statusBar {
+  text-align: center;
+  padding: 6px 0 10px;
+  font-family: var(--display);
+  font-size: 11px; font-style: italic;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+  flex-shrink: 0;
+  border-top: 1px solid var(--paper-edge);
+  background: var(--paper-warm);
+}
+#statusBar::before { content: "❦ "; color: var(--rubric); font-style: normal; }
+#statusBar::after  { content: " ❦"; color: var(--rubric); font-style: normal; }
+
+/* ── SETTINGS PANEL — tipped-in correspondence card ───────────────── */
+.settings-panel {
+  position: fixed; top: 90px; right: 18px;
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  border-left: 4px solid var(--rubric);
+  padding: 22px 24px;
+  width: 310px; z-index: 100; display: none;
+  max-height: 82vh; overflow-y: auto;
+  box-shadow: 8px 10px 0 var(--paper-fold), 0 0 30px rgba(60,40,10,0.15);
+  font-family: var(--body);
+}
+.settings-panel.open { display: block; animation: tipIn 0.24s ease-out; }
+@keyframes tipIn { from { transform: translate(10px,-6px) rotate(0.3deg); opacity: 0; } to { transform: translate(0,0) rotate(0); opacity: 1; } }
+.settings-panel label {
+  display: block;
+  font-family: var(--mono); font-size: 9px;
+  letter-spacing: 0.22em; text-transform: uppercase;
+  color: var(--rubric); font-weight: 500;
+  margin: 16px 0 4px; padding-bottom: 3px;
+  border-bottom: 1px dotted var(--ink);
+}
+.settings-panel label:first-of-type { margin-top: 0; }
+.settings-panel select,
+.settings-panel input[type="text"] {
+  width: 100%; padding: 8px 10px;
+  border: 1px solid var(--ink); border-radius: 0;
+  background: var(--paper-warm);
+  color: var(--ink);
+  font-family: var(--body); font-size: 14px;
+  outline: none;
+  -webkit-appearance: none; appearance: none;
+}
+.settings-panel select:focus,
+.settings-panel input[type="text"]:focus { border-color: var(--rubric); border-width: 1.5px; }
+.settings-status {
+  margin-top: 16px;
+  font-family: var(--display); font-style: italic;
+  font-size: 12px; color: var(--state-live);
+  min-height: 1.2em;
+}
+
+/* ── MODAL PANELS — agent / situation / wiki ─────────────────────── */
+.agent-panel, .situation-panel {
+  position: fixed; top: 50%; left: 50%;
+  transform: translate(-50%,-50%);
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  border-top: 4px solid var(--rubric);
+  width: 92vw; max-width: 720px; max-height: 85vh;
+  z-index: 200; display: none;
+  box-shadow: 10px 14px 0 var(--paper-fold), 0 0 48px rgba(60,40,10,0.25);
+  overflow: hidden;
+}
+.agent-panel.open, .situation-panel.open {
+  display: flex; flex-direction: column;
+  animation: tipIn 0.3s ease-out;
+}
+.agent-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 22px;
+  border-bottom: 2px double var(--ink);
+  background: var(--paper-warm);
+}
+.agent-title {
+  font-family: var(--masthead);
+  font-size: 20px; font-weight: 700;
+  color: var(--ink); letter-spacing: 0.01em;
+}
+.agent-close {
+  width: 28px; height: 28px;
+  border: 1px solid var(--rubric);
+  background: transparent; color: var(--rubric);
+  font-size: 16px; font-family: var(--display);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 0;
+}
+.agent-close:hover { background: var(--rubric); color: var(--paper); }
+.agent-screen-wrap {
+  flex: 1; background: var(--ink);
+  min-height: 220px; position: relative;
+}
+.agent-screen-wrap img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.agent-no-feed {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+  color: var(--paper-edge); font-family: var(--display); font-style: italic;
+  font-size: 14px; text-align: center;
+}
+.agent-footer {
+  padding: 12px 22px;
+  border-top: 1px solid var(--paper-edge);
+  background: var(--paper-warm);
+}
+.agent-status {
+  font-family: var(--display); font-style: italic;
+  font-size: 13px; color: var(--ink-soft);
+}
+.agent-step {
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-faint); margin-top: 3px;
+}
+
+.sit-card {
+  background: var(--paper-warm);
+  border: 1px solid var(--paper-edge);
+  border-left: 3px solid var(--rubric);
+  padding: 14px 16px;
+}
+.sit-card h3 {
+  font-family: var(--mono); font-size: 9px;
+  color: var(--rubric); letter-spacing: 0.22em;
+  text-transform: uppercase; margin: 0 0 8px;
+  font-weight: 500;
+}
+.sit-card .val {
+  font-family: var(--display); font-size: 20px;
+  color: var(--ink);
+}
+.sit-card .sub {
+  font-family: var(--body); font-size: 12px;
+  font-style: italic; color: var(--ink-soft);
+  margin-top: 4px;
+}
+
+/* ── CAM PREVIEW ──────────────────────────────────────────────────── */
+.cam-preview {
+  position: fixed; bottom: 110px; left: 22px;
+  width: 150px; height: 200px;
+  border: 1.5px solid var(--ink);
+  border-radius: 0;
+  object-fit: cover; z-index: 90; display: none;
+  box-shadow: 5px 5px 0 var(--paper-fold);
+}
+.cam-preview.active { display: block; }
+
+/* ── CRITICAL ALERT TOAST — wax seal ring ─────────────────────────── */
+.alert-toast {
+  position: fixed; top: 120px; left: 50%;
+  transform: translateX(-50%);
+  background: var(--paper);
+  border: 2px solid var(--rubric);
+  padding: 12px 24px;
+  font-family: var(--display); font-style: italic;
+  font-size: 14px; color: var(--rubric);
+  z-index: 300;
+  box-shadow: 4px 6px 0 var(--paper-fold), 0 0 30px rgba(122,27,27,0.2);
+  animation: tipIn 0.25s ease-out;
+}
+.alert-toast::before { content: "⚜ "; font-style: normal; }
+
+/* ── MOBILE ───────────────────────────────────────────────────────── */
+@media (max-width: 720px) {
+  body { font-size: 16px; }
+  .header { padding: 18px 16px 10px; }
+  .header::before, .header::after { left: 16px; right: 16px; }
+  .masthead-flank { display: none; }
+  .header-brand { font-size: clamp(34px, 11vw, 54px); }
+  .sub-masthead { font-size: 11px; gap: 8px; margin-top: 6px; }
+  .sub-masthead .folio-mid { font-size: 12px; }
+  .sub-masthead .folio-left, .sub-masthead .folio-right { font-size: 8px; }
+  .header-actions { gap: 2px; margin-top: 10px; }
+  .header-btn { min-width: 48px; padding: 4px 6px 2px; }
+  .header-btn .glyph { font-size: 17px; }
+  .header-btn { font-size: 6px; letter-spacing: 0.18em; }
+
+  .orb-area { padding: 6px 12px; }
+  .orb-wrap { width: 240px; height: 240px; }
+  #orbCanvas { width: 240px; height: 240px; }
+  .orb-wrap::before { inset: -28px; }
+  .orb-wrap::after  { inset: -40px; }
+  .orb-compass { inset: -52px; }
+
+  .response-area { padding: 0 24px; max-height: 26vh; margin-top: 14px; }
+  #response { font-size: 15px; line-height: 1.55; }
+  #response:not(:empty)::first-letter { font-size: 3em; }
+
+  .input-area { padding: 14px 18px calc(env(safe-area-inset-bottom, 0px) + 14px); gap: 10px; }
+  .input-area input { font-size: 16px; }
+  .mic-btn, .cam-btn { width: 40px; height: 40px; min-width: 40px; font-size: 16px; }
+
+  #statusBar { font-size: 10px; padding: 5px 0 8px; }
+
+  .settings-panel { width: calc(100vw - 32px); right: 16px; top: 120px; }
+  .cam-preview { width: 110px; height: 148px; bottom: 120px; left: 14px; }
+}
+
+@media (max-width: 420px) {
+  .header { padding: 14px 12px 8px; }
+  .header-brand { font-size: clamp(30px, 12vw, 44px); }
+  .header-actions { flex-wrap: wrap; justify-content: center; }
+  .header-btn { min-width: 56px; }
+}
 </style>
 </head>
 <body>
-<div class="header"><div class="header-brand">S.P.E.C.T.R.A.</div><div class="header-actions"><button class="header-btn" id="ambientBtn" onclick="toggleAmbient()" title="Ambient Mode">&#x1F4A4;</button><button class="header-btn" id="wikiBtn" onclick="toggleWiki()" title="Wiki">&#x1F4D6;</button><button class="header-btn" id="situationBtn" onclick="toggleSituation()" title="Situation Room">&#x1F4CA;</button><button class="header-btn" id="falconEyeBtn" onclick="fe_open()" title="Falcon Eye — 3D Globe">&#x1F985;</button><button class="header-btn" id="fixBtn" onclick="fixYourself()" title="Fix Yourself">&#x1F527;</button><button class="header-btn" id="agentToggle" onclick="toggleAgentView()">&#x1F441;</button><button class="header-btn" onclick="toggleSettings()">&#9881;</button></div></div>
+<div class="rule-underlay"></div>
+<div class="header">
+  <div class="masthead">
+    <div class="masthead-flank left">Volume IV<em id="folioVol">MMXXVI</em></div>
+    <div class="header-brand">Spectra<span class="amp">&amp;</span>Co.</div>
+    <div class="masthead-flank right">№ XXIII<em id="folioEdition">Daily Edition</em></div>
+  </div>
+  <div class="sub-masthead">
+    <span class="folio-left" id="folioDate">— · — · —</span>
+    <span class="folio-sep">✦</span>
+    <span class="folio-mid">A Private Engine for Daily Correspondence, Observation &amp; Intelligence</span>
+    <span class="folio-sep">✦</span>
+    <span class="folio-right" id="folioTime">00:00 Z</span>
+  </div>
+  <div class="header-actions">
+    <button class="header-btn" id="ambientBtn" onclick="toggleAmbient()" title="Ambient Mode">
+      <span class="glyph">☽</span><span>Ambient</span>
+    </button>
+    <button class="header-btn" id="wikiBtn" onclick="toggleWiki()" title="Archive / Wiki">
+      <span class="glyph">✎</span><span>Archive</span>
+    </button>
+    <button class="header-btn" id="situationBtn" onclick="toggleSituation()" title="Observatory">
+      <span class="glyph">⚲</span><span>Observatory</span>
+    </button>
+    <button class="header-btn" id="falconEyeBtn" onclick="fe_open()" title="Falcon Eye — 3D Globe">
+      <span class="glyph">♆</span><span>Falcon Eye</span>
+    </button>
+    <button class="header-btn" id="fixBtn" onclick="fixYourself()" title="Self Repair">
+      <span class="glyph">⚒</span><span>Repair</span>
+    </button>
+    <button class="header-btn" id="agentToggle" onclick="toggleAgentView()" title="Agent Browser">
+      <span class="glyph">⌘</span><span>Agent</span>
+    </button>
+    <button class="header-btn" onclick="toggleSettings()" title="Correspondence Card">
+      <span class="glyph">⚙</span><span>Ledger</span>
+    </button>
+  </div>
+</div>
 <div class="settings-panel" id="settingsPanel"><label>Audio Mode</label><select id="audioModeSelect" onchange="setAudioMode(this.value)"><option value="classic">Classic (Ollama + ElevenLabs)</option><option value="gemini">Gemini Live Audio</option><option value="gemma">Gemma 4 (Fast, Free)</option></select><div id="classicSettings"><label>Model</label><select id="modelSelect" onchange="setModel(this.value)"></select><label>Voice</label><select id="voiceSelect" onchange="setVoice(this.value)"></select><label>Custom Voice ID</label><div style="display:flex;gap:6px"><input type="text" id="voiceIdInput" placeholder="Paste ElevenLabs Voice ID..." style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:rgba(255,255,255,0.04);color:var(--text);font-family:var(--mono);font-size:0.7rem;outline:none"><button onclick="setCustomVoiceId()" style="padding:8px 12px;border:1px solid rgba(0,229,255,0.3);border-radius:8px;background:rgba(0,229,255,0.08);color:var(--cyan);font-family:var(--mono);font-size:0.7rem;font-weight:600;cursor:pointer">Set</button></div></div><div id="geminiVoiceSettings" style="display:none"><label>Gemini Voice</label><select id="geminiVoiceSelect" onchange="setGeminiVoice(this.value)"><option value="Kore">Kore (Default, calm female)</option><option value="Puck">Puck (warm male)</option><option value="Charon">Charon (deep male)</option><option value="Fenrir">Fenrir (bold male)</option><option value="Aoede">Aoede (bright female)</option><option value="Leda">Leda (soft female)</option><option value="Orus">Orus (clear male)</option><option value="Zephyr">Zephyr (breezy female)</option></select></div><div class="settings-status" id="settingsStatus"></div><label style="margin-top:14px">Falcon Eye</label><button onclick="fe_open()" style="width:100%;padding:12px;border:1px solid rgba(255,181,71,0.4);border-radius:10px;background:rgba(255,181,71,0.08);color:#ffb547;font-family:var(--mono);font-size:0.78rem;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;cursor:pointer;margin-bottom:6px">🦅  Open Falcon Eye Command Center</button><div style="font-size:0.65rem;color:var(--text-dim);line-height:1.5">3D globe · satellites · aircraft · 430+ live cameras · weather radar · severe alerts · earthquakes · wildfires. Driveable by voice — try "Spectra, show me Ukraine" or "track the ISS".</div></div>
 <div class="agent-panel" id="agentPanel"><div class="agent-header"><span class="agent-title">Agent Browser</span><button class="agent-close" onclick="toggleAgentView()">&times;</button></div><div class="agent-screen-wrap"><img id="agentScreen" style="display:none" alt="Agent browser view"><div class="agent-no-feed" id="agentNoFeed">No active session<br>Ask SPECTRA to browse something</div></div><div class="agent-footer"><div class="agent-status" id="agentStatus">Idle</div><div class="agent-step" id="agentStep"></div></div></div>
-<div class="orb-area"><div class="orb-wrap" id="orbWrap"><canvas id="orbCanvas" width="600" height="600" onclick="if(!orb.classList.contains('speaking'))toggleMic()"></canvas><div class="orb" id="orb"></div></div><div class="response-area"><div id="response"></div></div></div>
-<div class="input-area"><input type="text" id="input" placeholder="Ask SPECTRA anything..." autocomplete="off" onkeydown="if(event.key==='Enter')send()"><button class="mic-btn" id="micBtn" onclick="toggleMic()">&#x1F3A4;</button><button class="cam-btn" id="camBtn" onclick="toggleCamera()">&#x1F4F7;</button></div>
+<div class="orb-area">
+  <div class="orb-wrap" id="orbWrap">
+    <div class="orb-compass" aria-hidden="true"></div>
+    <canvas id="orbCanvas" width="600" height="600" onclick="if(!orb.classList.contains('speaking'))toggleMic()"></canvas>
+    <div class="orb" id="orb"></div>
+  </div>
+  <div class="plate-caption"><span class="plate-num">Plate I.</span><em>The Engine at Rest — Touch the Orb to Speak</em></div>
+  <div class="response-area"><div id="response"></div></div>
+</div>
+<div class="input-area">
+  <input type="text" id="input" placeholder="Enter your correspondence…" autocomplete="off" onkeydown="if(event.key==='Enter')send()">
+  <button class="mic-btn" id="micBtn" onclick="toggleMic()" title="Dictate">❦</button>
+  <button class="cam-btn" id="camBtn" onclick="toggleCamera()" title="Observe">◉</button>
+</div>
 <div class="situation-panel" id="situationPanel"><div class="agent-header"><span class="agent-title">Situation Room</span><button class="agent-close" onclick="toggleSituation()">&times;</button></div><div id="situationGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px;max-height:70vh;overflow-y:auto"></div></div>
 <div class="situation-panel" id="wikiPanel"><div class="agent-header"><span class="agent-title">Wiki</span><button class="agent-close" onclick="toggleWiki()">&times;</button></div><div style="padding:12px;overflow-y:auto;max-height:calc(85vh - 50px);-webkit-overflow-scrolling:touch"><div style="display:flex;gap:8px;margin-bottom:12px"><input type="text" id="wikiSearch" placeholder="Search wiki..." style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,0.04);color:var(--text);font-family:var(--mono);font-size:0.8rem;outline:none" onkeydown="if(event.key==='Enter')searchWikiUI()"><button onclick="searchWikiUI()" style="padding:8px 14px;border:1px solid rgba(0,229,255,0.3);border-radius:10px;background:rgba(0,229,255,0.08);color:var(--cyan);font-family:var(--mono);font-size:0.75rem;cursor:pointer">Search</button></div><div id="wikiContent" style="font-family:var(--mono);font-size:0.8rem;line-height:1.5"></div><div style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px"><button onclick="showIngestForm()" id="ingestToggle" style="width:100%;padding:10px;border:1px solid rgba(0,230,118,0.3);border-radius:10px;background:rgba(0,230,118,0.08);color:var(--green);font-family:var(--mono);font-size:0.8rem;cursor:pointer">+ Ingest New Source</button><div id="ingestForm" style="display:none;margin-top:10px"><input type="text" id="ingestTitle" placeholder="Source title..." style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,0.04);color:var(--text);font-family:var(--mono);font-size:0.8rem;outline:none;margin-bottom:8px;box-sizing:border-box"><textarea id="ingestContent" placeholder="Paste content to ingest..." style="width:100%;height:120px;padding:8px 12px;border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,0.04);color:var(--text);font-family:var(--mono);font-size:0.75rem;outline:none;resize:vertical;box-sizing:border-box"></textarea><button onclick="ingestFromUI()" style="margin-top:8px;width:100%;padding:10px;border:1px solid rgba(108,99,255,0.4);border-radius:10px;background:rgba(108,99,255,0.1);color:var(--accent);font-family:var(--mono);font-size:0.8rem;cursor:pointer">Process into Wiki</button></div></div></div></div>
 <video class="cam-preview" id="camPreview" autoplay playsinline muted></video>
-<div id="statusBar">Ollama Cloud + ElevenLabs</div>
+<div id="statusBar">Printed on Ollama Cloud &amp; ElevenLabs · Bound by ElevenLabs &amp; Gemini</div>
 <script>
 // ══════════════════════════════════════════════════════════════
 // HOLOGRAPHIC WIREFRAME SPHERE — 3D particle/node network
@@ -1721,6 +2287,35 @@ async function pollAgent() {
 
 loadSettings();
 inputEl.focus();
+
+// ── Almanac masthead date/time ticker ────────────────────────────
+(function almanacTick() {
+  const MONTH_ROMAN = ["I","II","III","IV","V","VI","VII","VIII","IX","X","XI","XII"];
+  const MONTH_NAME = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  const DAY_NAME = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  function tick() {
+    const d = new Date();
+    const dateEl = document.getElementById("folioDate");
+    const timeEl = document.getElementById("folioTime");
+    const volEl  = document.getElementById("folioVol");
+    const editionEl = document.getElementById("folioEdition");
+    if (dateEl) dateEl.textContent = `${DAY_NAME[d.getDay()]} · ${d.getDate()} ${MONTH_NAME[d.getMonth()]}`;
+    if (timeEl) timeEl.textContent = `${d.toISOString().substr(11,5)} Z`;
+    if (volEl)  volEl.textContent  = toRoman(d.getFullYear());
+    if (editionEl) {
+      const h = d.getHours();
+      editionEl.textContent = h < 6 ? "Night Edition" : h < 12 ? "Morning Edition" : h < 18 ? "Afternoon Edition" : "Evening Edition";
+    }
+  }
+  function toRoman(n) {
+    const map = [["M",1000],["CM",900],["D",500],["CD",400],["C",100],["XC",90],["L",50],["XL",40],["X",10],["IX",9],["V",5],["IV",4],["I",1]];
+    let out = "";
+    for (const [s, v] of map) while (n >= v) { out += s; n -= v; }
+    return out;
+  }
+  tick();
+  setInterval(tick, 15000);
+})();
 
 // Audio-reactive orb — pulse with playback volume
 let orbReactiveInterval = null;

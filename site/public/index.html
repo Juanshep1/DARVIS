@@ -19,30 +19,31 @@
    Fraunces + EB Garamond typography, ornamental marginalia.
    ═══════════════════════════════════════════════════════════════════ */
 :root {
-  /* Paper */
-  --paper:        #f0e6d2;
-  --paper-warm:   #ece0c3;
-  --paper-cool:   #e8dec6;
-  --paper-edge:   #c8b88a;
-  --paper-fold:   #a8997a;
+  /* Dark leather / night-edition palette —
+     "a folio left open on a desk lit by a single oil lamp" */
+  --paper:        #0d0a07;
+  --paper-warm:   #14100a;
+  --paper-cool:   #1a140d;
+  --paper-edge:   #3a2e1f;
+  --paper-fold:   #4a3b28;
 
-  /* Ink */
-  --ink:          #1a1f2e;
-  --ink-soft:     #3d4456;
-  --ink-faint:    #6a7285;
-  --ink-ghost:    #8d8770;
+  /* Ink flipped — warm cream text on dark leather */
+  --ink:          #ece1c6;
+  --ink-soft:     #c8bda5;
+  --ink-faint:    #8f8573;
+  --ink-ghost:    #5a5444;
 
-  /* Rubrication + ornaments */
-  --rubric:       #7a1b1b;
-  --rubric-deep:  #541010;
-  --gilt:         #a2791c;
-  --gilt-dark:    #6e4f10;
-  --seal:         #4a0d0d;
+  /* Rubrication — brighter oxblood so it reads on dark */
+  --rubric:       #e35252;
+  --rubric-deep:  #a82828;
+  --gilt:         #d4a847;
+  --gilt-dark:    #8f6e1e;
+  --seal:         #7a1b1b;
 
-  /* Status colors — muted to fit the paper aesthetic */
-  --state-live:   #2b5b2b;
-  --state-warn:   #a2791c;
-  --state-alarm:  #7a1b1b;
+  /* Status colors — adjusted for dark contrast */
+  --state-live:   #6fd36f;
+  --state-warn:   #d4a847;
+  --state-alarm:  #e35252;
 
   /* Type stack */
   --masthead:     'UnifrakturCook', 'Fraunces', serif;
@@ -71,25 +72,26 @@ body {
   position: relative;
 }
 
-/* Paper fiber noise + aged vignette — makes it look scanned */
+/* Leather grain — warm cream speckle over the dark ground */
 body::before {
   content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 9998;
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.2' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.10  0 0 0 0 0.07  0 0 0 0 0.02  0 0 0 0.10 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23f)'/%3E%3C/svg%3E");
-  mix-blend-mode: multiply;
-  opacity: 0.55;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.4' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.90  0 0 0 0 0.82  0 0 0 0 0.65  0 0 0 0.08 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23f)'/%3E%3C/svg%3E");
+  mix-blend-mode: screen;
+  opacity: 0.5;
 }
+/* Oil-lamp warm spill from above-center, darker toward the corners */
 body::after {
   content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 9999;
   background:
-    radial-gradient(ellipse at 50% 40%, transparent 45%, rgba(80, 60, 20, 0.08) 75%, rgba(60, 40, 10, 0.18) 100%),
-    linear-gradient(180deg, rgba(120, 90, 40, 0.04) 0%, transparent 20%, transparent 80%, rgba(120, 90, 40, 0.04) 100%);
+    radial-gradient(ellipse 90% 70% at 50% 25%, rgba(212, 168, 71, 0.14) 0%, rgba(212, 168, 71, 0.04) 35%, transparent 60%),
+    radial-gradient(ellipse 120% 100% at 50% 55%, transparent 40%, rgba(0, 0, 0, 0.35) 90%, rgba(0, 0, 0, 0.55) 100%);
 }
 
-/* Faint ledger ruling across the whole page */
+/* Faint ledger ruling — warm cream horizontal rules */
 .rule-underlay {
   position: fixed; inset: 0; pointer-events: none; z-index: 0;
-  background-image: repeating-linear-gradient(0deg, transparent 0 31px, rgba(26, 31, 46, 0.04) 31px 32px);
-  mix-blend-mode: multiply;
+  background-image: repeating-linear-gradient(0deg, transparent 0 31px, rgba(236, 225, 198, 0.035) 31px 32px);
+  mix-blend-mode: screen;
 }
 
 /* ── MASTHEAD ─────────────────────────────────────────────────────── */
@@ -248,7 +250,7 @@ body::after {
 .orb-compass {
   position: absolute; inset: -68px;
   pointer-events: none;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 400' fill='none' stroke='%231a1f2e' stroke-width='1'><circle cx='200' cy='200' r='198' opacity='0.35'/><g font-family='serif' font-size='16' fill='%237a1b1b' stroke='none' text-anchor='middle' font-style='italic'><text x='200' y='18'>N</text><text x='200' y='396'>S</text><text x='10' y='206'>W</text><text x='390' y='206'>E</text></g><g opacity='0.55'><line x1='200' y1='0' x2='200' y2='20'/><line x1='200' y1='380' x2='200' y2='400'/><line x1='0' y1='200' x2='20' y2='200'/><line x1='380' y1='200' x2='400' y2='200'/><line x1='60' y1='60' x2='74' y2='74'/><line x1='340' y1='60' x2='326' y2='74'/><line x1='60' y1='340' x2='74' y2='326'/><line x1='340' y1='340' x2='326' y2='326'/></g><g opacity='0.25'><line x1='200' y1='30' x2='200' y2='46'/><line x1='200' y1='354' x2='200' y2='370'/><line x1='30' y1='200' x2='46' y2='200'/><line x1='354' y1='200' x2='370' y2='200'/></g></svg>");
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 400' fill='none' stroke='%23ece1c6' stroke-width='1'><circle cx='200' cy='200' r='198' opacity='0.35'/><g font-family='serif' font-size='16' fill='%23d4a847' stroke='none' text-anchor='middle' font-style='italic'><text x='200' y='18'>N</text><text x='200' y='396'>S</text><text x='10' y='206'>W</text><text x='390' y='206'>E</text></g><g opacity='0.55'><line x1='200' y1='0' x2='200' y2='20'/><line x1='200' y1='380' x2='200' y2='400'/><line x1='0' y1='200' x2='20' y2='200'/><line x1='380' y1='200' x2='400' y2='200'/><line x1='60' y1='60' x2='74' y2='74'/><line x1='340' y1='60' x2='326' y2='74'/><line x1='60' y1='340' x2='74' y2='326'/><line x1='340' y1='340' x2='326' y2='326'/></g><g opacity='0.25'><line x1='200' y1='30' x2='200' y2='46'/><line x1='200' y1='354' x2='200' y2='370'/><line x1='30' y1='200' x2='46' y2='200'/><line x1='354' y1='200' x2='370' y2='200'/></g></svg>");
   background-size: contain; background-repeat: no-repeat; background-position: center;
   opacity: 0.75;
 }
@@ -256,10 +258,9 @@ body::after {
 #orbCanvas {
   width: 320px; height: 320px;
   cursor: pointer; position: relative; z-index: 2;
-  /* The orb canvas is a 3D particle sphere — leave it alone, just shift
-     the hue toward warmer tones to sit on parchment */
-  filter: sepia(0.1) hue-rotate(-10deg) contrast(1.05);
-  mix-blend-mode: multiply;
+  /* Dark-mode: let the orb glow naturally, boost it slightly */
+  filter: brightness(1.12) contrast(1.05) saturate(1.1);
+  mix-blend-mode: screen;
 }
 .orb { display: none; }
 
@@ -356,36 +357,39 @@ body::after {
 }
 
 .mic-btn, .cam-btn {
-  width: 42px; height: 42px; min-width: 42px;
-  border: 1px solid var(--ink);
+  width: 46px; height: 46px; min-width: 46px;
+  border: 1px solid var(--gilt);
   background: var(--paper-warm);
   color: var(--ink);
-  font-family: var(--display); font-size: 18px; font-style: italic;
+  font-family: var(--display); font-size: 19px; font-style: italic;
   cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   border-radius: 0;
   transition: all 0.2s ease;
   position: relative;
-  box-shadow: 2px 2px 0 var(--paper-fold);
+  box-shadow: 2px 2px 0 rgba(212,168,71,0.25);
+  -webkit-tap-highlight-color: transparent;
 }
 .mic-btn:hover, .cam-btn:hover {
   background: var(--rubric); color: var(--paper);
+  border-color: var(--rubric);
   transform: translate(-1px, -1px);
-  box-shadow: 3px 3px 0 var(--paper-fold);
+  box-shadow: 3px 3px 0 rgba(227,82,82,0.35);
 }
 .mic-btn:active, .cam-btn:active {
   transform: translate(1px, 1px);
-  box-shadow: 0 0 0 var(--paper-fold);
+  box-shadow: 0 0 0 rgba(212,168,71,0.25);
 }
 .mic-btn.recording {
   background: var(--rubric); color: var(--paper);
+  border-color: var(--rubric);
   animation: stampBeat 0.9s ease-in-out infinite;
 }
 @keyframes stampBeat {
-  0%,100% { box-shadow: 2px 2px 0 var(--paper-fold); }
-  50%     { box-shadow: 2px 2px 0 var(--paper-fold), 0 0 0 4px rgba(122,27,27,0.2); }
+  0%,100% { box-shadow: 2px 2px 0 rgba(227,82,82,0.4); }
+  50%     { box-shadow: 2px 2px 0 rgba(227,82,82,0.4), 0 0 0 5px rgba(227,82,82,0.25); }
 }
-.cam-btn.active { background: var(--state-live); color: var(--paper); }
+.cam-btn.active { background: var(--state-live); color: var(--paper); border-color: var(--state-live); }
 
 /* ── STATUS BAR — ornamental colophon ─────────────────────────────── */
 #statusBar {
@@ -405,16 +409,41 @@ body::after {
 /* ── SETTINGS PANEL — tipped-in correspondence card ───────────────── */
 .settings-panel {
   position: fixed; top: 90px; right: 18px;
-  background: var(--paper);
-  border: 1px solid var(--ink);
+  background: var(--paper-warm);
+  border: 1px solid var(--gilt);
   border-left: 4px solid var(--rubric);
-  padding: 22px 24px;
-  width: 310px; z-index: 100; display: none;
+  padding: 22px 24px 22px;
+  width: 320px; z-index: 220; display: none;
   max-height: 82vh; overflow-y: auto;
-  box-shadow: 8px 10px 0 var(--paper-fold), 0 0 30px rgba(60,40,10,0.15);
+  box-shadow: 8px 10px 0 rgba(0,0,0,0.6), 0 0 40px rgba(212,168,71,0.12);
   font-family: var(--body);
 }
 .settings-panel.open { display: block; animation: tipIn 0.24s ease-out; }
+.settings-panel-close {
+  position: absolute; top: 10px; right: 10px;
+  width: 32px; height: 32px;
+  background: transparent;
+  border: 1px solid var(--gilt);
+  color: var(--gilt);
+  font-family: var(--display); font-size: 16px; font-style: italic;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  z-index: 5;
+  -webkit-tap-highlight-color: transparent;
+}
+.settings-panel-close:hover {
+  background: var(--rubric); color: var(--paper); border-color: var(--rubric);
+}
+/* Scrim behind the panel on mobile so tap-outside works visually */
+.panel-scrim {
+  position: fixed; inset: 0; z-index: 210;
+  background: rgba(0,0,0,0.45);
+  backdrop-filter: blur(2px);
+  display: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.panel-scrim.open { display: block; animation: scrimIn 0.2s ease-out; }
+@keyframes scrimIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes tipIn { from { transform: translate(10px,-6px) rotate(0.3deg); opacity: 0; } to { transform: translate(0,0) rotate(0); opacity: 1; } }
 .settings-panel label {
   display: block;
@@ -427,14 +456,16 @@ body::after {
 .settings-panel label:first-of-type { margin-top: 0; }
 .settings-panel select,
 .settings-panel input[type="text"] {
-  width: 100%; padding: 8px 10px;
-  border: 1px solid var(--ink); border-radius: 0;
-  background: var(--paper-warm);
+  width: 100%; padding: 11px 12px;
+  border: 1px solid var(--gilt-dark); border-radius: 0;
+  background: var(--paper);
   color: var(--ink);
-  font-family: var(--body); font-size: 14px;
+  font-family: var(--body); font-size: 15px;
   outline: none;
   -webkit-appearance: none; appearance: none;
+  min-height: 44px;
 }
+.settings-panel select option { background: var(--paper); color: var(--ink); }
 .settings-panel select:focus,
 .settings-panel input[type="text"]:focus { border-color: var(--rubric); border-width: 1.5px; }
 .settings-status {
@@ -599,6 +630,7 @@ body::after {
 </head>
 <body>
 <div class="rule-underlay"></div>
+<div class="panel-scrim" id="panelScrim"></div>
 <div class="header">
   <div class="masthead">
     <div class="masthead-flank left">Volume IV<em id="folioVol">MMXXVI</em></div>
@@ -2061,8 +2093,40 @@ async function send() {
 // ══════════════════════════════════════════════════════════════════════════════
 
 function toggleSettings() {
-    document.getElementById('settingsPanel').classList.toggle('open');
+    const panel = document.getElementById('settingsPanel');
+    const open = panel.classList.toggle('open');
+    document.getElementById('panelScrim').classList.toggle('open', open);
+    // Inject a close button once
+    if (open && !panel.querySelector('.settings-panel-close')) {
+        const btn = document.createElement('button');
+        btn.className = 'settings-panel-close';
+        btn.textContent = '×';
+        btn.title = 'Close (Esc)';
+        btn.onclick = (e) => { e.stopPropagation(); closeAllPanels(); };
+        panel.appendChild(btn);
+    }
 }
+
+// Central panel dismiss — hides settings/wiki/situation/agent + scrim
+function closeAllPanels() {
+    document.getElementById('settingsPanel')?.classList.remove('open');
+    document.getElementById('wikiPanel')?.classList.remove('open');
+    document.getElementById('situationPanel')?.classList.remove('open');
+    document.getElementById('agentPanel')?.classList.remove('open');
+    document.getElementById('panelScrim')?.classList.remove('open');
+}
+
+// Tap the scrim or press Escape to dismiss any open panel
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('panelScrim')?.addEventListener('click', closeAllPanels);
+});
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeAllPanels();
+});
+// Immediate wiring in case DOMContentLoaded already fired
+setTimeout(() => {
+    document.getElementById('panelScrim')?.addEventListener('click', closeAllPanels);
+}, 0);
 
 let geminiVoiceName = 'Kore';
 
@@ -2220,12 +2284,9 @@ let lastScreenshotUrl = null;
 
 function toggleAgentView() {
     const panel = document.getElementById('agentPanel');
-    panel.classList.toggle('open');
-    if (panel.classList.contains('open')) {
-        startAgentPolling();
-    } else {
-        stopAgentPolling();
-    }
+    const isOpen = panel.classList.toggle('open');
+    document.getElementById('panelScrim')?.classList.toggle('open', isOpen);
+    if (isOpen) startAgentPolling(); else stopAgentPolling();
 }
 
 function startAgentPolling() {
@@ -2623,6 +2684,7 @@ let situationTimer = null;
 function toggleWiki() {
     const panel = document.getElementById('wikiPanel');
     const isOpen = panel.classList.toggle('open');
+    document.getElementById('panelScrim')?.classList.toggle('open', isOpen);
     if (isOpen) loadWikiIndex();
 }
 
@@ -2745,6 +2807,7 @@ async function ingestFromUI() {
 function toggleSituation() {
     const panel = document.getElementById('situationPanel');
     const isOpen = panel.classList.toggle('open');
+    document.getElementById('panelScrim')?.classList.toggle('open', isOpen);
     if (isOpen) {
         fetchSituation();
         situationTimer = setInterval(fetchSituation, 60000);

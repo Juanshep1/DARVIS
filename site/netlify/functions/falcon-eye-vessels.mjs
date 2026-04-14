@@ -8,6 +8,8 @@ import {
   withinBbox,
 } from "./falcon-eye-maritime-utils.mjs";
 
+const ALLOWED_TYPES = new Set(["cargo", "tanker", "passenger", "unknown"]);
+
 export default async (req) => {
   if (req.method !== "GET") return new Response("Method not allowed", { status: 405 });
 
@@ -18,6 +20,9 @@ export default async (req) => {
 
   if (url.searchParams.has("bbox") && !bbox) {
     return Response.json({ error: "Invalid bbox. Use minLon,minLat,maxLon,maxLat" }, { status: 400 });
+  }
+  if (type && !ALLOWED_TYPES.has(type)) {
+    return Response.json({ error: "Invalid type. Use cargo, tanker, passenger, or unknown" }, { status: 400 });
   }
 
   try {
@@ -35,6 +40,7 @@ export default async (req) => {
         type: type || null,
       },
       snapshotGeneratedAt: snapshot?.meta?.generatedAt || null,
+      snapshotAgeMs: snapshot?.meta?.generatedAt ? Math.max(0, Date.now() - snapshot.meta.generatedAt) : null,
       totalSnapshotCount: snapshot?.meta?.count || 0,
     });
 
@@ -50,6 +56,7 @@ export default async (req) => {
         type: type || null,
       },
       snapshotGeneratedAt: null,
+      snapshotAgeMs: null,
       totalSnapshotCount: 0,
     }), {
       headers: {

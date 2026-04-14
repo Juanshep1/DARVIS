@@ -125,7 +125,7 @@ async function drainAisStream({ apiKey, windowMs, seedVessels }) {
   return finished;
 }
 
-export default async (req) => {
+export async function ingestVessels(req) {
   if (!["GET", "POST"].includes(req.method)) return new Response("Method not allowed", { status: 405 });
 
   const apiKey = Netlify.env.get("AISSTREAM_API_KEY");
@@ -170,11 +170,10 @@ export default async (req) => {
       error: error?.message || "AIS ingest failed",
     }, { status: 500 });
   }
-};
+}
 
-// Manual HTTP endpoint. The matching cron schedule lives in a separate
-// wrapper (falcon-eye-vessels-cron.mjs) because Netlify rejects functions
-// that have BOTH `path` and `schedule` in their config.
+export default ingestVessels;
+
 export const config = {
   path: "/api/falcon-eye/vessels-ingest",
 };

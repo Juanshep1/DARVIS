@@ -755,6 +755,13 @@
   .chat-toolbar button:hover { color: var(--amber); border-color: var(--amber); }
   .chat-mode.active { color: var(--amber); border-color: var(--amber); background: rgba(255,181,71,0.08); text-shadow: 0 0 6px var(--amber-glow); }
   .chat-tts.on { color: var(--green); border-color: var(--green); background: rgba(57,255,143,0.08); text-shadow: 0 0 6px var(--green-glow); }
+  .chat-tts.on.speaking {
+    animation: ttsPulse 1.1s ease-in-out infinite;
+  }
+  @keyframes ttsPulse {
+    0%,100% { box-shadow: 0 0 6px var(--green-glow); background: rgba(57,255,143,0.10); }
+    50%     { box-shadow: 0 0 16px rgba(57,255,143,0.6); background: rgba(57,255,143,0.20); }
+  }
 
   .chat-input-wrap {
     display: flex; gap: 6px; padding: 8px 10px;
@@ -3123,15 +3130,37 @@ async function persistExchange(userText, replyText) {
   } catch {}
 }
 
+// Build an SpeechSynthesisUtterance with a preferred voice — tries to
+// pick a real British male voice if the browser has one, otherwise
+// falls back to whatever en-GB voice is available.
+function buildBrowserUtterance(text) {
+  const u = new SpeechSynthesisUtterance(text);
+  u.rate = 1.05; u.pitch = 0.95; u.lang = "en-GB"; u.volume = 1.0;
+  try {
+    const voices = speechSynthesis.getVoices() || [];
+    const prefer = voices.find((v) => /Daniel|Oliver|George|Arthur|Brian/i.test(v.name) && /en[-_]?GB/i.test(v.lang))
+                || voices.find((v) => /en[-_]?GB/i.test(v.lang))
+                || voices.find((v) => /en/i.test(v.lang));
+    if (prefer) u.voice = prefer;
+  } catch {}
+  return u;
+}
+
 async function speakReply(text) {
   if (!chatState.ttsOn || !text) return;
   // Stop any current playback
   if (chatState.audio) { try { chatState.audio.pause(); } catch {} chatState.audio = null; }
+  try { speechSynthesis.cancel(); } catch {}
   // Strip command blocks before speaking
-  const clean = text.replace(/```[\s\S]*?```/g, "").replace(/\s+/g, " ").trim().slice(0, 1200);
+  const clean = text.replace(/```[\s\S]*?```/g, "").replace(/\s+/g, " ").trim().slice(0, 1500);
   if (!clean) return;
-  // Classic mode → ElevenLabs via /api/tts. Gemini mode → Web Speech (browser native).
+
+  // Set the speaking visual state
+  document.getElementById("chatTtsToggle")?.classList.add("speaking");
+
   if (chatState.mode === "classic") {
+    // Classic mode → ElevenLabs via /api/tts (the same voice the main
+    // Spectra browser/terminal uses, so the experience is identical).
     try {
       const r = await fetch("/api/tts", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -3141,25 +3170,42 @@ async function speakReply(text) {
       const blob = await r.blob();
       const url = URL.createObjectURL(blob);
       chatState.audio = new Audio(url);
-      chatState.audio.play().catch(() => {});
+      chatState.audio.volume = 1.0;
+      chatState.audio.onended = () => {
+        document.getElementById("chatTtsToggle")?.classList.remove("speaking");
+        URL.revokeObjectURL(url);
+      };
+      chatState.audio.onerror = () => {
+        document.getElementById("chatTtsToggle")?.classList.remove("speaking");
+      };
+      await chatState.audio.play();
     } catch (e) {
+      console.warn("ElevenLabs TTS failed, falling back to browser voice:", e);
       // Fallback to Web Speech if ElevenLabs fails
       try {
-        const u = new SpeechSynthesisUtterance(clean);
-        u.rate = 1.05; u.pitch = 1; u.lang = "en-GB";
-        speechSynthesis.cancel();
+        const u = buildBrowserUtterance(clean);
+        u.onend = () => document.getElementById("chatTtsToggle")?.classList.remove("speaking");
         speechSynthesis.speak(u);
-      } catch {}
+      } catch {
+        document.getElementById("chatTtsToggle")?.classList.remove("speaking");
+      }
     }
   } else {
     // Gemini mode — use the browser's native voice. Free, no API call.
     try {
-      const u = new SpeechSynthesisUtterance(clean);
-      u.rate = 1.05; u.pitch = 1; u.lang = "en-GB";
-      speechSynthesis.cancel();
+      const u = buildBrowserUtterance(clean);
+      u.onend = () => document.getElementById("chatTtsToggle")?.classList.remove("speaking");
       speechSynthesis.speak(u);
-    } catch {}
+    } catch {
+      document.getElementById("chatTtsToggle")?.classList.remove("speaking");
+    }
   }
+}
+
+// Make sure voices are loaded (some browsers load asynchronously)
+if (typeof speechSynthesis !== "undefined") {
+  speechSynthesis.onvoiceschanged = () => {}; // trigger the lazy load
+  speechSynthesis.getVoices();
 }
 
 async function sendChat(text) {

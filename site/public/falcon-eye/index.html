@@ -10,6 +10,8 @@
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Unica+One&family=Barlow+Condensed:wght@300;500;700&display=swap" rel="stylesheet">
 <link href="https://unpkg.com/maplibre-gl@5.6.1/dist/maplibre-gl.css" rel="stylesheet">
 <script src="https://unpkg.com/maplibre-gl@5.6.1/dist/maplibre-gl.js"></script>
+<!-- Cesium ion 3D Earth — loaded lazily on first 3D toggle (~3MB) -->
+<link href="https://cesium.com/downloads/cesiumjs/releases/1.123/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/satellite.js@5.0.0/dist/satellite.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js"></script>
 <style>
@@ -348,6 +350,24 @@
   .alert .cat-politics { color: var(--cyan); }
   .alert .cat-economic { color: var(--amber); }
   .alert .cat-general  { color: var(--steel); }
+  .alert.swarm { box-shadow: inset 2px 0 0 0 var(--cyan); }
+  .alert.swarm .swarm-mark { color: var(--cyan); margin-right: 4px; font-size: 11px; }
+  .alert-tagrow { display: flex; gap: 3px; flex-wrap: wrap; margin-top: 5px; }
+  .alert-tag {
+    font-size: 7px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--steel); border: 1px solid var(--panel-edge);
+    padding: 1px 4px; background: rgba(0,0,0,0.25);
+  }
+  .alert.crit .alert-tag { color: var(--critical); border-color: rgba(255,58,85,0.4); }
+  .alert.high .alert-tag { color: var(--high); border-color: rgba(255,122,61,0.4); }
+  .alert-relbar {
+    height: 2px; background: rgba(255,255,255,0.05); margin-top: 6px;
+    overflow: hidden;
+  }
+  .alert-relbar-fill {
+    height: 100%; background: linear-gradient(90deg, var(--cyan), var(--amber));
+    box-shadow: 0 0 6px var(--cyan-glow);
+  }
 
   /* Dossier (entity details) */
   .dossier-empty {
@@ -621,7 +641,7 @@
     #threatPill { padding: 4px 8px; height: 26px; font-size: 8px; }
     #threatPill .label { display: none; }
 
-    #map {
+    #map, #cesium {
       top: 46px !important; left: 0 !important; right: 0 !important;
       bottom: calc(58px + env(safe-area-inset-bottom,0px)) !important;
       border: none;
@@ -755,6 +775,7 @@
 </head>
 <body>
   <div id="map"></div>
+  <div id="cesium" style="display:none;position:fixed;top:56px;left:280px;right:320px;bottom:110px;z-index:2;background:#000;border:1px solid var(--panel-edge)"></div>
   <div class="map-corner tl"></div><div class="map-corner tr"></div>
   <div class="map-corner bl"></div><div class="map-corner br"></div>
 
@@ -848,6 +869,7 @@
     <button class="active" data-bmap="esri">SAT</button>
     <button data-bmap="dark">DARK</button>
     <button data-bmap="topo">TOPO</button>
+    <button id="cesium3dBtn" data-bmap="cesium" title="Cesium ion 3D Earth · Photoreal terrain">3D</button>
   </div>
 
   <div class="cursor-readout">
@@ -981,6 +1003,7 @@ const API = {
   usacams: "/api/falcon-eye/usa-cams",
   naturecams: "/api/falcon-eye/nature-cams",
   news:    "/api/falcon-eye/news",
+  swarm:   "/api/falcon-eye/swarm",
   wxalerts:"/api/falcon-eye/weather-alerts",
   fires:   "/api/falcon-eye/fires",
   quakes:  "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson",
@@ -1334,6 +1357,18 @@ function installLayers() {
     "icon-size": ["interpolate", ["linear"], ["zoom"], 0, 0.7, 6, 0.95, 12, 1.3],
     "icon-allow-overlap": true, "icon-ignore-placement": true,
   }});
+  // Tiny "LIVE" ring around HLS cameras only (real moving video, not a
+  // refreshing snapshot). Filtered to cams whose kind property is "hls".
+  if (!map.getLayer("cam-live-ring-l")) map.addLayer({ id: "cam-live-ring-l", type: "circle", source: "cameras",
+    filter: ["==", ["get", "kind"], "hls"],
+    paint: {
+      "circle-radius": ["interpolate", ["linear"], ["zoom"], 0, 8, 8, 14],
+      "circle-color": "rgba(0,0,0,0)",
+      "circle-stroke-color": "#39ff8f",
+      "circle-stroke-width": 1.2,
+      "circle-stroke-opacity": 0.95,
+    }
+  });
 }
 
 let layersInstalled = false;
@@ -1459,24 +1494,221 @@ document.querySelectorAll(".layer[data-layer]").forEach((el) => {
   });
 });
 
-// ── Basemap switcher ──────────────────────────────────────────────
+// ── Basemap + 3D switcher ─────────────────────────────────────────
 document.querySelectorAll(".basemap-ctrl button").forEach((btn) => {
-  btn.addEventListener("click", () => {
+  btn.addEventListener("click", async () => {
     const id = btn.dataset.bmap;
     if (id === state.basemap) return;
     document.querySelectorAll(".basemap-ctrl button").forEach((b) => b.classList.toggle("active", b === btn));
     state.basemap = id;
+
+    if (id === "cesium") {
+      await enterCesiumMode();
+      log("basemap", "3D Cesium");
+      return;
+    }
+    // Switching back to a 2D MapLibre style
+    if (cesiumViewer && document.getElementById("cesium").style.display !== "none") {
+      exitCesiumMode();
+    }
     map.setStyle(BASEMAPS[id]);
     map.once("styledata", () => {
-      // Re-add sources & layers after style swap
       for (const sid of SOURCE_IDS) if (!map.getSource(sid)) map.addSource(sid, { type: "geojson", data: EMPTY });
-      // Re-trigger map load to add layers
       map.fire("load");
       rerender(); refreshOrbit(); refreshTrail(); updateTerminator();
     });
     log("basemap", id);
   });
 });
+
+// ── Cesium ion 3D Earth (lazy-loaded on first 3D toggle) ──────────
+let cesiumViewer = null;
+let cesiumLoaded = false;
+let cesiumSyncTimer = null;
+
+async function loadCesiumScript() {
+  if (cesiumLoaded) return true;
+  return new Promise((resolve) => {
+    const s = document.createElement("script");
+    s.src = "https://cesium.com/downloads/cesiumjs/releases/1.123/Build/Cesium/Cesium.js";
+    s.onload = () => { cesiumLoaded = true; resolve(true); };
+    s.onerror = () => { console.warn("Cesium load failed"); resolve(false); };
+    window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.123/Build/Cesium/";
+    document.head.appendChild(s);
+  });
+}
+
+async function enterCesiumMode() {
+  log("cesium", "loading 3D engine…");
+  const ok = await loadCesiumScript();
+  if (!ok || !window.Cesium) {
+    log("cesium", "load failed", "warn");
+    return;
+  }
+
+  // Fetch the access token from our Netlify function
+  if (!Cesium.Ion.defaultAccessToken) {
+    try {
+      const r = await fetch("/api/falcon-eye/cesium-token");
+      const d = await r.json();
+      if (d.token) Cesium.Ion.defaultAccessToken = d.token;
+    } catch (e) { console.warn("cesium token fetch:", e); }
+  }
+
+  const cesiumDiv = document.getElementById("cesium");
+  cesiumDiv.style.display = "block";
+  document.getElementById("map").style.display = "none";
+
+  if (!cesiumViewer) {
+    try {
+      cesiumViewer = new Cesium.Viewer("cesium", {
+        baseLayerPicker: false,
+        geocoder: false,
+        homeButton: false,
+        sceneModePicker: false,
+        navigationHelpButton: false,
+        animation: false,
+        timeline: false,
+        fullscreenButton: false,
+        infoBox: false,
+        selectionIndicator: false,
+        creditContainer: document.createElement("div"),
+        terrain: Cesium.Terrain.fromWorldTerrain({ requestVertexNormals: true }),
+      });
+      // Tactical look — dark atmosphere, lighting on
+      cesiumViewer.scene.globe.enableLighting = true;
+      cesiumViewer.scene.skyAtmosphere.show = true;
+      cesiumViewer.scene.skyAtmosphere.hueShift = -0.05;
+      cesiumViewer.scene.skyAtmosphere.saturationShift = -0.2;
+      cesiumViewer.scene.skyAtmosphere.brightnessShift = -0.1;
+      cesiumViewer.scene.fog.density = 0.00015;
+      cesiumViewer.scene.globe.showGroundAtmosphere = true;
+      cesiumViewer.scene.backgroundColor = Cesium.Color.fromCssColorString("#05080a");
+
+      // Click handler — wire to existing dossier
+      const handler = new Cesium.ScreenSpaceEventHandler(cesiumViewer.canvas);
+      handler.setInputAction((e) => {
+        const picked = cesiumViewer.scene.pick(e.position);
+        if (Cesium.defined(picked) && picked.id) {
+          const ent = picked.id;
+          const dossier = ent.fe_dossier;
+          if (dossier) showDossier(dossier);
+        }
+      }, Cesium.ScreenSpaceEventHandler.MouseEventType.LEFT_CLICK);
+
+      // Mirror current 2D map view
+      const c = map.getCenter();
+      const zoom = map.getZoom();
+      const altitude = Math.max(2_000_000, 25_000_000 / Math.pow(2, zoom));
+      cesiumViewer.camera.flyTo({
+        destination: Cesium.Cartesian3.fromDegrees(c.lng, c.lat, altitude),
+        duration: 0.5,
+      });
+
+      log("cesium", "3D viewer online");
+    } catch (e) {
+      console.error("Cesium init failed:", e);
+      log("cesium", `init failed: ${e.message}`, "warn");
+      cesiumDiv.style.display = "none";
+      document.getElementById("map").style.display = "";
+      return;
+    }
+  }
+
+  // Initial sync + periodic refresh
+  syncCesiumEntities();
+  if (cesiumSyncTimer) clearInterval(cesiumSyncTimer);
+  cesiumSyncTimer = setInterval(syncCesiumEntities, 1500);
+}
+
+function exitCesiumMode() {
+  document.getElementById("cesium").style.display = "none";
+  document.getElementById("map").style.display = "";
+  if (cesiumSyncTimer) { clearInterval(cesiumSyncTimer); cesiumSyncTimer = null; }
+}
+
+// Push current Falcon Eye entity state into Cesium as billboards / points
+function syncCesiumEntities() {
+  if (!cesiumViewer) return;
+  const ents = cesiumViewer.entities;
+  ents.suspendEvents();
+  ents.removeAll();
+
+  const C = window.Cesium;
+
+  // Satellites — small cyan points at orbital altitude
+  if (state.layers.satellites) {
+    for (const s of state.satPoints) {
+      const e = ents.add({
+        position: C.Cartesian3.fromDegrees(s.lng, s.lat, (s.altKm || 400) * 1000),
+        point: { pixelSize: 5, color: C.Color.fromCssColorString("#5fd9ff"), outlineColor: C.Color.fromCssColorString("#5fd9ff"), outlineWidth: 1 },
+        label: undefined,
+      });
+      e.fe_dossier = { type: "satellite", name: s.name, lat: s.lat, lon: s.lng };
+    }
+  }
+
+  // Aircraft — amber points at flight altitude
+  if (state.layers.aircraft) {
+    for (const a of state.aircraft) {
+      if (a.lat == null || a.lng == null) continue;
+      const e = ents.add({
+        position: C.Cartesian3.fromDegrees(a.lng, a.lat, Math.max(0, a.altM || 0)),
+        point: { pixelSize: 6, color: C.Color.fromCssColorString("#ffb547"), outlineColor: C.Color.WHITE, outlineWidth: 0.5 },
+      });
+      e.fe_dossier = { type: "aircraft", name: a.name, icao: a.icao, country: a.country, altM: a.altM, vel: a.vel, heading: a.heading, lat: a.lat, lon: a.lng };
+    }
+  }
+
+  // Cameras — bright phosphor green
+  if (state.layers.cameras) {
+    for (const c of state.cameras) {
+      if (c.lat == null) continue;
+      const lon = c.lng ?? c.lon;
+      const e = ents.add({
+        position: C.Cartesian3.fromDegrees(lon, c.lat, 10),
+        point: { pixelSize: 10, color: C.Color.fromCssColorString("#39ff8f"), outlineColor: C.Color.fromCssColorString("#003a17"), outlineWidth: 1.5 },
+      });
+      e.fe_dossier = { type: "camera", label: c.label, url: c.url, kind: c.kind, lat: c.lat, lon };
+    }
+  }
+
+  // News — severity-colored
+  if (state.layers.news) {
+    for (const a of state.alerts) {
+      if (a.lat == null) continue;
+      const col = a.severity === "critical" ? "#ff3a55" : a.severity === "high" ? "#ff7a3d" : a.severity === "medium" ? "#ffd23d" : "#5fd9ff";
+      const e = ents.add({
+        position: C.Cartesian3.fromDegrees(a.lon, a.lat, 5000),
+        point: { pixelSize: 8, color: C.Color.fromCssColorString(col), outlineColor: C.Color.WHITE, outlineWidth: 0.5 },
+      });
+      e.fe_dossier = { type: "news", ...a, lng: a.lon };
+    }
+  }
+
+  // Earthquakes — pink, sized by magnitude
+  if (state.layers.earthquakes) {
+    for (const q of state.earthquakes) {
+      const e = ents.add({
+        position: C.Cartesian3.fromDegrees(q.lng, q.lat, 0),
+        point: { pixelSize: Math.max(4, Math.min(18, (q.mag || 1) * 2.5)), color: C.Color.fromCssColorString("#ff5b8a") },
+      });
+      e.fe_dossier = { type: "earthquake", ...q, lon: q.lng };
+    }
+  }
+
+  // Wildfires — orange dots
+  if (state.layers.fires) {
+    for (const f of state.fires.slice(0, 1500)) {
+      ents.add({
+        position: C.Cartesian3.fromDegrees(f.lng, f.lat, 0),
+        point: { pixelSize: 3, color: C.Color.fromCssColorString("#ff6a1a") },
+      });
+    }
+  }
+
+  ents.resumeEvents();
+}
 
 // ── Time / clocks ─────────────────────────────────────────────────
 function tick() {
@@ -1739,10 +1971,52 @@ function maybeReloadCamsNearCenter() {
 }
 
 async function loadNews(region = "") {
+  // Pull both the legacy news endpoint AND the swarm-curated feed in
+  // parallel and merge them. Swarm items carry relevance scores + tags.
+  const [newsRes, swarmRes] = await Promise.allSettled([
+    fetch(API.news + (region ? `?region=${encodeURIComponent(region)}` : "")).then((r) => r.json()),
+    fetch(API.swarm + "?agent=news").then((r) => r.json()),
+  ]);
+
   try {
-    const r = await fetch(API.news + (region ? `?region=${encodeURIComponent(region)}` : ""));
-    const d = await r.json();
-    state.alerts = d.alerts || [];
+    const fromNews = newsRes.status === "fulfilled" ? (newsRes.value.alerts || []) : [];
+    const fromSwarm = swarmRes.status === "fulfilled" ? ((swarmRes.value.items || swarmRes.value.alerts || []).map((s) => ({
+      headline: s.headline,
+      snippet: s.summary || s.snippet || "",
+      url: s.url,
+      source: s.source || "",
+      lat: s.lat ?? null,
+      lon: s.lon ?? null,
+      region: s.region || "",
+      severity: s.severity || "low",
+      category: s.category || "general",
+      relevance: typeof s.relevance === "number" ? s.relevance : null,
+      tags: Array.isArray(s.tags) ? s.tags : null,
+      ts: s.ts || Date.now(),
+      _swarm: true,
+    }))) : [];
+
+    // Merge + dedup by normalized headline prefix
+    const seen = new Set();
+    const merged = [];
+    for (const a of [...fromSwarm, ...fromNews]) {
+      const key = (a.headline || "").toLowerCase().replace(/[^a-z0-9 ]/g, "").split(/\s+/).slice(0, 6).join(" ");
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      merged.push(a);
+    }
+
+    // Sort: relevance desc → severity desc → recency
+    const sevW = { critical: 4, high: 3, medium: 2, low: 1 };
+    merged.sort((a, b) => {
+      const ra = a.relevance != null ? a.relevance : (sevW[a.severity] || 0) * 20;
+      const rb = b.relevance != null ? b.relevance : (sevW[b.severity] || 0) * 20;
+      if (ra !== rb) return rb - ra;
+      return (b.ts || 0) - (a.ts || 0);
+    });
+
+    state.alerts = merged.slice(0, 100);
+
     refreshSource("news", state.alerts.filter((a) => a.lat != null).map((a) => ({ ...a, lng: a.lon })),
       (a) => ({ severity: a.severity, headline: a.headline, snippet: a.snippet, region: a.region, source: a.source, url: a.url }));
     renderFeed();
@@ -1756,6 +2030,7 @@ async function loadNews(region = "") {
     } else {
       document.getElementById("banner").classList.remove("show");
     }
+    log("intel", `${state.alerts.length} alerts (${fromSwarm.length} swarm + ${fromNews.length} news)`);
   } catch (e) { log("intel", `Load failed: ${e.message}`, "warn"); }
 }
 
@@ -1894,7 +2169,7 @@ function rerender() {
   set(["satellites-l"], state.layers.satellites);
   set(["aircraft-l", "airtrails-l", "airtrails-glow-l"], state.layers.aircraft);
   set(["military-l", "mil-glow-l", "miltrails-l", "miltrails-glow-l"], state.layers.military);
-  set(["cameras-l", "cam-glow-l"], state.layers.cameras);
+  set(["cameras-l", "cam-glow-l", "cam-live-ring-l"], state.layers.cameras);
   set(["news-l", "news-bg-l"], state.layers.news);
   set(["earthquakes-l", "eq-glow-l"], state.layers.earthquakes);
   set(["fires-l"], state.layers.fires);
@@ -2012,25 +2287,35 @@ function renderFeed() {
   feed.innerHTML = "";
   for (const a of state.alerts.slice(0, 80)) {
     const el = document.createElement("div");
-    el.className = `alert ${a.severity}`;
+    el.className = `alert ${a.severity}${a._swarm ? " swarm" : ""}`;
     const cat = a.category || "general";
+    const tagsHtml = (a.tags || []).slice(0, 4).map(() => '<span class="alert-tag"></span>').join("");
+    const relevance = a.relevance != null ? Math.max(0, Math.min(100, a.relevance)) : null;
     el.innerHTML = `
       <div class="alert-head">
         <span class="alert-meta"></span>
         <span class="alert-tags">
+          ${a._swarm ? '<span class="swarm-mark" title="Curated by intel swarm">◈</span>' : ''}
           <span class="cat cat-${cat}"></span>
           <span class="sev"></span>
         </span>
       </div>
       <div class="alert-title"></div>
       <div class="alert-snippet"></div>
+      ${tagsHtml ? `<div class="alert-tagrow">${tagsHtml}</div>` : ""}
+      ${relevance != null ? `<div class="alert-relbar"><div class="alert-relbar-fill" style="width:${relevance}%"></div></div>` : ""}
       <div class="alert-foot"></div>`;
     el.querySelector(".alert-meta").textContent = `${a.region || "Global"} · ${a.source || ""}`;
     el.querySelector(".cat").textContent = cat;
     el.querySelector(".sev").textContent = a.severity;
     el.querySelector(".alert-title").textContent = a.headline || "";
     el.querySelector(".alert-snippet").textContent = a.snippet || "";
-    el.querySelector(".alert-foot").textContent = timeAgo(a.ts);
+    el.querySelector(".alert-foot").textContent =
+      timeAgo(a.ts) + (relevance != null ? `  ·  rel ${relevance}` : "");
+    if (a.tags && a.tags.length) {
+      const tagSpans = el.querySelectorAll(".alert-tag");
+      a.tags.slice(0, 4).forEach((t, i) => { if (tagSpans[i]) tagSpans[i].textContent = t; });
+    }
     el.onclick = () => {
       if (a.lat != null) map.flyTo({ center: [a.lon, a.lat], zoom: 5, duration: 1500 });
       showDossier({ ...a, type: "news", lng: a.lon });

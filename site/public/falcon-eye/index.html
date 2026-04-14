@@ -16,29 +16,35 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js"></script>
 <style>
   :root {
-    --bg: #070a0e;
-    --bg-2: #0b1219;
-    --panel: rgba(11,18,25,0.86);
-    --panel-2: rgba(15,24,33,0.92);
-    --panel-edge: rgba(120,160,200,0.18);
+    /* Base — deeper, slightly bluer for SCIF wall feel */
+    --bg: #04070b;
+    --bg-2: #08111a;
+    --panel: rgba(8,17,26,0.90);
+    --panel-2: rgba(12,22,32,0.95);
+    --panel-edge: rgba(140,170,200,0.16);
     --panel-edge-hot: rgba(255,181,71,0.55);
-    --steel: #6b7d8e;
-    --steel-bright: #b9c7d4;
-    --steel-dim: #3d4a57;
-    --ink: #dbe7f0;
+    --steel: #7c8a99;
+    --steel-bright: #c5d0db;
+    --steel-dim: #3a4756;
+    --ink: #dde6ef;
     --ink-bright: #ffffff;
     --amber: #ffb547;
+    --amber-bright: #ffce82;
     --amber-glow: rgba(255,181,71,0.45);
     --cyan: #5fd9ff;
     --cyan-glow: rgba(95,217,255,0.4);
     --green: #39ff8f;
+    --green-glow: rgba(57,255,143,0.4);
     --critical: #ff3a55;
+    --critical-classified: #ff0033;
     --high: #ff7a3d;
     --medium: #ffd23d;
-    --grid: rgba(120,160,200,0.07);
+    --grid: rgba(140,170,200,0.05);
+    --grid-hot: rgba(255,181,71,0.08);
     --mono: 'IBM Plex Mono Condensed', 'JetBrains Mono', ui-monospace, monospace;
     --display: 'Unica One', 'Barlow Condensed', sans-serif;
     --condensed: 'Barlow Condensed', sans-serif;
+    --ease: cubic-bezier(0.2, 0.8, 0.4, 1);
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body {
@@ -64,39 +70,84 @@
     opacity: 0.55;
   }
 
-  /* Classification Banner */
+  /* Faint CRT graticule rendered behind the rails for SCIF-wall texture */
+  .rail-left, .rail-right, .footer, .header {
+    background-image:
+      linear-gradient(0deg, var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px) !important;
+    background-size: 32px 32px, 32px 32px !important;
+    background-position: 0 0, 0 0 !important;
+  }
+
+  /* Classification banners — top and bottom edges */
   .classification-banner {
     position: fixed;
-    top: 56px; /* Below the header */
-    left: 0;
-    right: 0;
-    height: 24px; /* Slim height */
-    background: var(--bg);
-    border-top: 1px solid var(--steel-dim); /* Use a darker steel for separation */
-    border-bottom: 1px solid var(--amber); /* Amber accent */
-    color: var(--ink-bright);
+    top: 56px;
+    left: 0; right: 0;
+    height: 22px;
+    background: var(--critical-classified);
+    border-top: 1px solid #ff5566;
+    border-bottom: 1px solid #ff5566;
+    color: #fff;
     font-family: var(--mono);
-    font-size: 10px;
-    letter-spacing: 0.18em;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.32em;
     text-transform: uppercase;
     display: flex;
     align-items: center;
-    justify-content: center;
-    z-index: 99; /* Below header, above map */
-    padding-bottom: 2px; /* Optical adjustment */
+    justify-content: space-between;
+    padding: 0 18px;
+    z-index: 99;
+    text-shadow: 0 0 6px rgba(0,0,0,0.4);
   }
+  .classification-banner::before {
+    content: "◉ TS//SCI//NOFORN";
+  }
+  .classification-banner::after {
+    content: "BRIEF #FE-2026-04Z · CCO ONLY";
+  }
+  .classification-banner .center {
+    position: absolute; left: 50%; transform: translateX(-50%);
+    pointer-events: none;
+  }
+  .classification-footer {
+    position: fixed;
+    bottom: 110px;
+    left: 0; right: 0;
+    height: 18px;
+    background: var(--critical-classified);
+    border-top: 1px solid #ff5566;
+    color: #fff;
+    font-family: var(--mono);
+    font-size: 8px;
+    font-weight: 600;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 18px;
+    z-index: 99;
+  }
+  .classification-footer::before { content: "TS//SCI//NOFORN"; }
+  .classification-footer::after  { content: "FALCON EYE · GEOINT · SPECTRA C4ISR"; }
   @media (max-width: 980px) {
     .classification-banner {
-      top: 46px; /* Adjust for smaller mobile header */
-      font-size: 8px;
-      height: 20px;
+      top: 46px; font-size: 7px; height: 18px; letter-spacing: 0.22em; padding: 0 8px;
     }
+    .classification-banner::after { content: "CCO ONLY"; }
+    .classification-footer {
+      bottom: calc(58px + env(safe-area-inset-bottom,0px));
+      font-size: 7px; height: 16px; letter-spacing: 0.18em; padding: 0 8px;
+    }
+    .classification-footer::after { content: "FALCON EYE · C4ISR"; }
   }
 
   /* ── Map container ── */
   #map {
     position: fixed;
-    top: 80px; left: 280px; right: 320px; bottom: 110px;
+    top: 78px; left: 280px; right: 320px; bottom: 128px;
     z-index: 1;
     background: #000;
     border: 1px solid var(--panel-edge);
@@ -109,10 +160,10 @@
     position: fixed; width: 16px; height: 16px; z-index: 60; pointer-events: none;
     border: 1px solid var(--amber); opacity: 0.8;
   }
-  .map-corner.tl { top: 80px; left: 280px;   border-right: none; border-bottom: none; }
-  .map-corner.tr { top: 80px; right: 320px;  border-left: none;  border-bottom: none; }
-  .map-corner.bl { bottom: 110px; left: 280px;border-right: none; border-top: none; }
-  .map-corner.br { bottom: 110px; right: 320px;border-left: none; border-top: none; }
+  .map-corner.tl { top: 78px; left: 280px;   border-right: none; border-bottom: none; }
+  .map-corner.tr { top: 78px; right: 320px;  border-left: none;  border-bottom: none; }
+  .map-corner.bl { bottom: 128px; left: 280px;border-right: none; border-top: none; }
+  .map-corner.br { bottom: 128px; right: 320px;border-left: none; border-top: none; }
 
   /* ── Header ── */
   .header {
@@ -124,22 +175,35 @@
     padding-right: 18px;
   }
   .brand {
-    display: flex; align-items: center; gap: 12px;
+    display: flex; align-items: center; gap: 14px;
     padding: 0 18px;
     border-right: 1px solid var(--panel-edge);
     height: 100%;
+    position: relative;
+  }
+  .brand::before {
+    content: "TS//SCI"; position: absolute;
+    top: 4px; left: 18px;
+    font-size: 7px; letter-spacing: 0.22em;
+    color: var(--critical-classified);
+    border: 1px solid var(--critical-classified);
+    padding: 1px 4px;
+    text-transform: uppercase;
+    line-height: 1;
   }
   .brand-mark {
     font-family: var(--display);
-    font-size: 26px; letter-spacing: 0.16em;
+    font-size: 24px; letter-spacing: 0.18em;
     color: var(--ink-bright);
     line-height: 0.9;
+    margin-top: 8px;
   }
   .brand-mark .eye { color: var(--amber); text-shadow: 0 0 14px var(--amber-glow); }
   .brand-sub {
-    font-size: 8px; letter-spacing: 0.32em; color: var(--steel);
+    font-size: 8px; letter-spacing: 0.28em; color: var(--steel);
     text-transform: uppercase;
     line-height: 1.2;
+    margin-top: 6px;
   }
   .brand-sub .row1 { color: var(--cyan); }
   .header-mid {
@@ -212,7 +276,7 @@
 
   /* ── Left rail — layers ── */
   .rail-left {
-    position: fixed; top: 56px; left: 0; bottom: 110px; width: 280px; z-index: 100;
+    position: fixed; top: 78px; left: 0; bottom: 128px; width: 280px; z-index: 100;
     background: var(--panel);
     border-right: 1px solid var(--panel-edge);
     overflow-y: auto;
@@ -221,23 +285,43 @@
   .rail-left::-webkit-scrollbar { width: 4px; }
   .rail-left::-webkit-scrollbar-thumb { background: var(--panel-edge); }
   .section-title {
-    font-size: 9px; letter-spacing: 0.32em; color: var(--steel-dim);
-    text-transform: uppercase;
+    font-size: 9px; letter-spacing: 0.28em; color: var(--steel-bright);
+    text-transform: uppercase; font-weight: 500;
     display: flex; align-items: center; gap: 8px;
-    margin: 14px 0 8px;
-  }
-  .section-title:first-child { margin-top: 0; }
-  .section-title::after {
-    content: ""; flex: 1; height: 1px; background: var(--panel-edge);
-  }
-  .layer {
-    background: rgba(0,0,0,0.25); border: 1px solid var(--panel-edge);
-    margin-bottom: 6px; padding: 9px 11px;
-    cursor: pointer; transition: all 0.12s;
+    margin: 18px 0 8px;
     position: relative;
   }
-  .layer.on { border-color: rgba(95,217,255,0.45); background: rgba(95,217,255,0.04); }
-  .layer:hover { background: rgba(95,217,255,0.08); }
+  .section-title:first-child { margin-top: 2px; }
+  .section-title::before {
+    content: attr(data-num) " //";
+    color: var(--amber);
+    font-weight: 400;
+    margin-right: 4px;
+  }
+  .section-title::after {
+    content: ""; flex: 1; height: 1px;
+    background: linear-gradient(90deg, var(--panel-edge) 0%, var(--panel-edge) 70%, transparent 100%);
+  }
+  .layer {
+    background: rgba(0,0,0,0.30); border: 1px solid var(--panel-edge);
+    margin-bottom: 5px; padding: 8px 11px;
+    cursor: pointer;
+    transition: background 0.12s var(--ease), border-color 0.12s var(--ease), transform 0.12s var(--ease);
+    position: relative;
+  }
+  .layer::before {
+    content: ""; position: absolute; top: -1px; left: -1px;
+    width: 5px; height: 5px;
+    border-top: 1px solid var(--amber); border-left: 1px solid var(--amber);
+    opacity: 0; transition: opacity 0.12s var(--ease);
+  }
+  .layer.on { border-color: rgba(255,181,71,0.45); background: rgba(255,181,71,0.04); }
+  .layer.on::before { opacity: 1; }
+  .layer:hover {
+    background: rgba(255,181,71,0.06);
+    border-color: rgba(255,181,71,0.55);
+    transform: translateX(1px);
+  }
   .layer-row {
     display: flex; align-items: center; justify-content: space-between;
   }
@@ -290,35 +374,58 @@
   .src-chips .chip[data-src="earthcam"].on { color: var(--amber); border-color: var(--panel-edge-hot); background: rgba(255,181,71,0.08); box-shadow: 0 0 8px rgba(255,181,71,0.18); }
   .src-chips .chip[data-src="nature"].on { color: #d586ff; border-color: #d586ff; background: rgba(213,134,255,0.08); box-shadow: 0 0 8px rgba(213,134,255,0.18); }
 
-  /* Cursor coordinate readout (overlaid on map) */
+  /* Cursor coordinate readout — instrument cluster style */
   .cursor-readout {
-    position: fixed; left: 290px; bottom: 118px; z-index: 80;
-    background: var(--panel-2); border: 1px solid var(--panel-edge);
-    padding: 6px 10px; font-size: 9px; letter-spacing: 0.18em;
+    position: fixed; left: 290px; bottom: 136px; z-index: 80;
+    background: var(--panel-2); border: 1px solid var(--panel-edge-hot);
+    padding: 7px 14px; font-size: 9px; letter-spacing: 0.16em;
     color: var(--steel-bright); text-transform: uppercase;
     pointer-events: none;
-    display: flex; gap: 14px;
+    display: flex; gap: 16px; align-items: center;
+    box-shadow: 0 0 0 0 transparent, 0 0 14px rgba(0,0,0,0.6);
+    position: fixed;
   }
-  .cursor-readout .k { color: var(--steel-dim); }
-  .cursor-readout .v { color: var(--cyan); font-variant-numeric: tabular-nums; }
+  .cursor-readout::before {
+    content: ""; position: absolute; top: -1px; left: -1px;
+    width: 6px; height: 6px;
+    border-top: 1px solid var(--amber); border-left: 1px solid var(--amber);
+  }
+  .cursor-readout::after {
+    content: ""; position: absolute; bottom: -1px; right: -1px;
+    width: 6px; height: 6px;
+    border-bottom: 1px solid var(--amber); border-right: 1px solid var(--amber);
+  }
+  .cursor-readout .k { color: var(--steel-dim); margin-right: 4px; font-weight: 500; }
+  .cursor-readout .v {
+    color: var(--amber); font-variant-numeric: tabular-nums;
+    text-shadow: 0 0 6px var(--amber-glow); font-weight: 500;
+  }
 
   /* Basemap toggles (overlaid on map top-right corner) */
   .basemap-ctrl {
-    position: fixed; top: 66px; right: 330px; z-index: 80;
-    display: flex; flex-direction: column; gap: 4px;
+    position: fixed; top: 88px; right: 330px; z-index: 80;
+    display: flex; flex-direction: column; gap: 0;
+    border: 1px solid var(--panel-edge);
   }
   .basemap-ctrl button {
-    background: var(--panel-2); border: 1px solid var(--panel-edge);
-    color: var(--steel); font-family: var(--mono);
-    font-size: 8px; letter-spacing: 0.18em; text-transform: uppercase;
-    padding: 6px 10px; cursor: pointer; min-width: 64px;
+    background: var(--panel-2); border: none;
+    border-bottom: 1px solid var(--panel-edge);
+    color: var(--steel); font-family: var(--mono); font-weight: 500;
+    font-size: 8px; letter-spacing: 0.22em; text-transform: uppercase;
+    padding: 7px 12px; cursor: pointer; min-width: 64px;
+    transition: all 0.12s var(--ease);
   }
-  .basemap-ctrl button:hover { color: var(--cyan); border-color: var(--cyan); }
-  .basemap-ctrl button.active { color: var(--amber); border-color: var(--amber); background: rgba(255,181,71,0.06); }
+  .basemap-ctrl button:last-child { border-bottom: none; }
+  .basemap-ctrl button:hover { color: var(--amber-bright); background: rgba(255,181,71,0.05); }
+  .basemap-ctrl button.active {
+    color: var(--amber); background: rgba(255,181,71,0.10);
+    text-shadow: 0 0 6px var(--amber-glow);
+    border-color: var(--amber);
+  }
 
   /* ── Right rail — intel feed + dossier ── */
   .rail-right {
-    position: fixed; top: 56px; right: 0; bottom: 110px; width: 320px; z-index: 100;
+    position: fixed; top: 78px; right: 0; bottom: 128px; width: 320px; z-index: 100;
     background: var(--panel);
     border-left: 1px solid var(--panel-edge);
     display: flex; flex-direction: column;
@@ -326,16 +433,24 @@
   .rail-tabs {
     display: grid; grid-template-columns: 1fr 1fr 1fr;
     border-bottom: 1px solid var(--panel-edge);
+    background: rgba(0,0,0,0.3);
   }
   .rail-tab {
-    padding: 12px 0; font-size: 9px; letter-spacing: 0.24em;
+    padding: 11px 0 9px; font-size: 9px; letter-spacing: 0.22em;
     text-transform: uppercase; text-align: center; cursor: pointer;
     color: var(--steel); background: transparent; border: none;
-    font-family: var(--mono);
+    font-family: var(--mono); font-weight: 500;
     border-bottom: 2px solid transparent;
+    border-right: 1px solid var(--panel-edge);
+    transition: all 0.12s var(--ease);
   }
-  .rail-tab.active { color: var(--cyan); border-bottom-color: var(--cyan); background: rgba(95,217,255,0.04); }
-  .rail-tab:hover { color: var(--cyan-glow); }
+  .rail-tab:last-child { border-right: none; }
+  .rail-tab.active {
+    color: var(--amber); border-bottom-color: var(--amber);
+    background: rgba(255,181,71,0.05);
+    text-shadow: 0 0 8px var(--amber-glow);
+  }
+  .rail-tab:hover { color: var(--amber-bright); }
   .rail-content { flex: 1; overflow: hidden; position: relative; }
   .rail-pane { position: absolute; inset: 0; overflow-y: auto; padding: 10px 12px; display: none; }
   .rail-pane.active { display: block; }
@@ -343,13 +458,22 @@
   .rail-pane::-webkit-scrollbar-thumb { background: var(--panel-edge); }
 
   .alert {
-    background: rgba(0,0,0,0.3); border: 1px solid var(--panel-edge);
-    border-left: 2px solid var(--steel-dim);
-    padding: 9px 11px; margin-bottom: 6px;
-    cursor: pointer; transition: background 0.12s;
+    background: rgba(0,0,0,0.35); border: 1px solid var(--panel-edge);
+    border-left: 3px solid var(--steel-dim);
+    padding: 9px 11px 8px 11px; margin-bottom: 5px;
+    cursor: pointer;
+    transition: background 0.12s var(--ease), border-color 0.12s var(--ease), transform 0.12s var(--ease);
+    position: relative;
   }
-  .alert:hover { background: rgba(95,217,255,0.06); }
-  .alert.crit { border-left-color: var(--critical); }
+  .alert:hover {
+    background: rgba(255,181,71,0.04);
+    border-color: var(--panel-edge-hot);
+    transform: translateX(1px);
+  }
+  .alert.crit {
+    border-left-color: var(--critical);
+    background: linear-gradient(90deg, rgba(255,58,85,0.10) 0%, rgba(0,0,0,0.35) 30%);
+  }
   .alert.high { border-left-color: var(--high); }
   .alert.medium { border-left-color: var(--medium); }
   .alert.low { border-left-color: var(--cyan); }
@@ -495,15 +619,23 @@
     border-left: 1px solid var(--panel-edge);
   }
   .footer-section .title {
-    font-size: 8px; letter-spacing: 0.32em; color: var(--steel-dim);
-    text-transform: uppercase; margin-bottom: 6px;
+    font-size: 8px; letter-spacing: 0.28em; color: var(--steel-bright);
+    text-transform: uppercase; margin-bottom: 6px; font-weight: 500;
+    padding-bottom: 4px; border-bottom: 1px solid var(--panel-edge);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .footer-section .title::before {
+    content: "▸"; color: var(--amber); font-size: 9px;
   }
   .stat-grid {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 3px 12px;
     font-size: 9px;
   }
-  .stat-grid .k { color: var(--steel-dim); letter-spacing: 0.16em; text-transform: uppercase; }
-  .stat-grid .v { color: var(--cyan); font-variant-numeric: tabular-nums; text-align: right; }
+  .stat-grid .k { color: var(--steel-dim); letter-spacing: 0.18em; text-transform: uppercase; }
+  .stat-grid .v {
+    color: var(--amber); font-variant-numeric: tabular-nums; text-align: right;
+    font-weight: 500; text-shadow: 0 0 4px var(--amber-glow);
+  }
 
   .ops-log {
     height: 72px; overflow-y: auto;
@@ -534,15 +666,28 @@
   }
   .footer-actions { display: flex; gap: 6px; flex-wrap: wrap; }
   .btn {
-    background: rgba(0,0,0,0.4); border: 1px solid var(--panel-edge);
-    color: var(--steel-bright); font-family: var(--mono);
+    background: rgba(0,0,0,0.5); border: 1px solid var(--panel-edge);
+    color: var(--steel-bright); font-family: var(--mono); font-weight: 500;
     font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase;
-    padding: 6px 11px; cursor: pointer;
-    transition: all 0.12s;
+    padding: 6px 12px; cursor: pointer;
+    transition: background 0.12s var(--ease), border-color 0.12s var(--ease), color 0.12s var(--ease), transform 0.12s var(--ease);
+    position: relative;
   }
-  .btn:hover { border-color: var(--cyan); color: var(--cyan); }
+  .btn::before, .btn::after {
+    content: ""; position: absolute; width: 4px; height: 4px;
+    border: 1px solid transparent; transition: border-color 0.12s var(--ease);
+  }
+  .btn::before { top: -1px; left: -1px; border-right: none; border-bottom: none; }
+  .btn::after { bottom: -1px; right: -1px; border-left: none; border-top: none; }
+  .btn:hover {
+    border-color: var(--amber); color: var(--amber);
+    background: rgba(255,181,71,0.06);
+    transform: translateY(-1px);
+  }
+  .btn:hover::before, .btn:hover::after { border-color: var(--amber); }
+  .btn:active { transform: translateY(0); }
   .btn.hot { color: var(--amber); border-color: var(--panel-edge-hot); }
-  .btn.hot:hover { background: rgba(255,181,71,0.08); }
+  .btn.hot:hover { background: rgba(255,181,71,0.10); }
 
   /* ── Floating PIP camera viewer ── */
   .pip {
@@ -688,8 +833,9 @@
     #threatPill .label { display: none; }
 
     #map, #cesium {
-      top: 46px !important; left: 0 !important; right: 0 !important;
-      bottom: calc(58px + env(safe-area-inset-bottom,0px)) !important;
+      /* slim top banner (18px) + slim header (46px) + bottom banner (16px) + nav (58px) */
+      top: 64px !important; left: 0 !important; right: 0 !important;
+      bottom: calc(74px + env(safe-area-inset-bottom,0px)) !important;
       border: none;
     }
     .map-corner { display: none; }
@@ -836,7 +982,7 @@
 </head>
 <body>
   <div id="map"></div>
-  <div id="cesium" style="display:none;position:fixed;top:80px;left:280px;right:320px;bottom:110px;z-index:2;background:#000;border:1px solid var(--panel-edge)"></div>
+  <div id="cesium" style="display:none;position:fixed;top:78px;left:280px;right:320px;bottom:128px;z-index:2;background:#000;border:1px solid var(--panel-edge)"></div>
   <div class="map-corner tl"></div><div class="map-corner tr"></div>
   <div class="map-corner bl"></div><div class="map-corner br"></div>
 
@@ -859,17 +1005,18 @@
       </div>
     </div>
     <div class="header-pills">
-      <div class="pill" id="utcPill"><span class="label">UTC</span><span class="val" id="utcVal">--:--:--</span></div>
+      <div class="pill" id="utcPill"><span class="label">DTG</span><span class="val" id="utcVal">--:--:--Z</span></div>
       <div class="pill threat" id="threatPill" data-level="nominal"><span class="label">DEFCON</span><span class="val" id="threatVal">5</span></div>
-      <div class="pill live" id="syncPill"><span class="dot"></span><span>Sync</span></div>
-      <div class="pill" id="spectraPill"><span class="dot"></span><span>Spectra Link</span></div>
+      <div class="pill live" id="syncPill"><span class="dot"></span><span>GRID NOMINAL</span></div>
+      <div class="pill" id="spectraPill"><span class="dot"></span><span>SPECTRA LINK</span></div>
     </div>
   </header>
 
-  <div class="classification-banner">UNCLASSIFIED // FOR SITUATIONAL USE ONLY</div>
+  <div class="classification-banner"></div>
+  <div class="classification-footer"></div>
 
   <aside class="rail-left">
-    <div class="section-title">TACTICAL OVERLAYS</div>
+    <div class="section-title" data-num="01">TACTICAL OVERLAYS</div>
     <div class="layer on" data-layer="satellites">
       <div class="layer-row"><span class="layer-name"><span class="layer-swatch"></span>Satellites</span><span class="layer-count" id="cntSats">0</span></div>
       <div class="layer-meta">CelesTrak · TLE · SGP4 propagation</div>
@@ -911,7 +1058,7 @@
       <div class="layer-meta">NOAA/NWS · Active alerts (US)</div>
     </div>
 
-    <div class="section-title">SENSOR FEEDS</div>
+    <div class="section-title" data-num="02">SENSOR FEEDS</div>
     <div class="src-chips" id="srcChips">
       <button class="chip on" data-src="usadot" title="OpenTrafficCamMap · 7,000+ live HLS US traffic cams">US Traffic</button>
       <button class="chip on" data-src="dot" title="Caltrans · 880+ live HLS California cams">Caltrans</button>
@@ -922,7 +1069,7 @@
       <button class="chip on" data-src="user" title="Your custom cameras">Custom</button>
     </div>
 
-    <div class="section-title">TARGETED ASSETS</div>
+    <div class="section-title" data-num="03">TARGETED ASSETS</div>
     <div class="layer" data-layer="orbit">
       <div class="layer-row"><span class="layer-name"><span class="layer-swatch" style="background:#5fd9ff;color:#5fd9ff"></span>Selected Orbit</span><span class="layer-count" id="cntOrb">—</span></div>
       <div class="layer-meta">Click a satellite</div>
@@ -955,7 +1102,7 @@
     <div class="rail-content">
       <div class="rail-pane active" id="paneFeed"></div>
       <div class="rail-pane" id="paneDossier">
-        <div class="dossier-empty">No entity selected.<br/>Click a marker to view dossier.</div>
+        <div class="dossier-empty">◉ NO TARGET DESIGNATED<br/><span style="opacity:0.5">SELECT A TRACK TO POPULATE DOSSIER</span></div>
       </div>
       <div class="rail-pane" id="paneChat">
         <div class="chat-log" id="chatLog">
@@ -1781,7 +1928,11 @@ function syncCesiumEntities() {
 // ── Time / clocks ─────────────────────────────────────────────────
 function tick() {
   const d = new Date();
-  document.getElementById("utcVal").textContent = d.toISOString().substr(11, 8);
+  // Day-of-year + Zulu time format — DOY 103 / 14:23:42Z
+  const start = Date.UTC(d.getUTCFullYear(), 0, 0);
+  const doy = String(Math.floor((d - start) / 86400000)).padStart(3, "0");
+  const t = d.toISOString().substr(11, 8);
+  document.getElementById("utcVal").textContent = `${doy}/${t}Z`;
 }
 setInterval(tick, 1000); tick();
 
@@ -2969,8 +3120,8 @@ document.getElementById("btnReset").onclick = () => {
   state.selectedTrail = null;
   state.selectedSatName = "";
   refreshOrbit(); refreshTrail();
-  document.getElementById("paneDossier").innerHTML = '<div class="dossier-empty">No entity selected.<br/>Click a marker to view dossier.</div>';
-  log("system", "View reset");
+  document.getElementById("paneDossier").innerHTML = '<div class="dossier-empty">◉ NO TARGET DESIGNATED<br/><span style="opacity:0.5">SELECT A TRACK TO POPULATE DOSSIER</span></div>';
+  log("system", "view reset");
 };
 document.getElementById("btnTrackISS").onclick = () => trackByName("ISS");
 document.getElementById("btnFly").onclick = () => {

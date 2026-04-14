@@ -736,8 +736,28 @@
   .chat-msg.user .chat-who { color: var(--amber); }
   .chat-msg.assistant .chat-who { color: var(--cyan); }
   .chat-body { font-size: 11px; line-height: 1.5; color: var(--ink); white-space: pre-wrap; word-wrap: break-word; }
+  .chat-toolbar {
+    display: flex; gap: 4px; align-items: center;
+    padding: 6px 8px;
+    border-top: 1px solid var(--panel-edge);
+    background: rgba(0,0,0,0.5);
+    font-family: var(--mono); font-size: 8px; letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+  .chat-toolbar .chat-flex { flex: 1; }
+  .chat-toolbar button {
+    background: transparent; border: 1px solid var(--panel-edge);
+    color: var(--steel); font-family: var(--mono); font-size: 8px;
+    letter-spacing: 0.18em; text-transform: uppercase;
+    padding: 4px 7px; cursor: pointer;
+    transition: all 0.12s var(--ease);
+  }
+  .chat-toolbar button:hover { color: var(--amber); border-color: var(--amber); }
+  .chat-mode.active { color: var(--amber); border-color: var(--amber); background: rgba(255,181,71,0.08); text-shadow: 0 0 6px var(--amber-glow); }
+  .chat-tts.on { color: var(--green); border-color: var(--green); background: rgba(57,255,143,0.08); text-shadow: 0 0 6px var(--green-glow); }
+
   .chat-input-wrap {
-    display: flex; gap: 6px; padding: 10px 12px;
+    display: flex; gap: 6px; padding: 8px 10px;
     border-top: 1px solid var(--panel-edge);
     background: rgba(0,0,0,0.4);
   }
@@ -747,12 +767,30 @@
     padding: 9px 11px; outline: none;
   }
   .chat-input-wrap input:focus { border-color: var(--amber); }
-  .chat-input-wrap button {
+  .chat-input-wrap button#chatSend {
     background: rgba(255,181,71,0.08); border: 1px solid var(--panel-edge-hot);
-    color: var(--amber); font-family: var(--mono); font-size: 14px;
+    color: var(--amber); font-family: var(--mono); font-size: 9px;
+    letter-spacing: 0.2em; text-transform: uppercase; font-weight: 500;
     padding: 0 14px; cursor: pointer;
   }
-  .chat-input-wrap button:hover { background: rgba(255,181,71,0.18); }
+  .chat-input-wrap button#chatSend:hover { background: rgba(255,181,71,0.18); }
+  .chat-mic {
+    background: rgba(0,0,0,0.5); border: 1px solid var(--panel-edge);
+    color: var(--cyan); font-family: var(--mono); font-size: 14px;
+    width: 38px; cursor: pointer;
+    transition: all 0.12s var(--ease);
+  }
+  .chat-mic:hover { border-color: var(--cyan); }
+  .chat-mic.recording {
+    color: var(--critical); border-color: var(--critical);
+    background: rgba(255,58,85,0.10);
+    box-shadow: 0 0 12px rgba(255,58,85,0.4);
+    animation: micPulse 0.9s ease-in-out infinite;
+  }
+  @keyframes micPulse {
+    0%,100% { box-shadow: 0 0 12px rgba(255,58,85,0.4); }
+    50%     { box-shadow: 0 0 22px rgba(255,58,85,0.7); }
+  }
   .chat-msg.thinking .chat-body::after {
     content: "▌"; animation: blink 1s infinite;
     color: var(--cyan);
@@ -1301,9 +1339,17 @@
             <div class="chat-body">Command center online. Ask me anything — I can search, open URLs, drive Falcon Eye, track satellites, and more.</div>
           </div>
         </div>
+        <div class="chat-toolbar">
+          <button class="chat-mode" id="chatModeClassic" data-mode="classic" title="Classical · Ollama + ElevenLabs">CLASSIC</button>
+          <button class="chat-mode" id="chatModeGemini" data-mode="gemini" title="Gemini Live native voice">GEMINI</button>
+          <span class="chat-flex"></span>
+          <button class="chat-tts" id="chatTtsToggle" title="Toggle voice playback">◉ VOICE</button>
+          <button class="chat-clear" id="chatClear" title="Clear shared history across all surfaces">⌫ CLEAR</button>
+        </div>
         <div class="chat-input-wrap">
-          <input id="chatInput" type="text" placeholder="ENTER DIRECTIVE…" autocomplete="off" />
-          <button id="chatSend">INITIATE</button>
+          <button class="chat-mic" id="chatMic" title="Hold to talk · Web Speech API">🎤</button>
+          <input id="chatInput" type="text" placeholder="ENTER DIRECTIVE OR PRESS MIC…" autocomplete="off" />
+          <button id="chatSend" title="Send directive">INITIATE</button>
         </div>
       </div>
     </div>
@@ -3033,6 +3079,89 @@ function safeOpen(u) {
   try { window.open(u, "_blank", "noopener"); } catch {}
 }
 
+// ── Chat / voice / history shared state ────────────────────────────
+const chatState = {
+  mode: localStorage.getItem("fe-chat-mode") || "classic",  // "classic" | "gemini"
+  ttsOn: localStorage.getItem("fe-chat-tts") !== "0",
+  historyLoaded: false,
+  recognizing: false,
+  recognition: null,
+  audio: null,
+};
+
+// Load shared conversation history from /api/history (same Netlify Blobs
+// store the main Spectra browser uses, so context follows the user across
+// every surface — terminal, browser, mobile, Falcon Eye chat).
+async function loadChatHistory() {
+  if (chatState.historyLoaded) return;
+  chatState.historyLoaded = true;
+  try {
+    const r = await fetch("/api/history");
+    const d = await r.json();
+    const msgs = (d.messages || []).slice(-12); // last 6 exchanges
+    if (msgs.length) {
+      const log = document.getElementById("chatLog");
+      // Clear the boot greeting if we actually have history
+      log.innerHTML = "";
+      addChatMsg("system", `↑ ${msgs.length} prior messages restored from shared session`);
+      for (const m of msgs) {
+        if (m.role === "user" || m.role === "assistant") addChatMsg(m.role, m.content || "");
+      }
+    }
+  } catch (e) { console.warn("history load:", e); }
+}
+
+async function persistExchange(userText, replyText) {
+  try {
+    await fetch("/api/history", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages: [
+        { role: "user", content: userText, ts: Date.now() },
+        { role: "assistant", content: replyText, ts: Date.now() },
+      ]}),
+    });
+  } catch {}
+}
+
+async function speakReply(text) {
+  if (!chatState.ttsOn || !text) return;
+  // Stop any current playback
+  if (chatState.audio) { try { chatState.audio.pause(); } catch {} chatState.audio = null; }
+  // Strip command blocks before speaking
+  const clean = text.replace(/```[\s\S]*?```/g, "").replace(/\s+/g, " ").trim().slice(0, 1200);
+  if (!clean) return;
+  // Classic mode → ElevenLabs via /api/tts. Gemini mode → Web Speech (browser native).
+  if (chatState.mode === "classic") {
+    try {
+      const r = await fetch("/api/tts", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: clean }),
+      });
+      if (!r.ok) throw new Error(`tts ${r.status}`);
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      chatState.audio = new Audio(url);
+      chatState.audio.play().catch(() => {});
+    } catch (e) {
+      // Fallback to Web Speech if ElevenLabs fails
+      try {
+        const u = new SpeechSynthesisUtterance(clean);
+        u.rate = 1.05; u.pitch = 1; u.lang = "en-GB";
+        speechSynthesis.cancel();
+        speechSynthesis.speak(u);
+      } catch {}
+    }
+  } else {
+    // Gemini mode — use the browser's native voice. Free, no API call.
+    try {
+      const u = new SpeechSynthesisUtterance(clean);
+      u.rate = 1.05; u.pitch = 1; u.lang = "en-GB";
+      speechSynthesis.cancel();
+      speechSynthesis.speak(u);
+    } catch {}
+  }
+}
+
 async function sendChat(text) {
   if (!text.trim()) return;
   addChatMsg("user", text);
@@ -3044,7 +3173,7 @@ async function sendChat(text) {
     const res = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: text }),
+      body: JSON.stringify({ message: text, mode: chatState.mode }),
     });
     // Parse safely — some errors return non-JSON text
     const raw = await res.text();
@@ -3063,6 +3192,8 @@ async function sendChat(text) {
   // ALWAYS show a reply, even if processing later fails
   if (data && data.reply) {
     addChatMsg("assistant", data.reply);
+    speakReply(data.reply);
+    persistExchange(text, data.reply);
   } else if (httpError) {
     addChatMsg("assistant", `Connection error (${httpError}). Retrying won't hurt, sir.`);
     return;
@@ -3107,6 +3238,95 @@ document.getElementById("chatSend").addEventListener("click", () => {
 document.getElementById("chatInput").addEventListener("keydown", (e) => {
   if (e.key === "Enter") { e.preventDefault(); document.getElementById("chatSend").click(); }
 });
+
+// ── Mode selector (classic / gemini) ──────────────────────────────
+function setChatMode(mode) {
+  chatState.mode = mode;
+  try { localStorage.setItem("fe-chat-mode", mode); } catch {}
+  document.getElementById("chatModeClassic").classList.toggle("active", mode === "classic");
+  document.getElementById("chatModeGemini").classList.toggle("active", mode === "gemini");
+}
+document.getElementById("chatModeClassic").addEventListener("click", () => setChatMode("classic"));
+document.getElementById("chatModeGemini").addEventListener("click", () => setChatMode("gemini"));
+setChatMode(chatState.mode);
+
+// ── TTS toggle ─────────────────────────────────────────────────────
+function setTtsState(on) {
+  chatState.ttsOn = on;
+  try { localStorage.setItem("fe-chat-tts", on ? "1" : "0"); } catch {}
+  const btn = document.getElementById("chatTtsToggle");
+  btn.classList.toggle("on", on);
+  btn.textContent = on ? "◉ VOICE" : "◯ MUTE";
+  if (!on && chatState.audio) { try { chatState.audio.pause(); } catch {}; chatState.audio = null; }
+  if (!on) try { speechSynthesis.cancel(); } catch {}
+}
+document.getElementById("chatTtsToggle").addEventListener("click", () => setTtsState(!chatState.ttsOn));
+setTtsState(chatState.ttsOn);
+
+// ── Clear shared history ───────────────────────────────────────────
+document.getElementById("chatClear").addEventListener("click", async () => {
+  if (!confirm("Clear shared conversation history across all Spectra surfaces?")) return;
+  try { await fetch("/api/history", { method: "DELETE" }); } catch {}
+  document.getElementById("chatLog").innerHTML = "";
+  addChatMsg("system", "Shared history cleared. Starting fresh.");
+});
+
+// ── Mic / Web Speech STT ───────────────────────────────────────────
+function startMic() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { addChatMsg("system", "Speech recognition not supported in this browser. Use Chrome or Safari."); return; }
+  if (chatState.recognizing) { stopMic(); return; }
+  const rec = new SR();
+  rec.lang = "en-US";
+  rec.continuous = false;
+  rec.interimResults = true;
+  rec.maxAlternatives = 1;
+
+  let interim = "";
+  const inp = document.getElementById("chatInput");
+  rec.onstart = () => {
+    chatState.recognizing = true;
+    document.getElementById("chatMic").classList.add("recording");
+    inp.placeholder = "LISTENING…";
+  };
+  rec.onresult = (e) => {
+    interim = "";
+    let final = "";
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const t = e.results[i][0].transcript;
+      if (e.results[i].isFinal) final += t;
+      else interim += t;
+    }
+    inp.value = (final || interim).trim();
+  };
+  rec.onerror = (e) => { addChatMsg("system", `Mic error: ${e.error}`); stopMic(); };
+  rec.onend = () => {
+    stopMic();
+    const v = inp.value.trim();
+    if (v) { inp.value = ""; sendChat(v); }
+  };
+  chatState.recognition = rec;
+  try { rec.start(); } catch (e) { addChatMsg("system", `Mic start failed: ${e.message}`); stopMic(); }
+}
+function stopMic() {
+  chatState.recognizing = false;
+  document.getElementById("chatMic").classList.remove("recording");
+  document.getElementById("chatInput").placeholder = "ENTER DIRECTIVE OR PRESS MIC…";
+  try { chatState.recognition?.stop(); } catch {}
+  chatState.recognition = null;
+}
+document.getElementById("chatMic").addEventListener("click", startMic);
+
+// ── Load shared history when the chat tab opens ───────────────────
+// Hook every tab button (avoid reassigning the setTab function declaration)
+document.querySelectorAll('.rail-tab[data-tab="chat"]').forEach((b) => {
+  b.addEventListener("click", () => loadChatHistory());
+});
+document.querySelectorAll('.mobile-nav button[data-sheet="chat"]').forEach((b) => {
+  b.addEventListener("click", () => loadChatHistory());
+});
+// Also load immediately if the chat tab happens to be active on boot
+if (document.getElementById("paneChat")?.classList.contains("active")) loadChatHistory();
 
 function showDossier(entity) {
   state.selectedEntity = entity;

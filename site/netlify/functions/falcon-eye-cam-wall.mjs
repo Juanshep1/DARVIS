@@ -84,12 +84,20 @@ export default async (req) => {
   // Same-origin fetch — Netlify sets this in the request URL
   const origin = new URL(req.url).origin;
 
+  const wantInsecam = !sourceFilter || sourceFilter.has("insecam");
   const jobs = [
     fetchSource(origin, "/api/falcon-eye/dot-cams", "caltrans"),
     fetchSource(origin, "/api/falcon-eye/wsdot-cams", "wsdot"),
     fetchSource(origin, "/api/falcon-eye/nature-cams", "nature"),
     fetchSource(origin, `/api/falcon-eye/webcams?near=${lat.toFixed(3)},${lon.toFixed(3)}`, "windy"),
   ];
+  if (wantInsecam) {
+    jobs.push(fetchSource(
+      origin,
+      `/api/falcon-eye/insecam-cams?lat=${lat.toFixed(3)}&lon=${lon.toFixed(3)}&r=${Math.max(r, 200)}&limit=120`,
+      "insecam"
+    ));
+  }
 
   const results = await Promise.allSettled(jobs);
   const all = [];

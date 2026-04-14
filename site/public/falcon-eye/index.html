@@ -473,6 +473,8 @@
   .layer[data-layer=satellites] .layer-swatch { background: var(--cyan); color: var(--cyan); }
   .layer[data-layer=aircraft] .layer-swatch { background: var(--amber); color: var(--amber); }
   .layer[data-layer=military] .layer-swatch { background: #ff3a55; color: #ff3a55; }
+  .layer[data-layer=vessels] .layer-swatch { background: #5fffd4; color: #5fffd4; }
+  .layer[data-layer=chokepoints] .layer-swatch { background: #ffce82; color: #ffce82; }
   .layer[data-layer=cameras] .layer-swatch { background: var(--green); color: var(--green); }
   .layer[data-layer=news] .layer-swatch { background: var(--critical); color: var(--critical); }
   .layer[data-layer=earthquakes] .layer-swatch { background: #ff5b8a; color: #ff5b8a; }
@@ -628,6 +630,22 @@
   .alert-foot {
     font-size: 8px; letter-spacing: 0.16em; text-transform: uppercase;
     color: var(--steel-dim); margin-top: 6px;
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  }
+  .alert-time { flex: 1; }
+  .alert-watch {
+    background: rgba(255,58,85,0.10);
+    border: 1px solid var(--critical);
+    color: var(--critical);
+    font-family: var(--mono); font-size: 8px; letter-spacing: 0.18em;
+    text-transform: uppercase; font-weight: 600;
+    padding: 3px 8px; cursor: pointer;
+    transition: all 0.12s var(--ease);
+    flex: 0 0 auto;
+  }
+  .alert-watch:hover {
+    background: var(--critical); color: #fff;
+    box-shadow: 0 0 10px rgba(255,58,85,0.5);
   }
   .alert-tags { display: flex; gap: 4px; align-items: center; }
   .alert .cat {
@@ -1192,6 +1210,14 @@
       <div class="layer-row"><span class="layer-name"><span class="layer-swatch"></span>Military Aircraft</span><span class="layer-count" id="cntMil">0</span></div>
       <div class="layer-meta">airplanes.live · Open ADS-B · Mil-only</div>
     </div>
+    <div class="layer on" data-layer="vessels">
+      <div class="layer-row"><span class="layer-name"><span class="layer-swatch"></span>Maritime Vessels</span><span class="layer-count" id="cntVes">0</span></div>
+      <div class="layer-meta">AISStream · Live AIS · Cargo / Tanker / Pax</div>
+    </div>
+    <div class="layer on" data-layer="chokepoints">
+      <div class="layer-row"><span class="layer-name"><span class="layer-swatch"></span>Maritime Chokepoints</span><span class="layer-count" id="cntCkp">9</span></div>
+      <div class="layer-meta">Hormuz · Suez · Panama · Malacca · Bosphorus</div>
+    </div>
     <div class="layer on" data-layer="cameras">
       <div class="layer-row"><span class="layer-name"><span class="layer-swatch"></span>SENSOR PLATFORMS</span><span class="layer-count" id="cntCam">0</span></div>
       <div class="layer-meta">Windy Webcams + custom feeds</div>
@@ -1248,6 +1274,7 @@
     <button data-bmap="dark">DARK</button>
     <button data-bmap="topo">TOPO</button>
     <button id="cesium3dBtn" data-bmap="cesium" title="Cesium ion 3D Earth · Photoreal terrain">3D</button>
+    <button id="cctvWallBtn" title="CCTV Command Wall — multi-camera grid for current view">▦ WALL</button>
   </div>
 
   <div class="cursor-readout">
@@ -1382,6 +1409,8 @@ const API = {
   naturecams: "/api/falcon-eye/nature-cams",
   news:    "/api/falcon-eye/news",
   swarm:   "/api/falcon-eye/swarm",
+  broadcasts: "/api/falcon-eye/broadcasts",
+  vessels: "/api/falcon-eye/vessels",
   wxalerts:"/api/falcon-eye/weather-alerts",
   fires:   "/api/falcon-eye/fires",
   quakes:  "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson",
@@ -1396,8 +1425,9 @@ try { savedSources = JSON.parse(localStorage.getItem("fe-sources") || "null"); }
 const SOURCES = { ...defaultSources, ...(savedSources || {}) };
 
 const state = {
-  layers: { satellites: true, aircraft: true, military: true, cameras: true, news: true,
-            earthquakes: true, fires: true, terminator: true, radar: true, wxalerts: true },
+  layers: { satellites: true, aircraft: true, military: true, vessels: true, chokepoints: true,
+            cameras: true, news: true, earthquakes: true, fires: true, terminator: true,
+            radar: true, wxalerts: true },
   sats: [],            // {name, satrec}
   satPoints: [],       // current propagated [{name, lat, lng, alt}]
   aircraft: [],
@@ -1407,6 +1437,7 @@ const state = {
   alerts: [],
   earthquakes: [],
   fires: [],
+  vessels: [],
   selectedSatName: "",
   selectedOrbit: null,
   selectedTrail: null,
@@ -1451,7 +1482,7 @@ map.on("error", (e) => { console.error("maplibre error:", e && e.error); });
 map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "bottom-right");
 
 const EMPTY = { type: "FeatureCollection", features: [] };
-const SOURCE_IDS = ["satellites","aircraft","military","cameras","earthquakes","fires","news","wxalerts","orbit","trail","terminator","airtrails","miltrails"];
+const SOURCE_IDS = ["satellites","aircraft","military","vessels","chokepoints","cameras","earthquakes","fires","news","wxalerts","orbit","trail","terminator","airtrails","miltrails"];
 
 // ── Tactical icon glyphs — hand-drawn to canvas, added as map images ──
 function makeIcon(drawFn, size = 32) {
@@ -1587,6 +1618,42 @@ function drawFire(ctx) {
   ctx.quadraticCurveTo(-4, -1, 0, -7);
   ctx.fill();
 }
+// Vessel — narrow chevron pointing along course-over-ground
+function drawVessel(ctx) {
+  ctx.translate(16, 16);
+  ctx.fillStyle = "#5fffd4";
+  ctx.strokeStyle = "rgba(0,40,30,0.9)";
+  ctx.lineWidth = 1; ctx.lineJoin = "round";
+  ctx.shadowColor = "rgba(95,255,212,0.7)"; ctx.shadowBlur = 4;
+  ctx.beginPath();
+  ctx.moveTo(0, -10);          // bow
+  ctx.lineTo(5, 6);
+  ctx.lineTo(2, 8);
+  ctx.lineTo(2, 11);
+  ctx.lineTo(-2, 11);
+  ctx.lineTo(-2, 8);
+  ctx.lineTo(-5, 6);
+  ctx.closePath();
+  ctx.fill(); ctx.shadowBlur = 0; ctx.stroke();
+}
+// Chokepoint — diamond with crosshair
+function drawChokepoint(ctx) {
+  ctx.translate(16, 16);
+  ctx.strokeStyle = "#ffce82";
+  ctx.fillStyle = "rgba(255,206,130,0.18)";
+  ctx.lineWidth = 1.4; ctx.lineJoin = "round";
+  ctx.shadowColor = "rgba(255,181,71,0.6)"; ctx.shadowBlur = 5;
+  ctx.beginPath();
+  ctx.moveTo(0, -12); ctx.lineTo(12, 0); ctx.lineTo(0, 12); ctx.lineTo(-12, 0);
+  ctx.closePath();
+  ctx.fill(); ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.beginPath();
+  ctx.moveTo(-6, 0); ctx.lineTo(6, 0);
+  ctx.moveTo(0, -6); ctx.lineTo(0, 6);
+  ctx.stroke();
+}
+
 function drawAlert(ctx) {
   ctx.translate(16, 16);
   ctx.fillStyle = "#ff3a55";
@@ -1608,6 +1675,7 @@ function addIcons() {
     camera: drawCamera, "camera-windy": drawCameraWindy,
     "camera-earth": drawCameraEarth, "camera-nature": drawCameraNature,
     quake: drawQuake, fire: drawFire, alert: drawAlert,
+    vessel: drawVessel, chokepoint: drawChokepoint,
   };
   for (const [name, fn] of Object.entries(defs)) {
     if (map.hasImage(name)) continue;
@@ -1707,6 +1775,26 @@ function installLayers() {
     "icon-size": ["interpolate", ["linear"], ["zoom"], 0, 0.7, 6, 1.0, 12, 1.35],
     "icon-rotate": ["coalesce", ["to-number", ["get", "track"]], 0],
     "icon-rotation-alignment": "map",
+    "icon-allow-overlap": true, "icon-ignore-placement": true,
+  }});
+
+  // Maritime vessels — sea-foam chevron rotated by course-over-ground
+  if (!map.getLayer("ves-glow-l")) map.addLayer({ id: "ves-glow-l", type: "circle", source: "vessels", paint: {
+    "circle-radius": ["interpolate", ["linear"], ["zoom"], 0, 5, 8, 14],
+    "circle-color": "#5fffd4", "circle-opacity": 0.16, "circle-blur": 0.7,
+  }});
+  if (!map.getLayer("vessels-l")) map.addLayer({ id: "vessels-l", type: "symbol", source: "vessels", layout: {
+    "icon-image": "vessel",
+    "icon-size": ["interpolate", ["linear"], ["zoom"], 0, 0.55, 6, 0.85, 12, 1.2],
+    "icon-rotate": ["coalesce", ["to-number", ["get", "cog"]], ["coalesce", ["to-number", ["get", "heading"]], 0]],
+    "icon-rotation-alignment": "map",
+    "icon-allow-overlap": true, "icon-ignore-placement": true,
+  }});
+
+  // Maritime chokepoints — diamond with throughput count label
+  if (!map.getLayer("chokepoints-l")) map.addLayer({ id: "chokepoints-l", type: "symbol", source: "chokepoints", layout: {
+    "icon-image": "chokepoint",
+    "icon-size": ["interpolate", ["linear"], ["zoom"], 0, 0.85, 6, 1.0, 12, 1.4],
     "icon-allow-overlap": true, "icon-ignore-placement": true,
   }});
 
@@ -1832,9 +1920,19 @@ function wireClicks() {
     showDossier({ type: "wx", ...f.properties });
     log("wx", f.properties.event || f.properties.headline || "alert");
   });
+  map.on("click", "vessels-l", (e) => {
+    const f = e.features[0];
+    showDossier({ type: "vessel", ...f.properties, lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0] });
+    log("ais", `${f.properties.name || f.properties.callsign || f.properties.mmsi || "vessel"}`);
+  });
+  map.on("click", "chokepoints-l", (e) => {
+    const f = e.features[0];
+    showDossier({ type: "chokepoint", ...f.properties, lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0] });
+    log("ckp", f.properties.name || "chokepoint");
+  });
 
   // Cursor pointer on hover
-  for (const layer of ["cameras-l","satellites-l","aircraft-l","military-l","earthquakes-l","news-l","fires-l"]) {
+  for (const layer of ["cameras-l","satellites-l","aircraft-l","military-l","vessels-l","chokepoints-l","earthquakes-l","news-l","fires-l"]) {
     map.on("mouseenter", layer, () => map.getCanvas().style.cursor = "pointer");
     map.on("mouseleave", layer, () => map.getCanvas().style.cursor = "");
   }
@@ -2230,6 +2328,53 @@ function refreshGlobalTrails() {
   if (srcM) srcM.setData({ type: "FeatureCollection", features: mil });
 }
 
+// ── Maritime vessels (AISStream via our cron-cached endpoint) ──────
+async function loadVessels() {
+  try {
+    const r = await fetch(API.vessels);
+    const d = await r.json();
+    // Endpoint returns either GeoJSON FeatureCollection or {features:[]}
+    const features = (d.features || []).map((f) => ({
+      mmsi: f.properties?.mmsi || "",
+      name: f.properties?.name || "",
+      callsign: f.properties?.callsign || "",
+      type: f.properties?.type || f.properties?.typeName || "",
+      flag: f.properties?.flag || "",
+      destination: f.properties?.destination || "",
+      eta: f.properties?.eta || "",
+      sog: f.properties?.sog || 0,
+      cog: f.properties?.cog || 0,
+      heading: f.properties?.heading || 0,
+      lat: f.geometry?.coordinates?.[1] || null,
+      lng: f.geometry?.coordinates?.[0] || null,
+    })).filter(v => v.lat != null && v.lng != null);
+    state.vessels = features;
+    refreshSource("vessels", features, (v) => ({
+      mmsi: v.mmsi, name: v.name, callsign: v.callsign, type: v.type,
+      flag: v.flag, destination: v.destination, sog: v.sog, cog: v.cog, heading: v.heading,
+    }));
+    document.getElementById("cntVes").textContent = String(features.length);
+  } catch (e) { log("ais", `load failed: ${e.message}`, "warn"); }
+}
+
+// ── Maritime chokepoints (static) ──────────────────────────────────
+const CHOKEPOINTS = [
+  { name: "Strait of Hormuz",    lat: 26.50, lon: 56.25, traffic: "~30% global oil", toll: "Free" },
+  { name: "Suez Canal",          lat: 30.42, lon: 32.35, traffic: "~12% global trade", toll: "$300k–800k avg" },
+  { name: "Panama Canal",        lat:  9.08, lon: -79.68,traffic: "~5% global trade", toll: "$150k–500k avg" },
+  { name: "Strait of Malacca",   lat:  2.50, lon: 101.30,traffic: "~25% global oil & 40% trade", toll: "Free" },
+  { name: "Bosphorus / Istanbul",lat: 41.10, lon: 29.05, traffic: "~3% global oil", toll: "Free" },
+  { name: "Bab-el-Mandeb",       lat: 12.58, lon: 43.33, traffic: "~10% global oil", toll: "Free" },
+  { name: "Strait of Gibraltar", lat: 35.95, lon: -5.60, traffic: "~10% global trade", toll: "Free" },
+  { name: "English Channel",     lat: 50.55, lon:  1.20, traffic: "~20% global trade", toll: "Free" },
+  { name: "Taiwan Strait",       lat: 24.50, lon: 119.50,traffic: "~88% largest ships transit", toll: "Free" },
+];
+function loadChokepoints() {
+  refreshSource("chokepoints", CHOKEPOINTS.map((c) => ({ ...c, lng: c.lon })), (c) => ({
+    name: c.name, traffic: c.traffic, toll: c.toll,
+  }));
+}
+
 // ── Military aircraft (airplanes.live, no key) ────────────────────
 async function loadMilitary() {
   try {
@@ -2566,6 +2711,8 @@ function rerender() {
   set(["satellites-l"], state.layers.satellites);
   set(["aircraft-l", "aircraft-halo-l", "airtrails-l", "airtrails-glow-l"], state.layers.aircraft);
   set(["military-l", "mil-glow-l", "miltrails-l", "miltrails-glow-l"], state.layers.military);
+  set(["vessels-l", "ves-glow-l"], state.layers.vessels);
+  set(["chokepoints-l"], state.layers.chokepoints);
   set(["cameras-l", "cam-glow-l", "cam-live-ring-l"], state.layers.cameras);
   set(["news-l", "news-bg-l"], state.layers.news);
   set(["earthquakes-l", "eq-glow-l"], state.layers.earthquakes);
@@ -2701,18 +2848,26 @@ function renderFeed() {
       <div class="alert-snippet"></div>
       ${tagsHtml ? `<div class="alert-tagrow">${tagsHtml}</div>` : ""}
       ${relevance != null ? `<div class="alert-relbar"><div class="alert-relbar-fill" style="width:${relevance}%"></div></div>` : ""}
-      <div class="alert-foot"></div>`;
+      <div class="alert-foot">
+        <span class="alert-time"></span>
+        <button class="alert-watch" title="Watch live broadcast">▶ LIVE</button>
+      </div>`;
     el.querySelector(".alert-meta").textContent = `${a.region || "Global"} · ${a.source || ""}`;
     el.querySelector(".cat").textContent = cat;
     el.querySelector(".sev").textContent = a.severity;
     el.querySelector(".alert-title").textContent = a.headline || "";
     el.querySelector(".alert-snippet").textContent = a.snippet || "";
-    el.querySelector(".alert-foot").textContent =
+    el.querySelector(".alert-time").textContent =
       timeAgo(a.ts) + (relevance != null ? `  ·  rel ${relevance}` : "");
     if (a.tags && a.tags.length) {
       const tagSpans = el.querySelectorAll(".alert-tag");
       a.tags.slice(0, 4).forEach((t, i) => { if (tagSpans[i]) tagSpans[i].textContent = t; });
     }
+    const watchBtn = el.querySelector(".alert-watch");
+    watchBtn.onclick = (ev) => {
+      ev.stopPropagation();
+      openLiveBroadcast(a);
+    };
     el.onclick = () => {
       if (a.lat != null) map.flyTo({ center: [a.lon, a.lat], zoom: 5, duration: 1500 });
       showDossier({ ...a, type: "news", lng: a.lon });
@@ -2920,6 +3075,30 @@ function showDossier(entity) {
       ["Area", entity.area || "—"],
       ["Expires", entity.expires ? new Date(entity.expires).toUTCString() : "—"],
     ];
+  } else if (t === "vessel") {
+    title = entity.name || entity.callsign || entity.mmsi || "Vessel";
+    sub = `${entity.type || "—"} · ${entity.flag || "—"} · AISStream`;
+    rows = [
+      ["MMSI", entity.mmsi || "—"],
+      ["Name", entity.name || "—"],
+      ["Callsign", entity.callsign || "—"],
+      ["Type", entity.type || "—"],
+      ["Flag", entity.flag || "—"],
+      ["Destination", entity.destination || "—"],
+      ["Speed", entity.sog ? `${entity.sog.toFixed(1)} kts` : "—"],
+      ["Course", entity.cog != null ? `${entity.cog.toFixed(0)}°` : "—"],
+      ["Lat", entity.lat?.toFixed(4) + "°"],
+      ["Lon", entity.lon?.toFixed(4) + "°"],
+    ];
+  } else if (t === "chokepoint") {
+    title = entity.name || "Chokepoint";
+    sub = "Maritime Transit Node";
+    rows = [
+      ["Traffic", entity.traffic || "—"],
+      ["Toll", entity.toll || "Free"],
+      ["Lat", entity.lat?.toFixed(4) + "°"],
+      ["Lon", entity.lon?.toFixed(4) + "°"],
+    ];
   } else if (t === "news") {
     title = entity.headline || "Intel";
     sub = `${entity.region || ""} · ${entity.source || ""}`;
@@ -2938,6 +3117,8 @@ function showDossier(entity) {
       ${entity.url ? '<button class="btn" data-act="open">Open Link</button>' : ""}
       ${t === "camera" ? '<button class="btn hot" data-act="watch">▶ Watch</button>' : ""}
       ${t === "satellite" ? '<button class="btn hot" data-act="follow">⌖ Follow</button>' : ""}
+      ${t === "news" ? '<button class="btn hot" data-act="broadcast">▶ Watch Live</button>' : ""}
+      ${t === "vessel" ? '<button class="btn hot" data-act="track">⌖ Track</button>' : ""}
     </div>`;
   pane.innerHTML = `<div class="dossier"><h3>${escape(title)}</h3><div class="sub">${escape(sub)}</div><dl>${dl}</dl>${actions}</div>`;
   pane.querySelectorAll(".actions button").forEach((b) => {
@@ -2945,6 +3126,7 @@ function showDossier(entity) {
       const a = b.dataset.act;
       if (a === "fly" && entity.lat != null) map.flyTo({ center: [entity.lon ?? entity.lng, entity.lat], zoom: 8, duration: 1800 });
       if (a === "open" && entity.url) window.open(entity.url, "_blank", "noopener");
+      if (a === "broadcast") openLiveBroadcast(entity);
       if (a === "watch") openViewer({ label: entity.label, url: entity.url, kind: entity.kind });
       if (a === "follow" && t === "satellite") trackByName(entity.name);
     };
@@ -3025,6 +3207,13 @@ document.getElementById("pipClose").onclick = () => {
   pipBody.innerHTML = "No feed selected";
 };
 document.getElementById("pipMin").onclick = () => pip.classList.toggle("min");
+
+// CCTV Command Wall — open Live Video Claude's wall.html with current map center
+document.getElementById("cctvWallBtn").addEventListener("click", () => {
+  const c = map.getCenter();
+  const url = `/falcon-eye/wall.html?lat=${c.lat.toFixed(4)}&lon=${c.lng.toFixed(4)}&r=50&grid=9`;
+  window.open(url, "fe-wall");
+});
 document.getElementById("pipToggleMode").onclick = () => {
   currentMode = currentMode === "video" ? "snapshot" : "video";
   renderPip();
@@ -3236,6 +3425,36 @@ function showIframeError(url) {
       <a href="${url}" target="_blank" rel="noopener" style="color:var(--amber);text-decoration:none;border:1px solid var(--amber);padding:6px 12px">Open in New Tab ↗</a>
     </div>`;
 }
+// Open a live news broadcast iframe in the existing PIP viewer for an
+// intel item. Uses the channels mapping from /api/falcon-eye/broadcasts.
+async function openLiveBroadcast(alert) {
+  const candidate = alert.channelId || alert.source || alert.region;
+  try {
+    const r = await fetch(`${API.broadcasts}?source=${encodeURIComponent(candidate || "")}`);
+    if (!r.ok) throw new Error("no broadcast");
+    const data = await r.json();
+    if (!data.url) throw new Error("no url");
+    openViewer({
+      label: `${data.name || "LIVE"} · ${alert.headline || ""}`.slice(0, 80),
+      url: data.url,
+      kind: "iframe",
+      source: "broadcast",
+    });
+  } catch (e) {
+    // Fallback: try the original article URL or open a search
+    if (alert.url) {
+      openViewer({
+        label: `${alert.source || "INTEL"} · ${alert.headline || ""}`.slice(0, 80),
+        url: alert.url,
+        kind: "iframe",
+        source: "broadcast",
+      });
+    } else {
+      log("intel", `no live feed for ${candidate}`, "warn");
+    }
+  }
+}
+
 function showCameraOfflineError(url, reason = "") {
   pipBody.innerHTML = `
     <div style="padding:22px;text-align:center;font-size:9px;letter-spacing:0.18em;color:var(--steel);line-height:1.7">
@@ -3668,6 +3887,8 @@ async function bootData() {
   setInterval(propagateSats, 1000);
   loadAircraft(); setInterval(loadAircraft, 25000);
   loadMilitary(); setInterval(loadMilitary, 20000);
+  loadVessels(); setInterval(loadVessels, 60000);
+  loadChokepoints();
   loadCameras();
   loadNews(); setInterval(() => loadNews(), 60000);
   loadEarthquakes(); setInterval(loadEarthquakes, 5 * 60 * 1000);

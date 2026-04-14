@@ -120,7 +120,35 @@ export default async (req) => {
   }
 
   normalized.sort((a, b) => a.distanceKm - b.distanceKm);
-  const top = normalized.slice(0, limit);
+
+  // Diversity cap: no single source eats more than ~60% of the grid when
+  // multiple sources have candidates. Keeps the CCTV wall varied in dense
+  // urban areas where one provider (e.g. Windy) would otherwise monopolize.
+  const diversify = u.searchParams.get("diversify") !== "0";
+  let top;
+  if (diversify) {
+    const perSourceCap = Math.max(1, Math.ceil(limit * 0.6));
+    const counts = {};
+    const picked = [];
+    const overflow = [];
+    for (const c of normalized) {
+      const used = counts[c.source] || 0;
+      if (used < perSourceCap && picked.length < limit) {
+        picked.push(c);
+        counts[c.source] = used + 1;
+      } else {
+        overflow.push(c);
+      }
+    }
+    // If the diversity pass left slots empty (only one source had cams in
+    // range), fall back to filling with overflow in distance order.
+    while (picked.length < limit && overflow.length) picked.push(overflow.shift());
+    // Re-sort final output by distance so the closest tile renders first
+    picked.sort((a, b) => a.distanceKm - b.distanceKm);
+    top = picked;
+  } else {
+    top = normalized.slice(0, limit);
+  }
 
   // Build a breakdown-by-source for the wall UI
   const bySource = {};

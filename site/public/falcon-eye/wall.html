@@ -1,0 +1,896 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>FALCON EYE · CCTV COMMAND WALL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js"></script>
+<style>
+  :root {
+    --bg: #05070b;
+    --bg-panel: #0a0e14;
+    --edge: #1a2230;
+    --edge-hot: #ff7043;
+    --cyan: #5fd9ff;
+    --amber: #ffb547;
+    --green: #3ddc84;
+    --red: #ff4558;
+    --text: #cfd8e3;
+    --text-dim: #6b7a8f;
+    --grid-gap: 4px;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Inter", system-ui, sans-serif;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    display: grid;
+    grid-template-rows: 48px 1fr 28px;
+    grid-template-columns: 260px 1fr;
+    grid-template-areas:
+      "header header"
+      "rail   grid"
+      "footer footer";
+    gap: 1px;
+    background: var(--edge);
+  }
+
+  /* ─── Header ─── */
+  header {
+    grid-area: header;
+    background: var(--bg-panel);
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 16px;
+    border-bottom: 1px solid var(--edge);
+  }
+  header .logo {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 0.18em;
+    color: var(--amber);
+    text-shadow: 0 0 12px rgba(255,181,71,0.35);
+  }
+  header .logo span { color: var(--cyan); text-shadow: 0 0 12px rgba(95,217,255,0.35); }
+  header .sep { width: 1px; height: 20px; background: var(--edge); }
+  header .stat {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+  header .stat b { color: var(--cyan); font-weight: 700; }
+  header .stat .dead { color: var(--red); }
+  header .spacer { flex: 1; }
+  header button {
+    background: transparent;
+    border: 1px solid var(--edge);
+    color: var(--text);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 6px 12px;
+    cursor: pointer;
+    transition: all 0.12s;
+  }
+  header button:hover {
+    border-color: var(--cyan);
+    color: var(--cyan);
+    box-shadow: 0 0 8px rgba(95,217,255,0.25);
+  }
+  header button.hot { border-color: var(--edge-hot); color: var(--edge-hot); }
+  header button.hot:hover { box-shadow: 0 0 8px rgba(255,112,67,0.35); }
+
+  /* ─── Left rail ─── */
+  aside {
+    grid-area: rail;
+    background: var(--bg-panel);
+    overflow-y: auto;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  aside h3 {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin: 0 0 6px 0;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--edge);
+  }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 9px;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .field input, .field select {
+    background: #0f141c;
+    border: 1px solid var(--edge);
+    color: var(--text);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    padding: 6px 8px;
+  }
+  .field input:focus, .field select:focus {
+    outline: none;
+    border-color: var(--cyan);
+  }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .grid-selector {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px;
+  }
+  .grid-selector button {
+    background: transparent;
+    border: 1px solid var(--edge);
+    color: var(--text-dim);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    padding: 6px 0;
+    cursor: pointer;
+    transition: all 0.12s;
+  }
+  .grid-selector button:hover { border-color: var(--cyan); color: var(--cyan); }
+  .grid-selector button.on {
+    border-color: var(--amber);
+    color: var(--amber);
+    background: rgba(255,181,71,0.08);
+    box-shadow: 0 0 8px rgba(255,181,71,0.2);
+  }
+  .src-list {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .src-list label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    color: var(--text);
+    padding: 4px 6px;
+    cursor: pointer;
+    border: 1px solid transparent;
+  }
+  .src-list label:hover { border-color: var(--edge); }
+  .src-list input[type="checkbox"] { accent-color: var(--cyan); }
+  .src-list .count {
+    margin-left: auto;
+    color: var(--text-dim);
+    font-size: 10px;
+  }
+  .cam-queue {
+    max-height: 240px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+  }
+  .cam-queue .item {
+    padding: 5px 6px;
+    border: 1px solid var(--edge);
+    color: var(--text-dim);
+    cursor: pointer;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .cam-queue .item:hover { border-color: var(--cyan); color: var(--cyan); }
+  .cam-queue .item.live { border-left: 2px solid var(--green); }
+  .cam-queue .item.pinned {
+    border-color: var(--amber);
+    color: var(--amber);
+    background: rgba(255,181,71,0.06);
+  }
+
+  /* ─── Main grid ─── */
+  main {
+    grid-area: grid;
+    background: #000;
+    position: relative;
+    overflow: hidden;
+  }
+  #wall {
+    position: absolute;
+    inset: var(--grid-gap);
+    display: grid;
+    gap: var(--grid-gap);
+  }
+  #wall[data-grid="1"] { grid-template-columns: 1fr; grid-template-rows: 1fr; }
+  #wall[data-grid="4"] { grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(2, 1fr); }
+  #wall[data-grid="6"] { grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(2, 1fr); }
+  #wall[data-grid="9"] { grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); }
+  #wall[data-grid="12"] { grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(3, 1fr); }
+  #wall[data-grid="16"] { grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(4, 1fr); }
+
+  .tile {
+    position: relative;
+    background: #0a0e14;
+    border: 1px solid var(--edge);
+    overflow: hidden;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .tile.active { border-color: var(--cyan); box-shadow: 0 0 16px rgba(95,217,255,0.35); }
+  .tile.dead { border-color: #3a1820; }
+  .tile.dead::after {
+    content: "◉ OFFLINE";
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.75);
+    color: var(--red);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    pointer-events: none;
+  }
+  .tile .media {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    background: #000;
+  }
+  .tile .overlay {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    padding: 6px 8px 6px 8px;
+    background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0) 100%);
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 8px;
+    font-family: "JetBrains Mono", monospace;
+    pointer-events: none;
+  }
+  .tile .overlay .label {
+    font-size: 10px;
+    color: var(--cyan);
+    text-shadow: 0 1px 2px #000;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 80%;
+  }
+  .tile .overlay .badge {
+    font-size: 8px;
+    letter-spacing: 0.08em;
+    color: var(--green);
+    padding: 1px 4px;
+    border: 1px solid var(--green);
+    background: rgba(61,220,132,0.08);
+    text-transform: uppercase;
+  }
+  .tile .hud {
+    position: absolute;
+    top: 6px;
+    left: 8px;
+    right: 8px;
+    display: flex;
+    justify-content: space-between;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 9px;
+    color: var(--amber);
+    text-shadow: 0 1px 2px #000;
+    pointer-events: none;
+    letter-spacing: 0.08em;
+  }
+  .tile .hud .rec::before {
+    content: "●";
+    color: var(--red);
+    margin-right: 4px;
+    animation: pulse 1.2s infinite;
+  }
+  .tile .close {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 18px; height: 18px;
+    border: 1px solid var(--edge);
+    background: rgba(0,0,0,0.6);
+    color: var(--text-dim);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    cursor: pointer;
+    display: none;
+    z-index: 2;
+  }
+  .tile:hover .close { display: block; }
+  .tile .close:hover { color: var(--red); border-color: var(--red); }
+
+  .empty-tile {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-dim);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+  .empty-tile::before {
+    content: "[ NO SIGNAL ]";
+  }
+
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+  /* Scan-line overlay for ambience */
+  main::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+      to bottom,
+      rgba(0,0,0,0) 0px,
+      rgba(0,0,0,0) 2px,
+      rgba(0,0,0,0.08) 3px,
+      rgba(0,0,0,0) 4px
+    );
+    z-index: 9;
+    mix-blend-mode: overlay;
+  }
+  main::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    box-shadow: inset 0 0 120px rgba(0,0,0,0.6);
+    z-index: 10;
+  }
+
+  /* ─── Footer ─── */
+  footer {
+    grid-area: footer;
+    background: var(--bg-panel);
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    gap: 12px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    border-top: 1px solid var(--edge);
+  }
+  footer .sep { width: 1px; height: 14px; background: var(--edge); }
+  footer .clock { color: var(--cyan); }
+  footer .warn { color: var(--amber); }
+  footer .spacer { flex: 1; }
+  footer a { color: var(--text-dim); text-decoration: none; }
+  footer a:hover { color: var(--cyan); }
+
+  @media (max-width: 760px) {
+    body {
+      grid-template-columns: 1fr;
+      grid-template-areas:
+        "header"
+        "grid"
+        "footer";
+    }
+    aside { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">FALCON EYE · <span>CCTV COMMAND WALL</span></div>
+  <div class="sep"></div>
+  <div class="stat">GRID <b id="statGrid">9</b></div>
+  <div class="sep"></div>
+  <div class="stat">FEEDS <b id="statAlive">0</b>/<span id="statTotal">0</span> <span class="dead" id="statDead"></span></div>
+  <div class="sep"></div>
+  <div class="stat">RADIUS <b id="statRadius">50</b>KM</div>
+  <div class="spacer"></div>
+  <button id="btnRotate">▶ AUTO-ROTATE</button>
+  <button id="btnProbe">⚡ PROBE ALL</button>
+  <button id="btnFullscreen">⛶ FULLSCREEN</button>
+  <button class="hot" onclick="location.href='/falcon-eye/'">⟵ MAP</button>
+</header>
+
+<aside>
+  <div>
+    <h3>◎ Target</h3>
+    <div class="field">
+      <label>Lat, Lon</label>
+      <div class="row">
+        <input id="inLat" type="number" step="0.01" value="34.05">
+        <input id="inLon" type="number" step="0.01" value="-118.24">
+      </div>
+    </div>
+    <div class="field" style="margin-top:6px">
+      <label>Radius (km)</label>
+      <input id="inRadius" type="number" min="5" max="2000" step="5" value="50">
+    </div>
+    <div class="field" style="margin-top:6px">
+      <label>Quick targets</label>
+      <select id="inPreset">
+        <option value="34.05,-118.24,50">LA · 50km</option>
+        <option value="40.71,-74.00,50">NYC · 50km</option>
+        <option value="47.61,-122.33,50">Seattle · 50km</option>
+        <option value="37.77,-122.42,50">San Francisco · 50km</option>
+        <option value="32.72,-117.16,50">San Diego · 50km</option>
+        <option value="29.76,-95.37,60">Houston · 60km</option>
+        <option value="33.45,-112.07,60">Phoenix · 60km</option>
+        <option value="41.88,-87.63,60">Chicago · 60km</option>
+        <option value="39.74,-104.99,80">Denver · 80km</option>
+        <option value="39.50,-98.35,2000">CONUS wide</option>
+      </select>
+    </div>
+  </div>
+
+  <div>
+    <h3>▦ Grid layout</h3>
+    <div class="grid-selector" id="gridSel">
+      <button data-n="1">1×1</button>
+      <button data-n="4">2×2</button>
+      <button data-n="6">3×2</button>
+      <button data-n="9" class="on">3×3</button>
+      <button data-n="12">4×3</button>
+      <button data-n="16">4×4</button>
+    </div>
+  </div>
+
+  <div>
+    <h3>⚙ Sources</h3>
+    <div class="src-list" id="srcList">
+      <label><input type="checkbox" data-src="caltrans" checked> Caltrans <span class="count" data-src="caltrans">—</span></label>
+      <label><input type="checkbox" data-src="wsdot" checked> WSDOT <span class="count" data-src="wsdot">—</span></label>
+      <label><input type="checkbox" data-src="windy" checked> Windy <span class="count" data-src="windy">—</span></label>
+      <label><input type="checkbox" data-src="earthcam"> EarthCam <span class="count" data-src="earthcam">—</span></label>
+      <label><input type="checkbox" data-src="nature"> Nature/Space <span class="count" data-src="nature">—</span></label>
+    </div>
+  </div>
+
+  <div style="flex:1;min-height:0;display:flex;flex-direction:column">
+    <h3>▤ Queue (<span id="queueCount">0</span>)</h3>
+    <div class="cam-queue" id="queue"></div>
+  </div>
+</aside>
+
+<main>
+  <div id="wall" data-grid="9"></div>
+</main>
+
+<footer>
+  <div class="clock" id="clock">--:--:--Z</div>
+  <div class="sep"></div>
+  <div>FEED POLL 5s</div>
+  <div class="sep"></div>
+  <div>ROTATE <span id="rotState">OFF</span></div>
+  <div class="sep"></div>
+  <div class="warn" id="ftWarn"></div>
+  <div class="spacer"></div>
+  <div><a href="/falcon-eye/">◄ FALCON EYE MAP</a></div>
+</footer>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────
+// FALCON EYE · CCTV COMMAND WALL
+// Standalone security-ops wall. Fetches /api/falcon-eye/cam-wall for a
+// merged+ranked list of cams near a target point and renders them into
+// a grid of HLS/JPG tiles. Auto-rotates, auto-probes liveness, respects
+// source toggles. Zero dependency on the map page.
+// ─────────────────────────────────────────────────────────────────────
+
+const state = {
+  grid: 9,
+  lat: 34.05,
+  lon: -118.24,
+  radius: 50,
+  sources: new Set(["caltrans", "wsdot", "windy"]),
+  cams: [],           // full queue returned by cam-wall
+  tiles: [],          // currently-mounted cam ids on the grid
+  tileObjs: {},       // id -> { el, video, hls, kind, refreshTimer }
+  rotate: false,
+  rotateTimer: null,
+  rotateCursor: 0,
+  pinned: new Set(),
+};
+
+// Read URL params (so the map can deep-link into the wall)
+const params = new URLSearchParams(location.search);
+if (params.has("lat")) state.lat = parseFloat(params.get("lat"));
+if (params.has("lon")) state.lon = parseFloat(params.get("lon"));
+if (params.has("r"))   state.radius = parseFloat(params.get("r"));
+if (params.has("grid")) state.grid = parseInt(params.get("grid"), 10);
+
+// Restore user preferences
+try {
+  const saved = JSON.parse(localStorage.getItem("fe-wall") || "{}");
+  if (saved.grid) state.grid = saved.grid;
+  if (saved.sources) state.sources = new Set(saved.sources);
+  if (saved.pinned) state.pinned = new Set(saved.pinned);
+} catch {}
+
+const $ = (id) => document.getElementById(id);
+const wall = $("wall");
+
+// ─── Helpers ─────────────────────────────────────────────────
+function savePrefs() {
+  try {
+    localStorage.setItem("fe-wall", JSON.stringify({
+      grid: state.grid,
+      sources: [...state.sources],
+      pinned: [...state.pinned],
+    }));
+  } catch {}
+}
+
+function snapUrl(camUrl) {
+  return "/api/falcon-eye/cam-snap?url=" + encodeURIComponent(camUrl);
+}
+
+function hlsProxyUrl(camUrl) {
+  return "/api/falcon-eye/hls-proxy?url=" + encodeURIComponent(camUrl);
+}
+
+function fmtDistance(km) {
+  if (km == null) return "";
+  if (km < 1) return (km * 1000).toFixed(0) + "m";
+  if (km < 100) return km.toFixed(1) + "km";
+  return Math.round(km) + "km";
+}
+
+// ─── Fetch the cam queue from the backend ───────────────────
+async function loadQueue() {
+  $("statAlive").textContent = "—";
+  $("statTotal").textContent = "—";
+  const url = `/api/falcon-eye/cam-wall?lat=${state.lat}&lon=${state.lon}&r=${state.radius}&limit=64`;
+  let data;
+  try {
+    const r = await fetch(url);
+    data = await r.json();
+  } catch (e) {
+    $("ftWarn").textContent = "queue fetch failed";
+    return;
+  }
+  const all = data.cams || [];
+  // Filter by active sources
+  state.cams = all.filter((c) => state.sources.has(c.source));
+  $("statTotal").textContent = state.cams.length;
+  $("queueCount").textContent = state.cams.length;
+  // Update per-source counts
+  const bySrc = {};
+  for (const c of all) bySrc[c.source] = (bySrc[c.source] || 0) + 1;
+  for (const el of document.querySelectorAll(".src-list .count")) {
+    el.textContent = bySrc[el.dataset.src] || 0;
+  }
+  renderQueue();
+  // Auto-fill the grid with the first N cams (pinned first)
+  const ordered = [
+    ...state.cams.filter((c) => state.pinned.has(c.id)),
+    ...state.cams.filter((c) => !state.pinned.has(c.id)),
+  ];
+  state.tiles = ordered.slice(0, state.grid).map((c) => c.id);
+  state.rotateCursor = state.grid;
+  renderGrid();
+  // Kick off a liveness probe
+  probeAll();
+}
+
+function renderQueue() {
+  const q = $("queue");
+  q.innerHTML = "";
+  for (const c of state.cams.slice(0, 200)) {
+    const el = document.createElement("div");
+    el.className = "item";
+    if (state.pinned.has(c.id)) el.classList.add("pinned");
+    if (c.kind === "hls") el.classList.add("live");
+    el.title = `${c.label}\n${c.source} · ${c.kind} · ${fmtDistance(c.distanceKm)}`;
+    el.textContent = `[${c.kind.toUpperCase()}] ${c.label} · ${fmtDistance(c.distanceKm)}`;
+    el.onclick = () => {
+      if (state.pinned.has(c.id)) state.pinned.delete(c.id);
+      else state.pinned.add(c.id);
+      savePrefs();
+      // Force this cam onto the wall if pinned
+      if (state.pinned.has(c.id) && !state.tiles.includes(c.id)) {
+        state.tiles.pop();
+        state.tiles.unshift(c.id);
+        renderGrid();
+      }
+      renderQueue();
+    };
+    q.appendChild(el);
+  }
+}
+
+// ─── Render the grid tiles ──────────────────────────────────
+function renderGrid() {
+  wall.dataset.grid = state.grid;
+  $("statGrid").textContent = state.grid;
+
+  // Tear down tiles that are no longer on-wall
+  for (const [id, obj] of Object.entries(state.tileObjs)) {
+    if (!state.tiles.includes(id)) {
+      try { obj.hls?.destroy(); } catch {}
+      if (obj.refreshTimer) clearInterval(obj.refreshTimer);
+      obj.el.remove();
+      delete state.tileObjs[id];
+    }
+  }
+
+  // Build/mount new tiles
+  wall.innerHTML = "";
+  for (let i = 0; i < state.grid; i++) {
+    const id = state.tiles[i];
+    if (!id) {
+      const empty = document.createElement("div");
+      empty.className = "tile empty-tile";
+      wall.appendChild(empty);
+      continue;
+    }
+    if (state.tileObjs[id]) {
+      wall.appendChild(state.tileObjs[id].el);
+      continue;
+    }
+    const cam = state.cams.find((c) => c.id === id);
+    if (!cam) continue;
+    const tile = buildTile(cam);
+    state.tileObjs[id] = tile;
+    wall.appendChild(tile.el);
+  }
+}
+
+function buildTile(cam) {
+  const el = document.createElement("div");
+  el.className = "tile";
+  el.dataset.id = cam.id;
+
+  const close = document.createElement("button");
+  close.className = "close";
+  close.textContent = "✕";
+  close.onclick = (ev) => {
+    ev.stopPropagation();
+    state.tiles = state.tiles.filter((x) => x !== cam.id);
+    // Refill from queue
+    const nextCam = state.cams.find(
+      (c) => !state.tiles.includes(c.id) && c.id !== cam.id
+    );
+    if (nextCam) state.tiles.push(nextCam.id);
+    renderGrid();
+  };
+  el.appendChild(close);
+
+  const hud = document.createElement("div");
+  hud.className = "hud";
+  hud.innerHTML = `<span class="rec">REC · ${cam.source.toUpperCase()}</span><span>${fmtDistance(cam.distanceKm)}</span>`;
+  el.appendChild(hud);
+
+  const overlay = document.createElement("div");
+  overlay.className = "overlay";
+  overlay.innerHTML = `<span class="label">${cam.label}</span><span class="badge">${cam.kind}</span>`;
+  el.appendChild(overlay);
+
+  let media, hls = null, refreshTimer = null;
+
+  const kind = cam.kind || "iframe";
+
+  if (kind === "hls") {
+    media = document.createElement("video");
+    media.className = "media";
+    media.muted = true;
+    media.autoplay = true;
+    media.playsInline = true;
+    const src = hlsProxyUrl(cam.url);
+    if (media.canPlayType("application/vnd.apple.mpegurl")) {
+      media.src = src;
+      media.play().catch(() => {});
+    } else if (window.Hls && Hls.isSupported()) {
+      hls = new Hls({ liveDurationInfinity: true, maxBufferLength: 6, lowLatencyMode: true });
+      hls.loadSource(src);
+      hls.attachMedia(media);
+      hls.on(Hls.Events.ERROR, (_, data) => {
+        if (data.fatal) {
+          el.classList.add("dead");
+          try { hls.destroy(); } catch {}
+        }
+      });
+    } else {
+      el.classList.add("dead");
+    }
+  } else if (kind === "jpg" || kind === "mjpeg") {
+    media = document.createElement("img");
+    media.className = "media";
+    const bump = () => { media.src = snapUrl(cam.url) + "&t=" + Date.now(); };
+    media.onerror = () => el.classList.add("dead");
+    media.onload = () => el.classList.remove("dead");
+    bump();
+    refreshTimer = setInterval(bump, 5000);
+  } else if (kind === "mp4") {
+    media = document.createElement("video");
+    media.className = "media";
+    media.muted = true;
+    media.autoplay = true;
+    media.loop = true;
+    media.playsInline = true;
+    media.src = cam.url;
+    media.play().catch(() => {});
+  } else {
+    // iframe fallback (windy/earthcam embeds)
+    media = document.createElement("iframe");
+    media.className = "media";
+    media.src = cam.url;
+    media.allow = "autoplay; fullscreen";
+    media.setAttribute("referrerpolicy", "no-referrer");
+  }
+
+  el.appendChild(media);
+  el.onclick = () => {
+    document.querySelectorAll(".tile.active").forEach((t) => t.classList.remove("active"));
+    el.classList.add("active");
+  };
+
+  return { el, media, hls, kind, refreshTimer, camId: cam.id };
+}
+
+// ─── Liveness probe ─────────────────────────────────────────
+async function probeAll() {
+  const probeTargets = state.tiles
+    .map((id) => state.cams.find((c) => c.id === id))
+    .filter((c) => c && (c.kind === "jpg" || c.kind === "hls"));
+
+  if (!probeTargets.length) return;
+
+  const urls = probeTargets.map((c) => encodeURIComponent(c.url)).join("|");
+  let data;
+  try {
+    const r = await fetch("/api/falcon-eye/cam-status?urls=" + urls);
+    data = await r.json();
+  } catch { return; }
+  const results = data.results || [];
+  let alive = 0;
+  for (let i = 0; i < results.length; i++) {
+    const cam = probeTargets[i];
+    const r = results[i];
+    const obj = state.tileObjs[cam.id];
+    if (!obj) continue;
+    if (r.alive) {
+      obj.el.classList.remove("dead");
+      alive++;
+    } else {
+      obj.el.classList.add("dead");
+    }
+  }
+  $("statAlive").textContent = alive;
+  const dead = probeTargets.length - alive;
+  $("statDead").textContent = dead ? `· ${dead} DEAD` : "";
+}
+
+// ─── Auto-rotate ────────────────────────────────────────────
+function toggleRotate() {
+  state.rotate = !state.rotate;
+  $("rotState").textContent = state.rotate ? "ON" : "OFF";
+  $("btnRotate").textContent = state.rotate ? "◼ STOP ROTATE" : "▶ AUTO-ROTATE";
+  if (state.rotate) {
+    state.rotateTimer = setInterval(rotateStep, 12000);
+  } else {
+    clearInterval(state.rotateTimer);
+  }
+}
+
+function rotateStep() {
+  if (!state.cams.length) return;
+  // Swap in the next non-pinned cam from the queue
+  const candidates = state.cams.filter(
+    (c) => !state.tiles.includes(c.id) && !state.pinned.has(c.id)
+  );
+  if (!candidates.length) return;
+  const next = candidates[state.rotateCursor % candidates.length];
+  state.rotateCursor++;
+  // Find first non-pinned tile slot to replace
+  const replaceIdx = state.tiles.findIndex((id) => !state.pinned.has(id));
+  if (replaceIdx === -1) return;
+  state.tiles[replaceIdx] = next.id;
+  renderGrid();
+  setTimeout(probeAll, 1500);
+}
+
+// ─── Wire up controls ───────────────────────────────────────
+$("gridSel").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-n]");
+  if (!b) return;
+  state.grid = parseInt(b.dataset.n, 10);
+  for (const btn of $("gridSel").querySelectorAll("button")) btn.classList.toggle("on", btn === b);
+  savePrefs();
+  // Trim or extend tiles
+  while (state.tiles.length < state.grid) {
+    const next = state.cams.find((c) => !state.tiles.includes(c.id));
+    if (!next) break;
+    state.tiles.push(next.id);
+  }
+  state.tiles = state.tiles.slice(0, state.grid);
+  renderGrid();
+});
+
+// Initial grid-selector on-state
+for (const b of $("gridSel").querySelectorAll("button")) {
+  b.classList.toggle("on", parseInt(b.dataset.n, 10) === state.grid);
+}
+
+$("inLat").value = state.lat;
+$("inLon").value = state.lon;
+$("inRadius").value = state.radius;
+
+let reloadTimer = null;
+function queueReload() {
+  clearTimeout(reloadTimer);
+  reloadTimer = setTimeout(() => {
+    state.lat = parseFloat($("inLat").value) || state.lat;
+    state.lon = parseFloat($("inLon").value) || state.lon;
+    state.radius = parseFloat($("inRadius").value) || state.radius;
+    $("statRadius").textContent = state.radius;
+    loadQueue();
+  }, 400);
+}
+$("inLat").addEventListener("input", queueReload);
+$("inLon").addEventListener("input", queueReload);
+$("inRadius").addEventListener("input", queueReload);
+
+$("inPreset").addEventListener("change", (e) => {
+  const [la, lo, rr] = e.target.value.split(",").map(parseFloat);
+  $("inLat").value = la; $("inLon").value = lo; $("inRadius").value = rr;
+  queueReload();
+});
+
+for (const cb of document.querySelectorAll("#srcList input[type=checkbox]")) {
+  cb.checked = state.sources.has(cb.dataset.src);
+  cb.addEventListener("change", () => {
+    if (cb.checked) state.sources.add(cb.dataset.src);
+    else state.sources.delete(cb.dataset.src);
+    savePrefs();
+    loadQueue();
+  });
+}
+
+$("btnRotate").onclick = toggleRotate;
+$("btnProbe").onclick = probeAll;
+$("btnFullscreen").onclick = () => {
+  const el = document.documentElement;
+  if (!document.fullscreenElement) el.requestFullscreen?.();
+  else document.exitFullscreen?.();
+};
+
+// Clock
+setInterval(() => {
+  const d = new Date();
+  $("clock").textContent = d.toISOString().slice(11, 19) + "Z";
+}, 1000);
+
+// Re-probe every 60s so dead cams recover and live cams stay green
+setInterval(probeAll, 60000);
+
+// Initial load
+$("statRadius").textContent = state.radius;
+loadQueue();
+</script>
+</body>
+</html>

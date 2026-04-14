@@ -20,6 +20,12 @@ import { getStore } from "@netlify/blobs";
 // GET /api/falcon-eye/flights?bbox=...&mil=0        → commercial only
 
 const CACHE_MS = 12_000;
+// The scheduled cron (falcon-eye-flights-cron) writes a global snapshot
+// every 2 minutes. Serve from it if it's younger than this — that way
+// the frontend gets an instant response and the ingestion work happens
+// off the critical path.
+const SNAPSHOT_MAX_AGE_MS = 3 * 60_000;
+const SNAPSHOT_KEY = "flights:snapshot";
 
 function normalizeAirplanesLive(list, milHint) {
   return (list || [])
@@ -165,6 +171,37 @@ export default async (req) => {
     }
   }
 
+  // ── Fast path: serve from the scheduled snapshot if it's fresh ───
+  // The cron ingests airplanes.live mil + OpenSky global + ADSBx every
+  // 2 minutes. When we have a recent snapshot we just filter it by the
+  // requested bbox and flags — zero upstream calls on the critical path.
+  try {
+    const snap = await store.get(SNAPSHOT_KEY, { type: "json" });
+    if (snap && snap.ac && Date.now() - (snap.ts || 0) < SNAPSHOT_MAX_AGE_MS) {
+      let ac = snap.ac;
+      if (!wantCommercial) ac = ac.filter((a) => a.mil);
+      if (!wantMil) ac = ac.filter((a) => !a.mil);
+      if (bbox) {
+        ac = ac.filter((a) =>
+          a.lat >= bbox.lamin && a.lat <= bbox.lamax &&
+          a.lon >= bbox.lomin && a.lon <= bbox.lomax
+        );
+      }
+      return Response.json({
+        ac,
+        total: ac.length,
+        commercial: ac.filter((a) => !a.mil).length,
+        military: ac.filter((a) => a.mil).length,
+        sources: snap.sources,
+        bbox: bbox ? [bbox.lamin, bbox.lomin, bbox.lamax, bbox.lomax] : null,
+        ts: snap.ts,
+        snapshotAgeMs: Date.now() - snap.ts,
+      }, { headers: { "X-Source": "snapshot" } });
+    }
+  } catch {}
+
+  // ── Slow path: snapshot missing or stale. Do a live fetch and
+  // cache per-bbox for 12s so repeated polls stay cheap.
   const cacheKey = `flights:${bboxRaw || "global"}:${wantCommercial ? 1 : 0}:${wantMil ? 1 : 0}`;
   try {
     const cached = await store.get(cacheKey, { type: "json" });

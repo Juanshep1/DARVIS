@@ -440,10 +440,48 @@ async function runWorldChannelsAgent() {
   };
 }
 
+// ── Air Traffic Agent ──────────────────────────────────────────────
+// Reports on the global flight snapshot written every 2 minutes by the
+// falcon-eye-flights-cron scheduled function. This agent doesn't do its
+// own upstream fetches — the cron is the worker; this agent just
+// surfaces its state through the swarm API so the UI can show "live
+// air traffic: 14,328 aircraft · refreshed 42s ago".
+
+async function runAirTrafficAgent() {
+  const store = getStore("darvis-falcon-eye");
+  try {
+    const snap = await store.get("flights:snapshot", { type: "json" });
+    if (!snap) {
+      return {
+        items: [],
+        ts: Date.now(),
+        status: "no-snapshot",
+        hint: "The flights cron has not run yet. Wait 2 minutes or trigger falcon-eye-flights-cron manually.",
+      };
+    }
+    const age = Date.now() - (snap.ts || 0);
+    const fresh = age < 3 * 60_000;
+    return {
+      items: [],
+      ts: Date.now(),
+      status: fresh ? "fresh" : "stale",
+      snapshotTs: snap.ts,
+      snapshotAgeMs: age,
+      total: snap.total,
+      commercial: snap.commercial,
+      military: snap.military,
+      sources: snap.sources,
+    };
+  } catch (e) {
+    return { items: [], ts: Date.now(), status: "error", error: String(e?.message || e) };
+  }
+}
+
 // ── Registry of agents ─────────────────────────────────────────────
 const AGENTS = {
   news: { label: "Breaking News Watcher", run: runBreakingNewsAgent },
   channels: { label: "World News Channels Watcher", run: runWorldChannelsAgent },
+  "air-traffic": { label: "Global Air Traffic (cron snapshot)", run: runAirTrafficAgent },
 };
 
 async function getOrRun(store, agentName, force = false) {

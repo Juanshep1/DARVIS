@@ -172,9 +172,9 @@ export default async (req) => {
   }
 };
 
-// Scheduled function — runs every minute. No `path` because Netlify
-// scheduled functions don't accept HTTP requests; they're invoked by
-// the cron runner only. (Coordinated unblock for swarm deploy.)
+// Manual HTTP endpoint. The matching cron schedule lives in a separate
+// wrapper (falcon-eye-vessels-cron.mjs) because Netlify rejects functions
+// that have BOTH `path` and `schedule` in their config.
 export const config = {
-  schedule: "*/1 * * * *",
+  path: "/api/falcon-eye/vessels-ingest",
 };

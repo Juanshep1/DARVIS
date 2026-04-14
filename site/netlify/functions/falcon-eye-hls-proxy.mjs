@@ -130,11 +130,18 @@ export default async (req) => {
       return rewrite(trimmed);
     }).join("\n");
 
+    // Master playlists rarely change; chunklists (media playlists) change every
+    // segment duration. Cache both very briefly at the edge so a stampede of
+    // viewers doesn't pound the upstream.
+    const isMaster = /#EXT-X-STREAM-INF/.test(rewritten);
+    const cacheControl = isMaster ? "public, max-age=10" : "public, max-age=1";
+
     return new Response(rewritten, {
       status: upstream.status,
       headers: corsHeaders({
         "Content-Type": "application/vnd.apple.mpegurl",
-        "Cache-Control": "no-cache",
+        "Cache-Control": cacheControl,
+        "X-Upstream-Status": String(upstream.status),
       }),
     });
   }

@@ -1400,6 +1400,8 @@ const API = {
   state:   "/api/falcon-eye/state",
   air:     "/api/falcon-eye/aircraft",
   airLive: "/api/falcon-eye/aircraft-live",
+  flights: "/api/falcon-eye/flights",
+  flightRoute: "/api/falcon-eye/flight-route",
   tle:     "/api/falcon-eye/tle",
   cams:    "/api/falcon-eye/cameras",
   webcams: "/api/falcon-eye/webcams",
@@ -1482,7 +1484,7 @@ map.on("error", (e) => { console.error("maplibre error:", e && e.error); });
 map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "bottom-right");
 
 const EMPTY = { type: "FeatureCollection", features: [] };
-const SOURCE_IDS = ["satellites","aircraft","military","vessels","chokepoints","cameras","earthquakes","fires","news","wxalerts","orbit","trail","terminator","airtrails","miltrails"];
+const SOURCE_IDS = ["satellites","aircraft","military","vessels","chokepoints","cameras","earthquakes","fires","news","wxalerts","orbit","trail","terminator","airtrails","miltrails","routes"];
 
 // ── Tactical icon glyphs — hand-drawn to canvas, added as map images ──
 function makeIcon(drawFn, size = 32) {
@@ -1711,6 +1713,13 @@ function installLayers() {
     "circle-opacity": 0.12,
     "circle-blur": 0.9,
   }});
+  // Great-circle origin → destination route arcs for resolved flights
+  if (!map.getLayer("routes-glow-l")) map.addLayer({ id: "routes-glow-l", type: "line", source: "routes",
+    paint: { "line-color": "#5fd9ff", "line-width": 3, "line-opacity": 0.18, "line-blur": 4 },
+    layout: { "line-cap": "round", "line-join": "round" } });
+  if (!map.getLayer("routes-l")) map.addLayer({ id: "routes-l", type: "line", source: "routes",
+    paint: { "line-color": "#5fd9ff", "line-width": 1.0, "line-opacity": 0.55, "line-dasharray": [2, 2] },
+    layout: { "line-cap": "round", "line-join": "round" } });
   if (!map.getLayer("miltrails-glow-l")) map.addLayer({ id: "miltrails-glow-l", type: "line", source: "miltrails",
     paint: { "line-color": "#ff3a55", "line-width": 5, "line-opacity": 0.2, "line-blur": 4 },
     layout: { "line-cap": "round", "line-join": "round" } });
@@ -2280,18 +2289,35 @@ function propagateSats() {
 
 async function loadAircraft() {
   try {
-    const r = await fetch(API.air);
+    // Use the unified /flights endpoint with the current viewport bbox so
+    // we get both commercial (OpenSky) and military (airplanes.live) in one
+    // schema. Falls back to global when no map (early boot) or full-Earth view.
+    let endpoint = API.flights;
+    try {
+      const b = map.getBounds();
+      if (b) {
+        const lamin = b.getSouth(), lomin = b.getWest(), lamax = b.getNorth(), lomax = b.getEast();
+        const span = Math.abs(lamax - lamin) * Math.abs(lomax - lomin);
+        if (span < 30_000) endpoint += `?bbox=${lamin.toFixed(2)},${lomin.toFixed(2)},${lamax.toFixed(2)},${lomax.toFixed(2)}`;
+      }
+    } catch {}
+    const r = await fetch(endpoint);
     const d = await r.json();
     const now = Date.now();
-    state.aircraft = (d.states || []).map((p) => ({
-      name: (p.callsign || p.icao || "").trim(),
-      icao: p.icao || "",
+    // /flights returns d.ac with {hex, flight, lat, lon, gs (knots), track, ...}
+    state.aircraft = (d.ac || []).map((p) => ({
+      name: (p.flight || p.hex || "").trim(),
+      icao: p.hex || "",
       baseLat: p.lat, baseLon: p.lon, baseTs: now,
       lat: p.lat, lng: p.lon,
-      altM: p.alt || 0,
-      heading: p.heading || 0,
-      vel: p.vel || 0,
+      altM: typeof p.altBaro === "number" ? p.altBaro * 0.3048 : 0,
+      heading: p.track != null ? p.track : 0,
+      vel: typeof p.gs === "number" ? p.gs * 0.514444 : 0, // kts → m/s
       country: p.country || "",
+      type: p.type || "",
+      reg: p.reg || "",
+      desc: p.desc || "",
+      mil: !!p.mil,
     }));
     for (const p of state.aircraft) {
       if (!p.icao) continue;
@@ -2326,6 +2352,92 @@ function refreshGlobalTrails() {
   }
   const srcM = map.getSource("miltrails");
   if (srcM) srcM.setData({ type: "FeatureCollection", features: mil });
+}
+
+// ── Flight route arcs — origin → destination great circles ────────
+// adsbdb.com (proxied via swarm Claude's /api/falcon-eye/flight-route)
+// resolves callsigns to airport pairs. We cache results indefinitely
+// in JS so route-rich views don't re-query on every load.
+const routeCache = new Map(); // callsign → { origin:{lat,lon}, dest:{lat,lon} } | null
+
+function greatCirclePts(o, d, n = 48) {
+  const φ1 = o[1] * Math.PI / 180, λ1 = o[0] * Math.PI / 180;
+  const φ2 = d[1] * Math.PI / 180, λ2 = d[0] * Math.PI / 180;
+  const Δφ = φ2 - φ1, Δλ = λ2 - λ1;
+  const a = Math.sin(Δφ/2)**2 + Math.cos(φ1)*Math.cos(φ2)*Math.sin(Δλ/2)**2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  if (c === 0) return [o, d];
+  const pts = [];
+  for (let i = 0; i <= n; i++) {
+    const f = i / n;
+    const A = Math.sin((1 - f) * c) / Math.sin(c);
+    const B = Math.sin(f * c) / Math.sin(c);
+    const x = A * Math.cos(φ1) * Math.cos(λ1) + B * Math.cos(φ2) * Math.cos(λ2);
+    const y = A * Math.cos(φ1) * Math.sin(λ1) + B * Math.cos(φ2) * Math.sin(λ2);
+    const z = A * Math.sin(φ1) + B * Math.sin(φ2);
+    const φi = Math.atan2(z, Math.sqrt(x*x + y*y));
+    const λi = Math.atan2(y, x);
+    pts.push([λi * 180 / Math.PI, φi * 180 / Math.PI]);
+  }
+  return pts;
+}
+
+async function resolveFlightRoutes() {
+  if (!state.aircraft.length) return;
+  // Collect callsigns we don't have a cached route for
+  const need = [];
+  for (const a of state.aircraft) {
+    const cs = (a.name || "").trim();
+    if (!cs || cs.length < 4 || cs.length > 8) continue;
+    if (routeCache.has(cs)) continue;
+    need.push(cs);
+    if (need.length >= 40) break;
+  }
+  if (need.length) {
+    try {
+      const r = await fetch(`${API.flightRoute}?callsign=${need.join(",")}`);
+      const d = await r.json();
+      const map_ = d.routes || d.results || d || {};
+      for (const cs of need) {
+        const route = map_[cs];
+        if (route && route.origin && route.destination &&
+            route.origin.lat != null && route.destination.lat != null) {
+          routeCache.set(cs, {
+            origin: { lat: route.origin.lat, lon: route.origin.lon, code: route.origin.iata || route.origin.icao },
+            dest:   { lat: route.destination.lat, lon: route.destination.lon, code: route.destination.iata || route.destination.icao },
+          });
+        } else {
+          routeCache.set(cs, null);
+        }
+      }
+    } catch {}
+  }
+
+  // Build line features for every aircraft we have a resolved route for
+  const features = [];
+  const seen = new Set();
+  for (const a of state.aircraft) {
+    const cs = (a.name || "").trim();
+    if (!cs || seen.has(cs)) continue;
+    seen.add(cs);
+    const r = routeCache.get(cs);
+    if (!r) continue;
+    const pts = greatCirclePts([r.origin.lon, r.origin.lat], [r.dest.lon, r.dest.lat]);
+    // Split at antimeridian to avoid wrap artifacts
+    const segs = [];
+    let cur = [pts[0]];
+    for (let i = 1; i < pts.length; i++) {
+      if (Math.abs(pts[i][0] - pts[i-1][0]) > 180) { if (cur.length > 1) segs.push(cur); cur = [pts[i]]; }
+      else cur.push(pts[i]);
+    }
+    if (cur.length > 1) segs.push(cur);
+    for (const seg of segs) features.push({
+      type: "Feature", properties: { callsign: cs },
+      geometry: { type: "LineString", coordinates: seg },
+    });
+  }
+  const src = map.getSource("routes");
+  if (src) src.setData({ type: "FeatureCollection", features });
 }
 
 // ── Maritime vessels (AISStream via our cron-cached endpoint) ──────
@@ -2709,7 +2821,7 @@ function rerender() {
     }
   }
   set(["satellites-l"], state.layers.satellites);
-  set(["aircraft-l", "aircraft-halo-l", "airtrails-l", "airtrails-glow-l"], state.layers.aircraft);
+  set(["aircraft-l", "aircraft-halo-l", "airtrails-l", "airtrails-glow-l", "routes-l", "routes-glow-l"], state.layers.aircraft);
   set(["military-l", "mil-glow-l", "miltrails-l", "miltrails-glow-l"], state.layers.military);
   set(["vessels-l", "ves-glow-l"], state.layers.vessels);
   set(["chokepoints-l"], state.layers.chokepoints);
@@ -3208,10 +3320,30 @@ document.getElementById("pipClose").onclick = () => {
 };
 document.getElementById("pipMin").onclick = () => pip.classList.toggle("min");
 
-// CCTV Command Wall — open Live Video Claude's wall.html with current map center
-document.getElementById("cctvWallBtn").addEventListener("click", () => {
-  const c = map.getCenter();
-  const url = `/falcon-eye/wall.html?lat=${c.lat.toFixed(4)}&lon=${c.lng.toFixed(4)}&r=50&grid=9`;
+// CCTV Command Wall — open Live Video Claude's wall.html with current map center.
+// If the user hasn't moved the map (default ocean center) or is over open water,
+// fall back to a known busy region (LA) so the wall opens with cameras.
+document.getElementById("cctvWallBtn").addEventListener("click", async () => {
+  let c = map.getCenter();
+  let lat = c.lat, lon = c.lng, radius = 75;
+
+  // Sanity-check the current view: if it's the boot default (lat≈20, lng≈0)
+  // or returns no cameras, jump to LA which is densely covered.
+  const isDefault = Math.abs(lat - 20) < 0.5 && Math.abs(lon) < 0.5;
+  if (isDefault) { lat = 34.05; lon = -118.24; radius = 75; }
+  else {
+    // Quick probe — if 0 cams in this region, fall back too
+    try {
+      const probe = await fetch(`/api/falcon-eye/cam-wall?lat=${lat.toFixed(2)}&lon=${lon.toFixed(2)}&r=${radius}&limit=1`);
+      const d = await probe.json();
+      if (!d.cams || d.cams.length === 0) {
+        lat = 34.05; lon = -118.24; radius = 75;
+        log("wall", "no cams in view → falling back to LA");
+      }
+    } catch {}
+  }
+
+  const url = `/falcon-eye/wall.html?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}&r=${radius}&grid=9`;
   window.open(url, "fe-wall");
 });
 document.getElementById("pipToggleMode").onclick = () => {
@@ -3889,6 +4021,14 @@ async function bootData() {
   loadMilitary(); setInterval(loadMilitary, 20000);
   loadVessels(); setInterval(loadVessels, 60000);
   loadChokepoints();
+  // After each aircraft refresh, batch-resolve their routes for great-circle arcs
+  setInterval(() => { resolveFlightRoutes().catch(() => {}); }, 12000);
+  // Also reload aircraft when the map moves (so bbox query picks up new region)
+  let aircraftMoveTimer = null;
+  map.on("moveend", () => {
+    clearTimeout(aircraftMoveTimer);
+    aircraftMoveTimer = setTimeout(() => loadAircraft(), 600);
+  });
   loadCameras();
   loadNews(); setInterval(() => loadNews(), 60000);
   loadEarthquakes(); setInterval(loadEarthquakes, 5 * 60 * 1000);

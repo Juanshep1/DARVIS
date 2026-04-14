@@ -506,7 +506,7 @@ const state = {
   lat: 34.05,
   lon: -118.24,
   radius: 50,
-  sources: new Set(["caltrans", "wsdot", "windy"]),
+  sources: new Set(["caltrans", "wsdot", "windy", "nasa", "earthcam"]),
   cams: [],           // full queue returned by cam-wall
   tiles: [],          // currently-mounted cam ids on the grid
   tileObjs: {},       // id -> { el, video, hls, kind, refreshTimer }
@@ -573,7 +573,26 @@ async function loadQueue() {
     $("ftWarn").textContent = "queue fetch failed";
     return;
   }
-  const all = data.cams || [];
+  let all = data.cams || [];
+  // Self-heal: if the requested region is empty, fall back to a much
+  // wider radius so we at least populate something instead of a blank wall.
+  if (!all.length) {
+    try {
+      const wide = await fetch(`/api/falcon-eye/cam-wall?lat=${state.lat}&lon=${state.lon}&r=2000&limit=64`);
+      const wd = await wide.json();
+      all = wd.cams || [];
+      if (all.length) $("ftWarn").textContent = "no cams in radius — widened to 2000km";
+    } catch {}
+  }
+  // Final fallback: jump to LA which is densely covered.
+  if (!all.length) {
+    try {
+      const la = await fetch("/api/falcon-eye/cam-wall?lat=34.05&lon=-118.24&r=100&limit=64");
+      const ld = await la.json();
+      all = ld.cams || [];
+      if (all.length) $("ftWarn").textContent = "fallback to LA grid (no local cams)";
+    } catch {}
+  }
   // Filter by active sources
   state.cams = all.filter((c) => state.sources.has(c.source));
   $("statTotal").textContent = state.cams.length;

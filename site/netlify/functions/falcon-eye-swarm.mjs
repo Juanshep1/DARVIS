@@ -477,11 +477,59 @@ async function runAirTrafficAgent() {
   }
 }
 
+// ── Live Video Agent ───────────────────────────────────────────────
+// Surfaces the validated HLS stream inventory maintained by
+// falcon-eye-live-video. The blob is kept under `swarm:live-cams` so
+// this agent just reads it and reports validity counts — the probing
+// logic lives in the dedicated endpoint.
+
+async function runLiveVideoAgent() {
+  const store = getStore("darvis-falcon-eye");
+  try {
+    const snap = await store.get("swarm:live-cams", { type: "json" });
+    if (!snap) {
+      return {
+        items: [],
+        ts: Date.now(),
+        status: "no-snapshot",
+        hint: "Hit GET /api/falcon-eye/live-video once to populate the probe cache.",
+      };
+    }
+    return {
+      items: (snap.streams || []).filter((s) => s.valid).map((s) => ({
+        id: `live-${s.id}`,
+        agent: "live-video",
+        headline: s.label,
+        url: s.url,
+        category: s.category,
+        region: s.region,
+        lat: s.lat,
+        lon: s.lon,
+        severity: "low",
+        relevance: 50,
+        playlistKind: s.playlistKind,
+        latencyMs: s.latencyMs,
+        ts: s.checkedAt || snap.ts,
+      })),
+      ts: Date.now(),
+      status: "fresh",
+      total: snap.total,
+      valid: snap.valid,
+      invalid: snap.invalid,
+      snapshotTs: snap.ts,
+      snapshotAgeMs: Date.now() - (snap.ts || 0),
+    };
+  } catch (e) {
+    return { items: [], ts: Date.now(), status: "error", error: String(e?.message || e) };
+  }
+}
+
 // ── Registry of agents ─────────────────────────────────────────────
 const AGENTS = {
   news: { label: "Breaking News Watcher", run: runBreakingNewsAgent },
   channels: { label: "World News Channels Watcher", run: runWorldChannelsAgent },
   "air-traffic": { label: "Global Air Traffic (cron snapshot)", run: runAirTrafficAgent },
+  "live-video": { label: "Live Video Inventory", run: runLiveVideoAgent },
 };
 
 async function getOrRun(store, agentName, force = false) {

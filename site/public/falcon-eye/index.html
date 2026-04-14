@@ -1177,6 +1177,143 @@
   }
 
   /* (legacy mobile block removed — superseded by the bottom-sheet layout above) */
+
+  /* ── Mobile optimization pass — handle every recent addition ── */
+  @media (max-width: 980px) {
+    /* Basemap chips (SAT/DARK/TOPO/3D/▦ WALL) — collapse into one row */
+    .basemap-ctrl {
+      right: auto !important; left: 50% !important;
+      top: calc(46px + 18px + 4px) !important;
+      transform: translateX(-50%);
+      flex-direction: row !important;
+      gap: 0;
+    }
+    .basemap-ctrl button {
+      min-width: 42px !important; padding: 5px 7px !important;
+      font-size: 7px !important; letter-spacing: 0.16em !important;
+      border-right: 1px solid var(--panel-edge);
+      border-bottom: none;
+    }
+    .basemap-ctrl button:last-child { border-right: none; }
+
+    /* Playback bar — full-width slim rail above the bottom nav */
+    .playback-bar {
+      left: 6px !important; right: 6px !important;
+      bottom: calc(58px + env(safe-area-inset-bottom,0px) + 22px) !important;
+      height: 32px !important; padding: 0 8px !important;
+      gap: 5px !important; font-size: 8px !important; letter-spacing: 0.12em !important;
+    }
+    .pb-btn { width: 26px !important; height: 20px !important; font-size: 9px !important; }
+    .pb-btn.small { display: none !important; }
+    .pb-track-fill, .pb-marks { display: none; }
+    .pb-readout { min-width: auto !important; gap: 4px !important; }
+    .pb-readout .pb-label { display: none !important; }
+    .pb-speed { border-width: 1px; }
+    .pb-speed-btn { padding: 4px 4px !important; font-size: 7px !important; }
+    .pb-speed-btn[data-speed="0.5"] { display: none; }
+    .pb-speed-btn[data-speed="10"] { display: none; }
+
+    /* Push the map clear of the playback bar and basemap chips */
+    #map, #cesium {
+      top: 86px !important;
+      bottom: calc(58px + env(safe-area-inset-bottom,0px) + 50px) !important;
+    }
+
+    /* Classification banners stay top/bottom but reposition above stacked chrome */
+    .classification-banner { top: 46px !important; }
+    .classification-footer {
+      bottom: calc(58px + env(safe-area-inset-bottom,0px) + 22px) !important;
+      height: 14px;
+    }
+
+    /* Spectra chat toolbar — wrap and shrink */
+    .chat-toolbar {
+      flex-wrap: wrap !important; gap: 3px !important; padding: 5px 6px !important;
+    }
+    .chat-toolbar button {
+      padding: 3px 5px !important; font-size: 7px !important; letter-spacing: 0.14em !important;
+      flex: 0 1 auto;
+    }
+    .chat-toolbar .chat-flex { flex-basis: 100%; height: 0; display: none; }
+    .chat-input-wrap { padding: 6px 8px !important; gap: 5px !important; }
+    .chat-input-wrap input { font-size: 12px !important; padding: 11px 10px !important; }
+    .chat-mic { width: 44px !important; min-height: 44px; font-size: 16px !important; }
+    .chat-input-wrap button#chatSend { padding: 0 12px !important; font-size: 9px !important; }
+
+    /* Intel feed — bigger ▶ LIVE tap target */
+    .alert-foot { gap: 6px !important; }
+    .alert-watch {
+      padding: 5px 9px !important; font-size: 8px !important;
+      min-height: 24px;
+    }
+    .alert { padding: 10px 11px !important; }
+    .alert-title { font-size: 12px !important; }
+    .alert-snippet { font-size: 10px !important; }
+
+    /* Bottom-nav buttons — larger touch targets */
+    .mobile-nav button { font-size: 8px !important; padding: 9px 0 !important; }
+    .mobile-nav button .icon { font-size: 19px !important; }
+
+    /* Header pills — show DEFCON + DTG only on mobile */
+    .header-pills .pill { padding: 4px 7px !important; font-size: 7px !important; height: 24px !important; gap: 5px; }
+    .header-pills #utcPill .label { display: none; }
+    #utcPill .val { font-size: 8px; }
+
+    /* Brand compartment mark scaled down */
+    .brand::before { font-size: 6px !important; padding: 0 3px !important; top: 3px !important; left: 8px !important; }
+    .brand-mark { font-size: 16px !important; margin-top: 6px !important; }
+
+    /* Source chips inside the layers sheet — wrap nicely */
+    .src-chips { gap: 4px; }
+    .src-chips .chip { padding: 6px 9px; font-size: 8px; min-height: 28px; }
+
+    /* Layer toggles in the sheet — bigger tap area */
+    .mobile-sheet-body .layer { padding: 11px 12px !important; }
+    .mobile-sheet-body .layer-name { font-size: 11px !important; }
+    .mobile-sheet-body .layer-count { font-size: 14px !important; }
+
+    /* PIP camera viewer — full-width on phones */
+    .pip { width: 92vw !important; max-width: 92vw !important; }
+    .pip-bar { padding: 10px 12px !important; }
+    .pip-bar button { width: 28px; height: 24px; }
+
+    /* Radar sweep — smaller on mobile to save GPU */
+    .radar-sweep .sweep-arm { width: 700px !important; height: 700px !important; opacity: 0.5; }
+
+    /* Cursor coordinate readout hidden — no mouse cursor on touch */
+    .cursor-readout { display: none !important; }
+
+    /* Banner critical alert — keep above everything */
+    .banner.show {
+      top: 46px !important;
+      font-size: 8px !important;
+      padding: 5px 10px !important;
+      gap: 6px !important;
+    }
+    .banner-label { display: none; }
+
+    /* Chat log — bigger reading size on phones */
+    .mobile-sheet-body .chat-msg { padding: 9px 12px; }
+    .mobile-sheet-body .chat-body { font-size: 12px !important; line-height: 1.55; }
+
+    /* Dossier — bigger numbers */
+    .mobile-sheet-body .dossier h3 { font-size: 20px !important; }
+    .mobile-sheet-body .dossier dt { font-size: 9px !important; }
+    .mobile-sheet-body .dossier dd { font-size: 12px !important; }
+    .mobile-sheet-body .dossier .actions .btn {
+      padding: 9px 11px !important; font-size: 9px !important; min-height: 36px;
+    }
+  }
+
+  /* Very narrow phones — drop more chrome */
+  @media (max-width: 380px) {
+    .basemap-ctrl button { min-width: 36px !important; font-size: 6px !important; padding: 4px 5px !important; }
+    .pb-speed-btn[data-speed="3"] { display: none; }
+    .header-pills #spectraPill { display: none; }
+    .header-pills #syncPill { display: none; }
+    .chat-toolbar button { font-size: 6px !important; }
+    .mobile-nav button { font-size: 7px !important; }
+  }
 </style>
 </head>
 <body>

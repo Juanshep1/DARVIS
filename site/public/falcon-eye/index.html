@@ -70,6 +70,142 @@
     opacity: 0.55;
   }
 
+  /* ── Radar sweep — slow rotating amber arc centered on the map ── */
+  .radar-sweep {
+    position: fixed; top: 78px; left: 280px; right: 320px; bottom: 128px;
+    z-index: 4; pointer-events: none;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+  }
+  .radar-sweep .sweep-arm {
+    width: 1200px; height: 1200px;
+    border-radius: 50%;
+    background: conic-gradient(from 0deg,
+      rgba(255,181,71,0.0) 0deg,
+      rgba(255,181,71,0.0) 320deg,
+      rgba(255,181,71,0.18) 350deg,
+      rgba(255,181,71,0.40) 358deg,
+      rgba(255,181,71,0.0) 360deg);
+    animation: radarSweep 8s linear infinite;
+    mix-blend-mode: screen;
+    opacity: 0.65;
+  }
+  @keyframes radarSweep {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+  }
+  @media (max-width: 980px) {
+    .radar-sweep { top: 64px; left: 0; right: 0; bottom: calc(74px + 56px + env(safe-area-inset-bottom,0px)); }
+    .radar-sweep .sweep-arm { width: 800px; height: 800px; }
+  }
+
+  /* ── Playback / time scrubber bar ── */
+  .playback-bar {
+    position: fixed;
+    left: 290px; right: 330px; bottom: 138px;
+    z-index: 90;
+    height: 38px;
+    background: var(--panel-2);
+    border: 1px solid var(--panel-edge-hot);
+    display: flex; align-items: center; gap: 12px;
+    padding: 0 14px;
+    font-family: var(--mono);
+    font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--steel-bright);
+    box-shadow: 0 0 24px rgba(0,0,0,0.6);
+  }
+  .pb-corner {
+    position: absolute; width: 6px; height: 6px;
+    border: 1px solid var(--amber); pointer-events: none;
+  }
+  .pb-corner.tl { top: -1px; left: -1px; border-right: none; border-bottom: none; }
+  .pb-corner.tr { top: -1px; right: -1px; border-left: none; border-bottom: none; }
+  .pb-corner.bl { bottom: -1px; left: -1px; border-right: none; border-top: none; }
+  .pb-corner.br { bottom: -1px; right: -1px; border-left: none; border-top: none; }
+
+  .pb-btn {
+    background: rgba(0,0,0,0.5); border: 1px solid var(--panel-edge);
+    color: var(--amber); font-family: var(--mono);
+    width: 30px; height: 22px; cursor: pointer;
+    font-size: 10px; transition: all 0.12s var(--ease);
+    padding: 0; line-height: 1;
+  }
+  .pb-btn.small { width: 26px; font-size: 8px; letter-spacing: 0.04em; }
+  .pb-btn:hover { background: rgba(255,181,71,0.10); border-color: var(--amber); }
+  .pb-btn.live { color: var(--green); border-color: var(--green); box-shadow: 0 0 8px var(--green-glow); }
+
+  .pb-track {
+    flex: 1; position: relative; height: 22px;
+    display: flex; align-items: center;
+  }
+  .pb-track::before {
+    content: ""; position: absolute; left: 0; right: 0; top: 50%;
+    height: 1px; background: var(--panel-edge);
+  }
+  .pb-track-fill {
+    position: absolute; left: 0; top: 50%;
+    height: 1px; background: var(--amber);
+    box-shadow: 0 0 6px var(--amber-glow);
+    width: 100%;
+  }
+  .pb-track input[type="range"] {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 22px; background: transparent;
+    cursor: pointer; position: relative; z-index: 2;
+  }
+  .pb-track input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 8px; height: 18px; background: var(--amber);
+    border: 1px solid #1a0e00; cursor: grab;
+    box-shadow: 0 0 12px var(--amber-glow);
+  }
+  .pb-track input[type="range"]::-moz-range-thumb {
+    width: 8px; height: 18px; background: var(--amber);
+    border: 1px solid #1a0e00; cursor: grab;
+    box-shadow: 0 0 12px var(--amber-glow);
+  }
+  .pb-marks {
+    position: absolute; left: 0; right: 0; top: 50%;
+    height: 6px; transform: translateY(-50%);
+    background-image: repeating-linear-gradient(90deg, var(--steel-dim) 0 1px, transparent 1px 10%);
+    pointer-events: none;
+  }
+
+  .pb-readout {
+    display: flex; align-items: center; gap: 6px;
+    min-width: 130px;
+  }
+  .pb-readout .pb-label { color: var(--steel-dim); }
+  .pb-readout .pb-time {
+    color: var(--amber); font-variant-numeric: tabular-nums;
+    text-shadow: 0 0 6px var(--amber-glow); font-weight: 500;
+  }
+  .pb-readout .pb-time.live { color: var(--green); text-shadow: 0 0 6px var(--green-glow); }
+  .pb-speed { display: flex; gap: 0; border: 1px solid var(--panel-edge); }
+  .pb-speed-btn {
+    background: transparent; border: none; border-right: 1px solid var(--panel-edge);
+    color: var(--steel); font-family: var(--mono); font-size: 8px;
+    padding: 4px 7px; cursor: pointer; letter-spacing: 0.1em;
+    transition: all 0.12s var(--ease);
+  }
+  .pb-speed-btn:last-child { border-right: none; }
+  .pb-speed-btn:hover { color: var(--amber); }
+  .pb-speed-btn.active {
+    color: var(--amber); background: rgba(255,181,71,0.10);
+    text-shadow: 0 0 6px var(--amber-glow);
+  }
+  @media (max-width: 980px) {
+    .playback-bar {
+      left: 6px; right: 6px;
+      bottom: calc(74px + env(safe-area-inset-bottom,0px));
+      height: 34px; padding: 0 8px; gap: 6px;
+    }
+    .pb-readout { min-width: auto; }
+    .pb-readout .pb-label { display: none; }
+    .pb-speed-btn { padding: 4px 5px; }
+    .pb-btn.small { display: none; }
+  }
+
   /* Faint CRT graticule rendered behind the rails for SCIF-wall texture */
   .rail-left, .rail-right, .footer, .header {
     background-image:
@@ -376,7 +512,7 @@
 
   /* Cursor coordinate readout — instrument cluster style */
   .cursor-readout {
-    position: fixed; left: 290px; bottom: 136px; z-index: 80;
+    position: fixed; left: 290px; bottom: 184px; z-index: 80;
     background: var(--panel-2); border: 1px solid var(--panel-edge-hot);
     padding: 7px 14px; font-size: 9px; letter-spacing: 0.16em;
     color: var(--steel-bright); text-transform: uppercase;
@@ -983,6 +1119,33 @@
 <body>
   <div id="map"></div>
   <div id="cesium" style="display:none;position:fixed;top:78px;left:280px;right:320px;bottom:128px;z-index:2;background:#000;border:1px solid var(--panel-edge)"></div>
+  <!-- Radar sweep ring overlay (centered, slow rotation) -->
+  <div class="radar-sweep" aria-hidden="true">
+    <div class="sweep-arm"></div>
+  </div>
+  <!-- Playback / time scrubber control bar -->
+  <div class="playback-bar" id="playbackBar">
+    <div class="pb-corner tl"></div><div class="pb-corner tr"></div>
+    <div class="pb-corner bl"></div><div class="pb-corner br"></div>
+    <button class="pb-btn" id="pbPlay" title="Play / pause replay">▶</button>
+    <button class="pb-btn small" id="pbBack" title="Step back 30s">◀◀</button>
+    <button class="pb-btn small" id="pbFwd" title="Step forward 30s">▶▶</button>
+    <div class="pb-track">
+      <div class="pb-track-fill" id="pbTrackFill"></div>
+      <input type="range" id="pbScrub" min="0" max="1000" value="1000" step="1" />
+      <div class="pb-marks"></div>
+    </div>
+    <div class="pb-readout">
+      <span class="pb-label">DTG</span>
+      <span class="pb-time" id="pbTime">LIVE</span>
+    </div>
+    <div class="pb-speed">
+      <button class="pb-speed-btn" data-speed="0.5">½×</button>
+      <button class="pb-speed-btn active" data-speed="1">1×</button>
+      <button class="pb-speed-btn" data-speed="3">3×</button>
+      <button class="pb-speed-btn" data-speed="10">10×</button>
+    </div>
+  </div>
   <div class="map-corner tl"></div><div class="map-corner tr"></div>
   <div class="map-corner bl"></div><div class="map-corner br"></div>
 
@@ -1466,13 +1629,20 @@ function installLayers() {
   if (!map.getLayer("trail-l")) map.addLayer({ id: "trail-l", type: "line", source: "trail",
     paint: { "line-color": "#ffb547", "line-width": 1.6, "line-opacity": 0.9 } });
 
-  // Global aircraft trails — bright amber streaks showing recent flight paths
+  // Global aircraft trails — comet streaks with wider blurred underlay glow
   if (!map.getLayer("airtrails-glow-l")) map.addLayer({ id: "airtrails-glow-l", type: "line", source: "airtrails",
-    paint: { "line-color": "#ffb547", "line-width": 4, "line-opacity": 0.15, "line-blur": 3 },
+    paint: { "line-color": "#ffb547", "line-width": 6, "line-opacity": 0.18, "line-blur": 5 },
     layout: { "line-cap": "round", "line-join": "round" } });
   if (!map.getLayer("airtrails-l")) map.addLayer({ id: "airtrails-l", type: "line", source: "airtrails",
-    paint: { "line-color": "#ffb547", "line-width": 1.8, "line-opacity": 0.75 },
+    paint: { "line-color": "#ffce82", "line-width": 1.8, "line-opacity": 0.85 },
     layout: { "line-cap": "round", "line-join": "round" } });
+  // Per-aircraft subtle blurred halo so each plane reads as a moving heat dot
+  if (!map.getLayer("aircraft-halo-l")) map.addLayer({ id: "aircraft-halo-l", type: "circle", source: "aircraft", paint: {
+    "circle-radius": ["interpolate", ["linear"], ["zoom"], 0, 4, 6, 8, 12, 18],
+    "circle-color": "#ffb547",
+    "circle-opacity": 0.12,
+    "circle-blur": 0.9,
+  }});
   if (!map.getLayer("miltrails-glow-l")) map.addLayer({ id: "miltrails-glow-l", type: "line", source: "miltrails",
     paint: { "line-color": "#ff3a55", "line-width": 5, "line-opacity": 0.2, "line-blur": 4 },
     layout: { "line-cap": "round", "line-join": "round" } });
@@ -2394,7 +2564,7 @@ function rerender() {
     }
   }
   set(["satellites-l"], state.layers.satellites);
-  set(["aircraft-l", "airtrails-l", "airtrails-glow-l"], state.layers.aircraft);
+  set(["aircraft-l", "aircraft-halo-l", "airtrails-l", "airtrails-glow-l"], state.layers.aircraft);
   set(["military-l", "mil-glow-l", "miltrails-l", "miltrails-glow-l"], state.layers.military);
   set(["cameras-l", "cam-glow-l", "cam-live-ring-l"], state.layers.cameras);
   set(["news-l", "news-bg-l"], state.layers.news);
@@ -3361,6 +3531,136 @@ const _dossierHook = () => { if (window.innerWidth <= 980) openSheet("dossier");
   try { map.on("click", layer, () => setTimeout(_dossierHook, 20)); } catch {}
 });
 
+// ── Playback / time scrubber ─────────────────────────────────────
+// Captures a circular buffer of aircraft snapshots once per second so the
+// user can scrub back through the last 10 minutes of flight tracks.
+const playback = {
+  buffer: [],          // { ts, features:[{icao, lng, lat, heading}] }
+  capacity: 600,       // 600 frames × 1s = 10 min history
+  lastCaptureTs: 0,
+  scrubbing: false,    // true while user holds the slider
+  speed: 1,            // 0.5 / 1 / 3 / 10
+};
+
+function capturePlaybackFrame() {
+  const now = Date.now();
+  if (now - playback.lastCaptureTs < 1000) return;
+  playback.lastCaptureTs = now;
+  const features = [];
+  for (const a of state.aircraft) {
+    if (a.lat == null || a.lng == null) continue;
+    features.push({ icao: a.icao, lng: a.lng, lat: a.lat, heading: a.heading });
+  }
+  playback.buffer.push({ ts: now, features });
+  if (playback.buffer.length > playback.capacity) playback.buffer.shift();
+}
+
+function applyPlaybackFrame(idx) {
+  const frame = playback.buffer[idx];
+  if (!frame) return;
+  const features = frame.features.map((f) => ({
+    type: "Feature",
+    geometry: { type: "Point", coordinates: [f.lng, f.lat] },
+    properties: { icao: f.icao, heading: f.heading },
+  }));
+  const src = map.getSource("aircraft");
+  if (src) src.setData({ type: "FeatureCollection", features });
+  // Update DTG readout to the playback frame's time
+  const t = new Date(frame.ts);
+  const start = Date.UTC(t.getUTCFullYear(), 0, 0);
+  const doy = String(Math.floor((t - start) / 86400000)).padStart(3, "0");
+  const tStr = t.toISOString().substr(11, 8);
+  const pbTime = document.getElementById("pbTime");
+  pbTime.textContent = `${doy}/${tStr}Z`;
+  pbTime.classList.remove("live");
+}
+
+const pbScrub = document.getElementById("pbScrub");
+const pbPlay = document.getElementById("pbPlay");
+const pbTime = document.getElementById("pbTime");
+const pbTrackFill = document.getElementById("pbTrackFill");
+
+function scrubToValue(v) {
+  if (!playback.buffer.length) return;
+  const idx = Math.floor((v / 1000) * (playback.buffer.length - 1));
+  applyPlaybackFrame(idx);
+  pbTrackFill.style.width = `${(v / 1000) * 100}%`;
+}
+
+function setLiveMode() {
+  playback.scrubbing = false;
+  pbScrub.value = 1000;
+  pbTrackFill.style.width = "100%";
+  pbTime.textContent = "LIVE";
+  pbTime.classList.add("live");
+  pbPlay.classList.add("live");
+  pbPlay.textContent = "■";
+  // Push the latest extrapolated state back to the source
+  if (state.aircraft.length) {
+    refreshSource("aircraft", state.aircraft, (a) => ({
+      name: a.name, icao: a.icao, country: a.country, altM: a.altM, vel: a.vel, heading: a.heading,
+    }));
+  }
+}
+
+pbScrub.addEventListener("input", (e) => {
+  playback.scrubbing = true;
+  pbPlay.classList.remove("live");
+  pbPlay.textContent = "▶";
+  scrubToValue(parseInt(e.target.value, 10));
+});
+
+let pbReplayTimer = null;
+pbPlay.addEventListener("click", () => {
+  if (parseInt(pbScrub.value, 10) >= 1000 && !pbReplayTimer) {
+    // Already at LIVE — just toggle live mode
+    setLiveMode();
+    return;
+  }
+  if (pbReplayTimer) {
+    // Pause
+    clearInterval(pbReplayTimer);
+    pbReplayTimer = null;
+    pbPlay.textContent = "▶";
+    return;
+  }
+  // Play forward from current scrub position
+  pbPlay.textContent = "❚❚";
+  pbReplayTimer = setInterval(() => {
+    let v = parseInt(pbScrub.value, 10);
+    v += Math.max(1, Math.round(playback.speed * 8));
+    if (v >= 1000) {
+      clearInterval(pbReplayTimer);
+      pbReplayTimer = null;
+      setLiveMode();
+      return;
+    }
+    pbScrub.value = v;
+    scrubToValue(v);
+  }, 100);
+});
+
+document.getElementById("pbBack").addEventListener("click", () => {
+  let v = parseInt(pbScrub.value, 10);
+  v = Math.max(0, v - Math.round(1000 / Math.max(1, playback.buffer.length) * 30));
+  pbScrub.value = v; scrubToValue(v); playback.scrubbing = true;
+  pbPlay.classList.remove("live"); pbPlay.textContent = "▶";
+});
+document.getElementById("pbFwd").addEventListener("click", () => {
+  let v = parseInt(pbScrub.value, 10);
+  v = Math.min(1000, v + Math.round(1000 / Math.max(1, playback.buffer.length) * 30));
+  pbScrub.value = v;
+  if (v >= 1000) setLiveMode(); else { scrubToValue(v); playback.scrubbing = true; pbPlay.classList.remove("live"); pbPlay.textContent = "▶"; }
+});
+document.querySelectorAll(".pb-speed-btn").forEach((b) => {
+  b.addEventListener("click", () => {
+    document.querySelectorAll(".pb-speed-btn").forEach((x) => x.classList.toggle("active", x === b));
+    playback.speed = parseFloat(b.dataset.speed);
+  });
+});
+// Initialize live state
+setLiveMode();
+
 // ── Boot ──────────────────────────────────────────────────────────
 async function bootData() {
   await loadSats();
@@ -3375,7 +3675,19 @@ async function bootData() {
   loadRadarFrames(); setInterval(loadRadarFrames, 5 * 60 * 1000);
   loadWeatherAlerts(); setInterval(loadWeatherAlerts, 3 * 60 * 1000);
   updateTerminator(); setInterval(updateTerminator, 60 * 1000);
-  setInterval(() => { extrapolateAircraft(); }, 150);
+  // Smooth aircraft motion via requestAnimationFrame (was setInterval 150ms).
+  // rAF gives the browser the smoothest possible cadence and pauses cleanly
+  // when the tab is hidden.
+  let rafLast = 0;
+  function aircraftFrame(t) {
+    if (t - rafLast > 100) {           // ~10 fps update on the data, GPU smooths
+      if (!playback.scrubbing) extrapolateAircraft();
+      capturePlaybackFrame();
+      rafLast = t;
+    }
+    requestAnimationFrame(aircraftFrame);
+  }
+  requestAnimationFrame(aircraftFrame);
   setInterval(() => {
     if (state.selectedSatName) state.selectedOrbit = computeOrbit(state.selectedSatName);
     refreshOrbit();

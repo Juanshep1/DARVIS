@@ -253,9 +253,197 @@ Relevance 0-100 — breaking conflict/casualty/disaster = 80-100, political back
   return { items: baseline.slice(0, 60), ts: Date.now(), llm: !!classified, diag: __lastOllamaDiag };
 }
 
+// ── World News Channels Watcher ────────────────────────────────────
+// Fetches major global broadcasters directly from their RSS feeds so the
+// frontend can render channel-branded "pop-up" intel cards. Items are
+// clustered across channels: when 3+ outlets cover the same story it gets
+// a corroboration relevance boost and a sources[] array of every channel
+// reporting it — that's the multi-source "flesh out" signal.
+//
+// Channel IDs are stable slugs the frontend can map to logos/colors.
+// For outlets whose RSS is flaky or gated, we fall back to a targeted
+// Google News query scoped to their domain (site:domain.com).
+
+const WORLD_CHANNELS = [
+  { id: "bbc", name: "BBC", region: "UK", tier: "global",
+    rss: "https://feeds.bbci.co.uk/news/world/rss.xml" },
+  { id: "guardian", name: "The Guardian", region: "UK", tier: "global",
+    rss: "https://www.theguardian.com/world/rss" },
+  { id: "aljazeera", name: "Al Jazeera", region: "Qatar", tier: "global",
+    rss: "https://www.aljazeera.com/xml/rss/all.xml" },
+  { id: "france24", name: "France 24", region: "France", tier: "global",
+    rss: "https://www.france24.com/en/rss" },
+  { id: "dw", name: "Deutsche Welle", region: "Germany", tier: "global",
+    rss: "https://rss.dw.com/rdf/rss-en-world" },
+  { id: "cnn", name: "CNN", region: "USA", tier: "global",
+    rss: "http://rss.cnn.com/rss/edition_world.rss" },
+  { id: "skynews", name: "Sky News", region: "UK", tier: "global",
+    rss: "https://feeds.skynews.com/feeds/rss/world.xml" },
+  { id: "nytimes", name: "NYT World", region: "USA", tier: "global",
+    rss: "https://rss.nytimes.com/services/xml/rss/nyt/World.xml" },
+  { id: "reuters", name: "Reuters", region: "UK", tier: "global",
+    googleQuery: "site:reuters.com world" },
+  { id: "ap", name: "AP News", region: "USA", tier: "global",
+    googleQuery: "site:apnews.com world" },
+  { id: "nhk", name: "NHK World", region: "Japan", tier: "regional",
+    googleQuery: "site:www3.nhk.or.jp world" },
+  { id: "cna", name: "Channel News Asia", region: "Singapore", tier: "regional",
+    rss: "https://www.channelnewsasia.com/api/v1/rss-outbound-feed?_format=xml&category=6511" },
+  { id: "abc-au", name: "ABC Australia", region: "Australia", tier: "regional",
+    rss: "https://www.abc.net.au/news/feed/51120/rss.xml" },
+  { id: "timesofindia", name: "Times of India", region: "India", tier: "regional",
+    rss: "https://timesofindia.indiatimes.com/rssfeeds/296589292.cms" },
+  { id: "kyivindependent", name: "Kyiv Independent", region: "Ukraine", tier: "regional",
+    rss: "https://kyivindependent.com/rss/" },
+  { id: "timesofisrael", name: "Times of Israel", region: "Israel", tier: "regional",
+    rss: "https://www.timesofisrael.com/feed/" },
+];
+
+async function fetchRSS(url) {
+  try {
+    const r = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0 (FalconEye-Swarm)", Accept: "application/rss+xml, application/xml, text/xml" },
+      signal: AbortSignal.timeout(6000),
+    });
+    if (!r.ok) return [];
+    const xml = await r.text();
+    const items = [];
+    const re = /<item[^>]*>([\s\S]*?)<\/item>/g;
+    let m;
+    while ((m = re.exec(xml))) {
+      const block = m[1];
+      const getTag = (tag) => {
+        const rx = new RegExp(`<${tag}[^>]*>(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?<\\/${tag}>`);
+        return decodeEntities(stripTags(rx.exec(block)?.[1] || ""));
+      };
+      const title = getTag("title");
+      const link = getTag("link");
+      const pubDate = getTag("pubDate") || getTag("dc:date");
+      const description = getTag("description");
+      const ts = pubDate ? new Date(pubDate).getTime() : Date.now();
+      if (title && !isNaN(ts)) items.push({ title, link, description, ts });
+    }
+    // Also handle Atom <entry> feeds (NYT, some others mix formats)
+    if (!items.length) {
+      const re2 = /<entry[^>]*>([\s\S]*?)<\/entry>/g;
+      let m2;
+      while ((m2 = re2.exec(xml))) {
+        const block = m2[1];
+        const title = decodeEntities(stripTags((/<title[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/.exec(block)?.[1]) || ""));
+        const link = (/<link[^>]*href="([^"]+)"/.exec(block)?.[1]) || "";
+        const pub = (/<(?:published|updated)>([^<]+)<\/(?:published|updated)>/.exec(block)?.[1]) || "";
+        const summary = decodeEntities(stripTags((/<summary[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/summary>/.exec(block)?.[1]) || ""));
+        const ts = pub ? new Date(pub).getTime() : Date.now();
+        if (title && !isNaN(ts)) items.push({ title, link, description: summary, ts });
+      }
+    }
+    return items;
+  } catch { return []; }
+}
+
+async function fetchChannelItems(ch) {
+  let raw = [];
+  if (ch.rss) raw = await fetchRSS(ch.rss);
+  if (!raw.length && ch.googleQuery) raw = await fetchGoogleNewsRSS(ch.googleQuery);
+  return raw.slice(0, 15).map((it) => ({
+    channelId: ch.id,
+    channelName: ch.name,
+    channelRegion: ch.region,
+    channelTier: ch.tier,
+    headline: it.title,
+    description: stripTags(it.description || ""),
+    url: it.link,
+    ts: it.ts,
+  }));
+}
+
+async function runWorldChannelsAgent() {
+  const results = await Promise.allSettled(WORLD_CHANNELS.map(fetchChannelItems));
+  const channelCounts = {};
+  const all = [];
+  results.forEach((r, i) => {
+    const ch = WORLD_CHANNELS[i];
+    if (r.status === "fulfilled") {
+      channelCounts[ch.id] = r.value.length;
+      all.push(...r.value);
+    } else {
+      channelCounts[ch.id] = 0;
+    }
+  });
+
+  // Drop noise + classify + cluster by dedupKey
+  const clusters = new Map();
+  for (const item of all) {
+    if (NOISE_RE.test(item.headline) || NOISE_RE.test(item.description)) continue;
+    const key = dedupKey(item.headline);
+    if (!key || key.split(" ").length < 2) continue;
+    if (!clusters.has(key)) clusters.set(key, []);
+    clusters.get(key).push(item);
+  }
+
+  const items = [];
+  for (const [key, members] of clusters) {
+    // Sort members by timestamp, newest first
+    members.sort((a, b) => b.ts - a.ts);
+    const primary = members[0];
+    const text = `${primary.headline} ${primary.description}`;
+    const severity = regexSeverity(text);
+    const category = regexCategory(text);
+    const { lat, lon, region } = regexGeocode(text);
+
+    // Corroboration: distinct channels covering the story
+    const distinctChannels = [...new Set(members.map((m) => m.channelId))];
+    const corroboration = distinctChannels.length;
+    const boost = Math.min((corroboration - 1) * 8, 30);
+    const relevance = Math.min((SEV_BASE_REL[severity] || 10) + boost, 100);
+
+    items.push({
+      id: `ch-${primary.ts}-${key.replace(/\s+/g, "-").slice(0, 40)}`,
+      agent: "channels",
+      headline: primary.headline,
+      summary: primary.description.slice(0, 280),
+      url: primary.url,
+      channel: primary.channelName,
+      channelId: primary.channelId,
+      region,
+      lat, lon,
+      severity,
+      category,
+      relevance,
+      corroboration,
+      sources: members.slice(0, 8).map((m) => ({
+        channelId: m.channelId,
+        channel: m.channelName,
+        url: m.url,
+        ts: m.ts,
+      })),
+      ts: primary.ts,
+    });
+  }
+
+  const sevWeight = { critical: 4, high: 3, medium: 2, low: 1 };
+  items.sort((a, b) => {
+    const sw = (sevWeight[b.severity] || 0) - (sevWeight[a.severity] || 0);
+    if (sw !== 0) return sw;
+    const cw = (b.corroboration || 0) - (a.corroboration || 0);
+    if (cw !== 0) return cw;
+    const rw = (b.relevance || 0) - (a.relevance || 0);
+    if (rw !== 0) return rw;
+    return (b.ts || 0) - (a.ts || 0);
+  });
+
+  return {
+    items: items.slice(0, 80),
+    ts: Date.now(),
+    channels: channelCounts,
+    channelCount: Object.keys(channelCounts).length,
+  };
+}
+
 // ── Registry of agents ─────────────────────────────────────────────
 const AGENTS = {
   news: { label: "Breaking News Watcher", run: runBreakingNewsAgent },
+  channels: { label: "World News Channels Watcher", run: runWorldChannelsAgent },
 };
 
 async function getOrRun(store, agentName, force = false) {

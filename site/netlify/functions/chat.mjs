@@ -61,20 +61,57 @@ function needsBrowse(msg) {
 
 function needsSearch(msg) {
   const lower = msg.toLowerCase();
-  const searchTriggers = [
-    "search", "look up", "google", "find out", "what is the current",
-    "what's the current", "latest", "today", "tonight", "yesterday",
-    "this week", "this month", "this season", "this year", "right now",
-    "score", "scores", "record", "standings", "weather", "forecast",
-    "news", "price", "stock", "who won", "who is winning", "who lost",
-    "how much", "how many", "when is", "when does", "where is",
-    "recent", "update", "results", "live", "current",
-    "who is the president", "who is the prime minister",
-    "playoffs", "championship", "election", "released",
-    "box office", "trending", "viral", "tell me about", "what happened",
-    "remind me", "what's going on", "catch me up", "info on", "details about",
+  // Conversation openers / casual chat — never search
+  const chatter = [
+    /^(hi|hey|hello|yo|sup|good (morning|afternoon|evening|night))\b/,
+    /^(thanks|thank you|thx|cheers)\b/,
+    /^(are you there|you there|you awake|can you hear me)\b/,
+    /^(what can you do|what are you|who are you)\b/,
+    /^(shut up|stop|pause|be quiet)\b/,
   ];
-  return searchTriggers.some((t) => lower.includes(t));
+  if (chatter.some((re) => re.test(lower))) return false;
+
+  // Factual / temporal / named-entity triggers — search aggressively.
+  // The goal is "when in doubt, search" so Spectra responds with real
+  // information instead of training-data guesses.
+  const triggers = [
+    // Direct search verbs
+    "search", "look up", "google", "find out", "find me", "show me",
+    // Temporal
+    "latest", "today", "tonight", "yesterday", "this week", "this month",
+    "this year", "right now", "currently", "recent", "recently", "just happened",
+    "this morning", "this afternoon", "this evening", "last night",
+    // Sports / events
+    "score", "scores", "record", "standings", "playoffs", "championship",
+    "who won", "who is winning", "who lost", "results", "highlights", "game",
+    "match", "final", "semifinal", "tournament", "league",
+    // News / markets
+    "news", "headline", "breaking", "update", "weather", "forecast", "temperature",
+    "price", "stock", "crypto", "bitcoin", "market", "shares", "index",
+    "earnings", "rate", "inflation", "fed",
+    // People / positions
+    "who is the president", "who is the prime minister", "who is the ceo",
+    "who owns", "who runs", "who leads", "who leads",
+    // Reference / factual
+    "how much", "how many", "how old", "when is", "when does", "when did",
+    "where is", "where does", "how long", "how far",
+    // Curiosity / lookup
+    "tell me about", "what happened", "what is going on", "what's going on",
+    "catch me up", "info on", "details about", "background on",
+    "history of", "details on", "biography", "bio of",
+    // Wiki-ish
+    "wiki", "wikipedia", "encyclopedia", "define",
+    // Trending
+    "trending", "viral", "going viral", "hot right now", "released",
+    "released today", "box office",
+    // Places
+    "restaurant", "open right now", "near me", "hours of", "phone number",
+    "address of", "map of",
+    // General conditionals that signal a factual answer
+    "is ", "are ", "does ", "do ", "did ", "can ", "will ", "should ",
+    "which ",
+  ];
+  return triggers.some((t) => lower.includes(t));
 }
 
 // ── Main handler ────────────────────────────────────────────────────────────
@@ -228,12 +265,14 @@ CRITICAL: Pay attention to conversation history for context — don't ask the us
 ${timeBlock}
 
 IMPORTANT RULES:
-- When web search results are provided below, use ONLY those results for factual claims. Do NOT mix in your training data which may be outdated. The search results are live and accurate — your training data is NOT.
-- Quote specific numbers, records, standings, and dates EXACTLY as they appear in search results. Do not guess or infer different numbers.
-- When the user asks about current events, news, scores, prices, weather, or anything real-time AND no search results are provided below, you MUST use the search_web command block.
-- ALWAYS provide a spoken text response ALONGSIDE any command blocks. Never output ONLY command blocks.
-- Give substantive answers. If the user asks about news, give 5+ stories with details.
-- Pay attention to conversation history. If the user says "their record" or "what about them", look at previous messages to understand who/what they're referring to. Don't ask the user to repeat themselves.
+- SEARCH AGGRESSIVELY. When in doubt about whether something is current or factual, USE THE search_web COMMAND BLOCK. Your training data is frozen — the web is live. Default to searching for: any person, event, price, score, location, statistic, ranking, record, release, date, product, news story, weather, or specific fact.
+- When web search results ARE provided below, use ONLY those results for factual claims. Quote numbers, dates, names EXACTLY as they appear. Do not blend in your training-data memory.
+- When search results are NOT provided and the query needs current info, OUTPUT a search_web command block AS PART OF YOUR REPLY. The user will see your initial reply, the search will run, and then you'll get a second turn with the results to give the thorough answer.
+- ALWAYS give a spoken text response alongside any command blocks. Never output ONLY command blocks — the user hears what you say.
+- Be thorough but fast. Aim for 3–5 substantive sentences on most queries, longer only when the user asks for depth (briefing, summary, breakdown, deep dive). Skip throat-clearing — no "Certainly, sir. I'd be delighted to..." openings. Start with the answer.
+- For news or briefings, give 5+ stories with 1–2 sentences of real substance each. No lazy headlines.
+- Pay attention to conversation history. If the user says "their record" or "what about them", reuse the previous subject instead of asking them to repeat themselves.
+- Both Classic and Gemini voice modes now route through this endpoint, so every query should respond as if the user can hear you. Use natural sentence flow, not bullet lists, when the reply will be spoken.
 
 You run on ${MODEL} via Ollama Cloud across iPhone, web browser, macOS terminal.
 

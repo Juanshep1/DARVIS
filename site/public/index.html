@@ -2058,27 +2058,63 @@ async function send() {
     orb.className = 'orb thinking';
     responseEl.textContent = '';
 
+    // Helpers — never let an invalid URL or a bad parse blow up the chat
+    const safeUrl = (u) => { try { return new URL(u).toString(); } catch { return null; } };
+    const safeOpenTab = (u) => { try { const v = safeUrl(u); if (v) window.open(v, '_blank', 'noopener'); } catch {} };
+
+    let data = null;
+    let httpError = null;
     try {
         const res = await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ message: text }),
+            signal: AbortSignal.timeout(90000),
         });
-        const data = await res.json();
-        responseEl.textContent = data.reply;
+        // Parse defensively — some errors return HTML / partial bodies
+        // that crash JSON.parse with "string did not match the expected pattern"
+        const raw = await res.text();
+        try {
+            data = raw ? JSON.parse(raw) : { reply: '(empty response)' };
+        } catch {
+            // Not JSON. Show whatever text we got so the user has something.
+            const looksLikeHtml = /<html|<!DOCTYPE/i.test(raw);
+            data = { reply: looksLikeHtml ? 'The brain returned an HTML error page. Try again, sir.' : (raw.slice(0, 600) || '(no response)') };
+        }
+        if (!res.ok) httpError = `HTTP ${res.status}`;
+    } catch (e) {
+        httpError = e?.message || String(e);
+    }
 
-        if (data.actions) {
-            let usedPending = false;
-            data.actions.forEach(act => {
+    // Always surface a reply, even if every subsequent step throws
+    if (!data || !data.reply) {
+        data = data || {};
+        data.reply = httpError
+            ? `Connection error (${httpError}). I'll try again if you repeat yourself.`
+            : 'No response from the brain, sir.';
+    }
+
+    responseEl.textContent = data.reply;
+    lastFailedRequest = httpError ? text : null;
+
+    // Action processing — every action wrapped so a single bad field can't
+    // kill the rest of the reply flow
+    if (Array.isArray(data.actions)) {
+        let usedPending = false;
+        for (const act of data.actions) {
+            try {
                 if (act.action === 'open_url' && act.url) {
+                    const validUrl = safeUrl(act.url);
+                    if (!validUrl) continue;
                     if (pendingTab && !usedPending) {
-                        pendingTab.location.href = act.url;
-                        usedPending = true;
+                        try { pendingTab.location.href = validUrl; usedPending = true; }
+                        catch { safeOpenTab(validUrl); }
                     } else {
-                        window.open(act.url, '_blank');
+                        safeOpenTab(validUrl);
                     }
                 } else if (act.action === 'agent_started') {
-                    document.getElementById('agentPanel').classList.add('open');
+                    document.getElementById('agentPanel')?.classList.add('open');
+                    document.getElementById('panelScrim')?.classList.add('open');
                     startAgentPolling();
                 } else if (act.action === 'open_maps') {
                     handleMaps(act);
@@ -2093,13 +2129,19 @@ async function send() {
                 } else if (act.action === 'falcon_eye') {
                     handleFalconEyeAction(act);
                 }
-            });
-            if (pendingTab && !usedPending) pendingTab.close();
-            pendingTab = null;
-        } else if (pendingTab) {
-            pendingTab.close();
-            pendingTab = null;
+            } catch (actErr) {
+                console.warn('action failed:', actErr, act);
+            }
         }
+        if (pendingTab && !usedPending) { try { pendingTab.close(); } catch {} }
+        pendingTab = null;
+    } else if (pendingTab) {
+        try { pendingTab.close(); } catch {}
+        pendingTab = null;
+    }
+
+    // If we only have a connection error, stop here — no TTS on error msgs
+    if (httpError) { orb.className = 'orb'; return; }
 
         // Classic TTS — speak the reply, then follow-up if present
         // Pick the right TTS endpoint based on the user's chosen provider.
@@ -2205,7 +2247,7 @@ async function send() {
 
         async function speakText(text) {
             // Browser provider takes a fast path with no fetch
-            const provider = localStorage.getItem('spectra-tts-provider') || 'elevenlabs';
+            const provider = localStorage.getItem('spectra-tts-provider') || 'browser';
             if (provider === 'browser') return browserSpeak(text);
 
             try {
@@ -2256,19 +2298,27 @@ async function send() {
             return false;
         }
 
-        // Speak initial reply
-        const spoke = await speakText(data.reply);
+        // Speak initial reply — never let TTS errors crash the chat
+        try { await speakText(data.reply); } catch (ttsErr) { console.warn('speak failed:', ttsErr); }
 
         // If there's a follow-up (search results, etc.), show and speak it
         if (data.followUp) {
-            responseEl.textContent = data.followUp;
-            orb.className = 'orb speaking';
-            await speakText(data.followUp);
+            try {
+                responseEl.textContent = data.followUp;
+                orb.className = 'orb speaking';
+                await speakText(data.followUp);
+            } catch (fuErr) { console.warn('follow-up speak failed:', fuErr); }
         }
 
         orb.className = 'orb';
     } catch (err) {
-        responseEl.textContent = 'Connection error: ' + err.message;
+        // Absolute last-resort catch — should never fire now because every
+        // inner op is wrapped, but if something still throws we show a
+        // friendly message and never expose Safari's raw error text.
+        console.warn('send() unexpected error:', err);
+        if (!responseEl.textContent || /^Connection error/.test(responseEl.textContent)) {
+            responseEl.textContent = 'Something went sideways, sir. Try again.';
+        }
         lastFailedRequest = text;
         orb.className = 'orb';
     }

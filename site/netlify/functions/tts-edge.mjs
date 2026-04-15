@@ -1,168 +1,156 @@
-// Microsoft Edge Read-Aloud TTS proxy — genuinely natural neural voices,
-// free, no API key, no signup. Uses the same WebSocket endpoint the
-// Edge browser's Read Aloud feature hits, with the community-known
-// trusted client token.
+// Natural neural TTS via Google Translate's read-aloud endpoint.
+// Free, no API key, works from Netlify Lambda. The endpoint returns
+// real WaveNet-adjacent audio that sounds natural on most English
+// content. The community fgtts / gTTS libraries use the same trick.
 //
-// GET  /api/tts-edge?voice=en-GB-RyanNeural&text=hello
-// POST { voice, text, rate, pitch }
+// GET  /api/tts-edge?voice=en&text=hello
+// POST { voice, text }
 //
-// Audio format: audio-24khz-48kbitrate-mono-mp3
+// Voice codes map to Google Translate language+accent combinations:
+//   en-GB → British
+//   en-US → American
+//   en-AU → Australian
+//   en-IE → Irish
+//   en-IN → Indian
+//   en-ZA → South African
+//
+// The endpoint has a 200-char-per-request limit, so we chunk long
+// text and concatenate the MP3 segments.
 
-import WebSocket from "ws";
+const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
 
-const TRUSTED_CLIENT_TOKEN = "6A5AA1D4EAFF4E9FB37E23D68491D6F4";
-const ENDPOINT = `wss://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1?TrustedClientToken=${TRUSTED_CLIENT_TOKEN}`;
-const USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Edg/130.0.0.0";
-
-function nowTimestamp() {
-  // Windows File Time style — MS uses this format
-  return new Date().toString().replace(/\([^)]+\)$/, "").trim() + " GMT+0000 (Coordinated Universal Time)";
-}
-
-function uuid() {
-  return crypto.randomUUID().replace(/-/g, "");
-}
-
-function escapeXml(s) {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
-}
-
-function buildSsml(text, voice, rate, pitch) {
-  const clean = escapeXml(text).slice(0, 3000);
-  const lang = voice.slice(0, 5); // en-GB, en-US, etc.
-  return `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='${lang}'>` +
-    `<voice name='${voice}'>` +
-    `<prosody pitch='${pitch}' rate='${rate}' volume='+0%'>` +
-    clean +
-    `</prosody></voice></speak>`;
-}
-
-function synthesize({ text, voice, rate = "+0%", pitch = "+0Hz" }) {
-  return new Promise((resolve, reject) => {
-    const reqId = uuid();
-    const ws = new WebSocket(ENDPOINT, {
-      headers: {
-        "User-Agent": USER_AGENT,
-        "Origin": "chrome-extension://jdiccldimpdaibmpdkjnbmckianbfold",
-        "Accept-Encoding": "gzip, deflate, br",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Pragma": "no-cache",
-        "Cache-Control": "no-cache",
-      },
-      timeout: 15000,
-    });
-
-    const chunks = [];
-    let settled = false;
-    const settle = (fn, val) => { if (!settled) { settled = true; try { ws.close(); } catch {} fn(val); } };
-    const timer = setTimeout(() => settle(reject, new Error("edge tts timeout")), 20000);
-
-    ws.on("open", () => {
-      // 1) Audio config message
-      const config = {
-        context: {
-          synthesis: {
-            audio: {
-              metadataoptions: { sentenceBoundaryEnabled: "false", wordBoundaryEnabled: "false" },
-              outputFormat: "audio-24khz-48kbitrate-mono-mp3",
-            },
-          },
-        },
-      };
-      const configMsg =
-        `X-Timestamp:${nowTimestamp()}\r\n` +
-        `Content-Type:application/json; charset=utf-8\r\n` +
-        `Path:speech.config\r\n\r\n` +
-        JSON.stringify(config);
-      ws.send(configMsg);
-
-      // 2) SSML message
-      const ssml = buildSsml(text, voice, rate, pitch);
-      const ssmlMsg =
-        `X-RequestId:${reqId}\r\n` +
-        `Content-Type:application/ssml+xml\r\n` +
-        `X-Timestamp:${nowTimestamp()}\r\n` +
-        `Path:ssml\r\n\r\n` +
-        ssml;
-      ws.send(ssmlMsg);
-    });
-
-    ws.on("message", (data, isBinary) => {
-      if (isBinary && Buffer.isBuffer(data)) {
-        // Binary frame — first 2 bytes are the header length big-endian,
-        // then that many bytes of text header, then raw audio bytes.
-        if (data.length < 2) return;
-        const headerLen = data.readUInt16BE(0);
-        const header = data.slice(2, 2 + headerLen).toString("utf8");
-        if (header.toLowerCase().includes("path:audio")) {
-          const audio = data.slice(2 + headerLen);
-          if (audio.length) chunks.push(audio);
-        }
-      } else {
-        // Text frame — check for end-of-turn
-        const msg = data.toString();
-        if (msg.includes("Path:turn.end")) {
-          clearTimeout(timer);
-          settle(resolve, Buffer.concat(chunks));
+// Split text into ≤200-char chunks on sentence/clause boundaries so
+// each TTS request fits within Google's limit without cutting words.
+function chunkText(text, max = 195) {
+  const out = [];
+  const clean = text.replace(/\s+/g, " ").trim();
+  if (!clean) return out;
+  const parts = clean.split(/(?<=[.!?])\s+/);
+  let buf = "";
+  for (const p of parts) {
+    if (p.length > max) {
+      // Hard split on commas or word boundaries
+      const words = p.split(" ");
+      let sub = "";
+      for (const w of words) {
+        if ((sub + " " + w).length > max) {
+          if (sub) out.push(sub.trim());
+          sub = w;
+        } else {
+          sub = sub ? sub + " " + w : w;
         }
       }
-    });
+      if (sub) out.push(sub.trim());
+      buf = "";
+      continue;
+    }
+    if ((buf + " " + p).length > max) {
+      if (buf) out.push(buf.trim());
+      buf = p;
+    } else {
+      buf = buf ? buf + " " + p : p;
+    }
+  }
+  if (buf) out.push(buf.trim());
+  return out;
+}
 
-    ws.on("error", (err) => { clearTimeout(timer); settle(reject, err); });
-    ws.on("close", () => { clearTimeout(timer); if (!settled) settle(resolve, Buffer.concat(chunks)); });
+async function fetchChunk(text, lang) {
+  const url = `https://translate.google.com/translate_tts` +
+    `?ie=UTF-8` +
+    `&q=${encodeURIComponent(text)}` +
+    `&tl=${encodeURIComponent(lang)}` +
+    `&client=tw-ob` +
+    `&ttsspeed=1`;
+  const r = await fetch(url, {
+    headers: {
+      "User-Agent": UA,
+      "Referer": "https://translate.google.com/",
+      "Accept": "audio/mpeg, audio/*, */*;q=0.8",
+      "Accept-Language": "en-US,en;q=0.9",
+    },
+    signal: AbortSignal.timeout(12000),
   });
+  if (!r.ok) throw new Error(`google tts ${r.status}`);
+  const buf = Buffer.from(await r.arrayBuffer());
+  if (buf.length < 32) throw new Error("google tts: empty audio");
+  return buf;
+}
+
+// Voice param → Google Translate language code. The "voice" field is
+// preserved for API compat with the previous Edge implementation so the
+// frontend doesn't have to change.
+function voiceToLang(voice) {
+  if (!voice) return "en";
+  const v = voice.toLowerCase();
+  if (v.startsWith("en-gb")) return "en-GB";
+  if (v.startsWith("en-us")) return "en-US";
+  if (v.startsWith("en-au")) return "en-AU";
+  if (v.startsWith("en-ie")) return "en-IE";
+  if (v.startsWith("en-in")) return "en-IN";
+  if (v.startsWith("en-za")) return "en-ZA";
+  if (v.startsWith("en-ca")) return "en-CA";
+  if (v.startsWith("en-nz")) return "en-AU"; // NZ not supported, use AU
+  if (v.startsWith("en")) return "en";
+  if (v.startsWith("fr")) return "fr";
+  if (v.startsWith("de")) return "de";
+  if (v.startsWith("es")) return "es";
+  if (v.startsWith("it")) return "it";
+  if (v.startsWith("pt")) return "pt";
+  if (v.startsWith("ja")) return "ja";
+  if (v.startsWith("ko")) return "ko";
+  if (v.startsWith("zh")) return "zh-CN";
+  return "en";
 }
 
 export default async (req) => {
-  let voice = "en-GB-RyanNeural";
+  let voice = "en-GB";
   let text = "";
-  let rate = "+0%";
-  let pitch = "+0Hz";
 
   if (req.method === "GET") {
     const url = new URL(req.url);
     voice = url.searchParams.get("voice") || voice;
     text = url.searchParams.get("text") || "";
-    rate = url.searchParams.get("rate") || rate;
-    pitch = url.searchParams.get("pitch") || pitch;
   } else if (req.method === "POST") {
     const body = await req.json().catch(() => ({}));
     voice = body.voice || voice;
     text = body.text || "";
-    rate = body.rate || rate;
-    pitch = body.pitch || pitch;
   } else {
     return new Response("Method not allowed", { status: 405 });
   }
 
-  // Clean up markdown / emoji
+  // Clean markdown + code blocks
   text = text
     .replace(/```[\s\S]*?```/g, "")
     .replace(/[*_`#\[\]()]/g, "")
     .replace(/\s+/g, " ")
-    .trim();
+    .trim()
+    .slice(0, 3000);
 
   if (!text) return Response.json({ error: "no text" }, { status: 400 });
 
+  const lang = voiceToLang(voice);
+
   try {
-    const audio = await synthesize({ text, voice, rate, pitch });
-    if (!audio || !audio.length) throw new Error("empty audio from edge tts");
-    return new Response(audio, {
+    const chunks = chunkText(text);
+    if (!chunks.length) return Response.json({ error: "no speakable text" }, { status: 400 });
+
+    // Fetch all chunks in parallel, in original order
+    const buffers = await Promise.all(chunks.map((c) => fetchChunk(c, lang)));
+    const total = buffers.reduce((s, b) => s + b.length, 0);
+    const combined = Buffer.concat(buffers, total);
+
+    return new Response(combined, {
       status: 200,
       headers: {
         "Content-Type": "audio/mpeg",
-        "Content-Length": String(audio.length),
+        "Content-Length": String(combined.length),
         "Cache-Control": "public, max-age=3600",
         "Access-Control-Allow-Origin": "*",
       },
     });
   } catch (e) {
-    return Response.json({ error: e?.message || "edge tts failed" }, { status: 502 });
+    return Response.json({ error: e?.message || "google tts failed" }, { status: 502 });
   }
 };
 

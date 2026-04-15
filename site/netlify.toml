@@ -6,6 +6,9 @@
   node_bundler = "esbuild"
   external_node_modules = ["@netlify/blobs"]
 
+[functions."tts-edge"]
+  timeout = 30
+
 [functions."chat"]
   timeout = 120
 

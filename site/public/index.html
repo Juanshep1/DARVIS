@@ -615,7 +615,7 @@ body::after {
     </button>
   </div>
 </div>
-<div class="settings-panel" id="settingsPanel"><label>Audio Mode</label><select id="audioModeSelect" onchange="setAudioMode(this.value)"><option value="classic">Classic (Ollama + ElevenLabs)</option><option value="gemini">Gemini Live Audio</option><option value="gemma">Gemma 4 (Fast, Free)</option></select><div id="classicSettings"><label>Model</label><select id="modelSelect" onchange="setModel(this.value)"></select><label>Voice</label><select id="voiceSelect" onchange="setVoice(this.value)"></select><label>Custom Voice ID</label><div style="display:flex;gap:6px"><input type="text" id="voiceIdInput" placeholder="Paste ElevenLabs Voice ID..." style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:rgba(255,255,255,0.04);color:var(--text);font-family:var(--mono);font-size:0.7rem;outline:none"><button onclick="setCustomVoiceId()" style="padding:8px 12px;border:1px solid rgba(0,229,255,0.3);border-radius:8px;background:rgba(0,229,255,0.08);color:var(--cyan);font-family:var(--mono);font-size:0.7rem;font-weight:600;cursor:pointer">Set</button></div></div><div id="geminiVoiceSettings" style="display:none"><label>Gemini Voice</label><select id="geminiVoiceSelect" onchange="setGeminiVoice(this.value)"><option value="Kore">Kore (Default, calm female)</option><option value="Puck">Puck (warm male)</option><option value="Charon">Charon (deep male)</option><option value="Fenrir">Fenrir (bold male)</option><option value="Aoede">Aoede (bright female)</option><option value="Leda">Leda (soft female)</option><option value="Orus">Orus (clear male)</option><option value="Zephyr">Zephyr (breezy female)</option></select></div><div class="settings-status" id="settingsStatus"></div><label style="margin-top:14px">Falcon Eye</label><button onclick="fe_open()" style="width:100%;padding:12px;border:1px solid rgba(255,181,71,0.4);border-radius:10px;background:rgba(255,181,71,0.08);color:#ffb547;font-family:var(--mono);font-size:0.78rem;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;cursor:pointer;margin-bottom:6px">🦅  Open Falcon Eye Command Center</button><div style="font-size:0.65rem;color:var(--text-dim);line-height:1.5">3D globe · satellites · aircraft · 430+ live cameras · weather radar · severe alerts · earthquakes · wildfires. Driveable by voice — try "Spectra, show me Ukraine" or "track the ISS".</div></div>
+<div class="settings-panel" id="settingsPanel"><label>Audio Mode</label><select id="audioModeSelect" onchange="setAudioMode(this.value)"><option value="classic">Classic (Ollama Brain)</option><option value="gemini">Gemini Live (native voice)</option><option value="gemma">Gemma 4 (Fast, Free)</option></select><label>Voice Provider</label><select id="ttsProviderSelect" onchange="setTtsProvider(this.value)"><option value="elevenlabs">ElevenLabs (paid, premium)</option><option value="streamelements">StreamElements (free, no key)</option><option value="browser">Browser Native (free, on-device)</option></select><div id="streamelementsSettings" style="display:none"><label>StreamElements Voice</label><select id="streamElementsVoiceSelect" onchange="setStreamElementsVoice(this.value)"><option value="Brian">Brian (UK male, classic)</option><option value="Amy">Amy (UK female)</option><option value="Emma">Emma (UK female)</option><option value="Russell">Russell (Australian male)</option><option value="Nicole">Nicole (Australian female)</option><option value="Joey">Joey (US male, deep)</option><option value="Justin">Justin (US male, young)</option><option value="Matthew">Matthew (US male)</option><option value="Joanna">Joanna (US female)</option><option value="Salli">Salli (US female)</option><option value="Kimberly">Kimberly (US female, warm)</option><option value="Kendra">Kendra (US female)</option><option value="Geraint">Geraint (Welsh male)</option><option value="Mizuki">Mizuki (Japanese female)</option><option value="Hans">Hans (German male)</option><option value="Vicki">Vicki (German female)</option><option value="Celine">Celine (French female)</option><option value="Mathieu">Mathieu (French male)</option></select></div><div id="browserVoiceSettings" style="display:none"><label>Browser Voice</label><select id="browserVoiceSelect" onchange="setBrowserVoice(this.value)"></select></div><div id="classicSettings"><label>Model</label><select id="modelSelect" onchange="setModel(this.value)"></select><label>ElevenLabs Voice</label><select id="voiceSelect" onchange="setVoice(this.value)"></select><label>Custom Voice ID</label><div style="display:flex;gap:6px"><input type="text" id="voiceIdInput" placeholder="Paste ElevenLabs Voice ID..." style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:rgba(255,255,255,0.04);color:var(--text);font-family:var(--mono);font-size:0.7rem;outline:none"><button onclick="setCustomVoiceId()" style="padding:8px 12px;border:1px solid rgba(0,229,255,0.3);border-radius:8px;background:rgba(0,229,255,0.08);color:var(--cyan);font-family:var(--mono);font-size:0.7rem;font-weight:600;cursor:pointer">Set</button></div></div><div id="geminiVoiceSettings" style="display:none"><label>Gemini Voice</label><select id="geminiVoiceSelect" onchange="setGeminiVoice(this.value)"><option value="Kore">Kore (Default, calm female)</option><option value="Puck">Puck (warm male)</option><option value="Charon">Charon (deep male)</option><option value="Fenrir">Fenrir (bold male)</option><option value="Aoede">Aoede (bright female)</option><option value="Leda">Leda (soft female)</option><option value="Orus">Orus (clear male)</option><option value="Zephyr">Zephyr (breezy female)</option></select></div><div class="settings-status" id="settingsStatus"></div><label style="margin-top:14px">Falcon Eye</label><button onclick="fe_open()" style="width:100%;padding:12px;border:1px solid rgba(255,181,71,0.4);border-radius:10px;background:rgba(255,181,71,0.08);color:#ffb547;font-family:var(--mono);font-size:0.78rem;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;cursor:pointer;margin-bottom:6px">🦅  Open Falcon Eye Command Center</button><div style="font-size:0.65rem;color:var(--text-dim);line-height:1.5">3D globe · satellites · aircraft · 430+ live cameras · weather radar · severe alerts · earthquakes · wildfires. Driveable by voice — try "Spectra, show me Ukraine" or "track the ISS".</div></div>
 <div class="agent-panel" id="agentPanel"><div class="agent-header"><span class="agent-title">Agent Browser</span><button class="agent-close" onclick="toggleAgentView()">&times;</button></div><div class="agent-screen-wrap"><img id="agentScreen" style="display:none" alt="Agent browser view"><div class="agent-no-feed" id="agentNoFeed">No active session<br>Ask SPECTRA to browse something</div></div><div class="agent-footer"><div class="agent-status" id="agentStatus">Idle</div><div class="agent-step" id="agentStep"></div></div></div>
 <div class="orb-area">
   <div class="orb-wrap" id="orbWrap">
@@ -1351,13 +1351,10 @@ Describe EXACTLY what is in this image — the actual objects, text, colors, peo
                 }
             }));
         } else {
-            // Classic mode: use ElevenLabs TTS
+            // Classic mode: use selected TTS provider
             try {
-                const ttsRes = await fetch('/api/tts', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text: description }),
-                });
+                const ttsRes = await ttsFetch(description);
+                if (!ttsRes) { browserSpeak(description); return; }
                 const contentType = ttsRes.headers.get('content-type') || '';
                 if (ttsRes.ok && contentType.includes('audio')) {
                     const audioBlob = await ttsRes.blob();
@@ -1766,60 +1763,45 @@ async function send() {
                 } catch {}
             }
 
-            const ok = await geminiConnect();
-            if (ok && geminiWs && geminiWs.readyState === WebSocket.OPEN) {
-                // Route ALL text queries through classic API (has wiki + memory + search context)
-                // Gemini just handles the voice output
-                {
-                    responseEl.textContent = needsSearchLocal(text) ? 'Searching...' : '';
-                    const classicRes = await fetch('/api/chat', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ message: text }),
-                        signal: AbortSignal.timeout(90000),
+            // Gemini mode now ALWAYS routes text through /api/chat (which has
+            // Tavily search, wiki, memory, falcon_eye actions, etc.) and plays
+            // the reply via the user's chosen TTS provider — same path as
+            // classic mode, just with a different brand label. The previous
+            // approach asked Gemini to "Say this exactly" via a separate WS
+            // round-trip which was fragile and often paraphrased the reply.
+            try {
+                responseEl.textContent = needsSearchLocal(text) ? 'Searching...' : '';
+                const classicRes = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: text }),
+                    signal: AbortSignal.timeout(90000),
+                });
+                const classicData = await classicRes.json();
+                responseEl.textContent = classicData.reply || 'No results.';
+                // Play the reply via the selected TTS provider
+                if (classicData.reply) speakText(classicData.reply);
+                // Handle actions
+                if (classicData.actions) {
+                    classicData.actions.forEach(act => {
+                        if (act.action === 'open_url' && act.url) window.open(act.url, '_blank');
+                        else if (act.action === 'open_maps') handleMaps(act);
+                        else if (act.action === 'play_music' && act.query) handlePlayMusic(act.query);
+                        else if (act.action === 'music_control' && act.command) handleMusicControl(act.command);
+                        else if (act.action === 'falcon_eye') handleFalconEyeAction(act);
                     });
-                    const classicData = await classicRes.json();
-                    responseEl.textContent = classicData.reply || 'No results.';
-                    // Speak initial reply via Gemini native voice
-                    if (classicData.reply && geminiWs && geminiWs.readyState === WebSocket.OPEN) {
-                        geminiWs.send(JSON.stringify({
-                            clientContent: {
-                                turns: [{ role: 'user', parts: [{ text: 'Say this exactly to the user, do not add anything: ' + classicData.reply }] }],
-                                turnComplete: true
-                            }
-                        }));
-                    }
-                    // Handle actions
-                    if (classicData.actions) {
-                        classicData.actions.forEach(act => {
-                            if (act.action === 'open_url' && act.url) window.open(act.url, '_blank');
-                            else if (act.action === 'open_maps') handleMaps(act);
-                            else if (act.action === 'play_music' && act.query) handlePlayMusic(act.query);
-                            else if (act.action === 'music_control' && act.command) handleMusicControl(act.command);
-                            else if (act.action === 'falcon_eye') handleFalconEyeAction(act);
-                        });
-                    }
-                    // If there's a follow-up, show and speak it after a delay
-                    if (classicData.followUp) {
-                        setTimeout(() => {
-                            responseEl.textContent = classicData.followUp;
-                            if (geminiWs && geminiWs.readyState === WebSocket.OPEN) {
-                                geminiWs.send(JSON.stringify({
-                                    clientContent: {
-                                        turns: [{ role: 'user', parts: [{ text: 'Say this exactly to the user, do not add anything: ' + classicData.followUp }] }],
-                                        turnComplete: true
-                                    }
-                                }));
-                            }
-                        }, 3000); // Wait for first message to be spoken
-                    }
-                    return;
                 }
-            } else {
-                fallbackToClassic();
-                inputEl.value = text;
-                send();
+                if (classicData.followUp) {
+                    setTimeout(() => {
+                        responseEl.textContent = classicData.followUp;
+                        speakText(classicData.followUp);
+                    }, 3000);
+                }
+            } catch (innerErr) {
+                console.warn('Gemini /api/chat error:', innerErr);
+                responseEl.textContent = 'Brain unreachable. Retry, sir.';
             }
+            return;
         } catch (err) {
             console.warn('Gemini send error:', err);
             fallbackToClassic();
@@ -1892,9 +1874,10 @@ async function send() {
                 body: JSON.stringify({ messages: [{ role: 'user', content: text }, { role: 'assistant', content: reply }] })
             }).catch(() => {});
 
-            // TTS
+            // TTS — selected provider
             try {
-                const ttsRes = await fetch('/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: reply }) });
+                const ttsRes = await ttsFetch(reply);
+                if (!ttsRes) { browserSpeak(reply); throw new Error('browser tts'); }
                 const ct = ttsRes.headers.get('content-type') || '';
                 if (ttsRes.ok && ct.includes('audio')) {
                     const blob = await ttsRes.blob();
@@ -1978,13 +1961,61 @@ async function send() {
         }
 
         // Classic TTS — speak the reply, then follow-up if present
-        async function speakText(text) {
-            try {
-                const ttsRes = await fetch('/api/tts', {
+        // Pick the right TTS endpoint based on the user's chosen provider.
+        // ElevenLabs (paid) → /api/tts
+        // StreamElements (free, no key) → /api/tts-stream
+        // Browser native (zero cost, on-device) → SpeechSynthesis API
+        async function ttsFetch(text) {
+            const provider = localStorage.getItem('spectra-tts-provider') || 'elevenlabs';
+            const voice = localStorage.getItem('spectra-tts-voice') || (provider === 'streamelements' ? 'Brian' : '');
+
+            if (provider === 'browser') return null;  // handled by the browser path below
+
+            if (provider === 'streamelements') {
+                return fetch('/api/tts-stream', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text }),
+                    body: JSON.stringify({ provider: 'streamelements', voice, text }),
                 });
+            }
+
+            // Default: ElevenLabs
+            return fetch('/api/tts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text }),
+            });
+        }
+
+        function browserSpeak(text) {
+            return new Promise((resolve) => {
+                try {
+                    speechSynthesis.cancel();
+                    const u = new SpeechSynthesisUtterance(text.replace(/```[\s\S]*?```/g, '').slice(0, 1500));
+                    const desired = localStorage.getItem('spectra-tts-voice') || '';
+                    const voices = speechSynthesis.getVoices() || [];
+                    let pick = null;
+                    if (desired) pick = voices.find(v => v.name === desired);
+                    if (!pick) pick = voices.find(v => /Daniel|Oliver|George|Arthur|Brian/i.test(v.name) && /en[-_]?GB/i.test(v.lang));
+                    if (!pick) pick = voices.find(v => /en[-_]?GB/i.test(v.lang)) || voices.find(v => /en/i.test(v.lang));
+                    if (pick) u.voice = pick;
+                    u.rate = 1.05; u.pitch = 0.95; u.volume = 1.0;
+                    u.onend = () => { orb.className = 'orb'; resolve(true); };
+                    u.onerror = () => { orb.className = 'orb'; resolve(false); };
+                    orb.className = 'orb speaking';
+                    speechSynthesis.speak(u);
+                } catch (e) { resolve(false); }
+            });
+        }
+
+        async function speakText(text) {
+            // Browser provider takes a fast path with no fetch
+            const provider = localStorage.getItem('spectra-tts-provider') || 'elevenlabs';
+            if (provider === 'browser') return browserSpeak(text);
+
+            try {
+                const ttsRes = await ttsFetch(text);
+                if (!ttsRes) return browserSpeak(text);
                 const contentType = ttsRes.headers.get('content-type') || '';
                 if (ttsRes.ok && contentType.includes('audio')) {
                     const audioBlob = await ttsRes.blob();
@@ -2002,7 +2033,7 @@ async function send() {
                         } catch (playErr) {
                             console.warn('Audio play blocked:', playErr);
                             orb.className = 'orb';
-                            return false;
+                            return browserSpeak(text);
                         }
                         await new Promise((resolve) => {
                             persistentAudio.onended = () => { URL.revokeObjectURL(audioUrl); currentAudio = null; resolve(); };
@@ -2011,7 +2042,14 @@ async function send() {
                         return true;
                     }
                 }
-            } catch (ttsErr) { console.warn('TTS error:', ttsErr); }
+                // ElevenLabs failed (out of credits, 401, etc.) — gracefully fall back
+                // to the browser voice instead of going silent.
+                console.warn('TTS provider failed, falling back to browser voice');
+                return browserSpeak(text);
+            } catch (ttsErr) {
+                console.warn('TTS error, falling back to browser voice:', ttsErr);
+                return browserSpeak(text);
+            }
             return false;
         }
 
@@ -2171,8 +2209,84 @@ async function loadSettings() {
         });
     } catch(e) { console.warn('Failed to load voices', e); }
 
+    // Load TTS provider preference (localStorage)
+    try {
+        const provider = localStorage.getItem('spectra-tts-provider') || 'elevenlabs';
+        const sel = document.getElementById('ttsProviderSelect');
+        if (sel) { sel.value = provider; updateTtsProviderUI(); }
+        // Restore provider-specific voice
+        const seVoice = localStorage.getItem('spectra-tts-voice');
+        if (seVoice && document.getElementById('streamElementsVoiceSelect')) {
+            document.getElementById('streamElementsVoiceSelect').value = seVoice;
+        }
+    } catch {}
+
+    // Populate browser native voices (loads asynchronously in some browsers)
+    populateBrowserVoices();
+    if (typeof speechSynthesis !== 'undefined') {
+        speechSynthesis.onvoiceschanged = populateBrowserVoices;
+    }
+
     status.textContent = 'Settings loaded';
     setTimeout(() => { status.textContent = ''; }, 2000);
+}
+
+function populateBrowserVoices() {
+    const sel = document.getElementById('browserVoiceSelect');
+    if (!sel) return;
+    const voices = (typeof speechSynthesis !== 'undefined' ? speechSynthesis.getVoices() : []) || [];
+    if (!voices.length) return;
+    sel.innerHTML = '';
+    // Sort English voices first
+    const sorted = voices.slice().sort((a, b) => {
+        const aEn = /en/i.test(a.lang) ? 0 : 1;
+        const bEn = /en/i.test(b.lang) ? 0 : 1;
+        if (aEn !== bEn) return aEn - bEn;
+        return a.name.localeCompare(b.name);
+    });
+    for (const v of sorted) {
+        const opt = document.createElement('option');
+        opt.value = v.name;
+        opt.textContent = `${v.name} (${v.lang})`;
+        sel.appendChild(opt);
+    }
+    const saved = localStorage.getItem('spectra-tts-voice');
+    if (saved && sorted.find(v => v.name === saved)) sel.value = saved;
+}
+
+function setTtsProvider(provider) {
+    localStorage.setItem('spectra-tts-provider', provider);
+    // Reset the per-provider voice when switching
+    if (provider === 'streamelements') localStorage.setItem('spectra-tts-voice', 'Brian');
+    if (provider === 'browser') localStorage.removeItem('spectra-tts-voice');
+    updateTtsProviderUI();
+    const status = document.getElementById('settingsStatus');
+    status.textContent = `TTS: ${provider}`;
+    setTimeout(() => { status.textContent = ''; }, 1500);
+}
+
+function setStreamElementsVoice(voice) {
+    localStorage.setItem('spectra-tts-voice', voice);
+    const status = document.getElementById('settingsStatus');
+    // Quick demo so the user hears the new voice immediately
+    speakText(`Voice set to ${voice}.`);
+    status.textContent = `Voice: ${voice}`;
+    setTimeout(() => { status.textContent = ''; }, 1500);
+}
+
+function setBrowserVoice(voice) {
+    localStorage.setItem('spectra-tts-voice', voice);
+    speakText(`Voice set to ${voice}.`);
+    const status = document.getElementById('settingsStatus');
+    status.textContent = `Voice: ${voice}`;
+    setTimeout(() => { status.textContent = ''; }, 1500);
+}
+
+function updateTtsProviderUI() {
+    const provider = document.getElementById('ttsProviderSelect')?.value || 'elevenlabs';
+    document.getElementById('streamelementsSettings').style.display = provider === 'streamelements' ? 'block' : 'none';
+    document.getElementById('browserVoiceSettings').style.display    = provider === 'browser' ? 'block' : 'none';
+    document.getElementById('classicSettings').style.display          = provider === 'elevenlabs' ? 'block' : 'none';
 }
 
 async function setModel(model) {
@@ -2356,7 +2470,8 @@ async function runBriefing() {
                 .replace(/^(\d+)\. /gm, '<span style="color:var(--cyan);font-weight:600">$1.</span> ')
                 .replace(/\n/g, '<br>');
             try {
-                const ttsRes = await fetch('/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: data.briefing }) });
+                const ttsRes = await ttsFetch(data.briefing);
+                if (!ttsRes) { browserSpeak(data.briefing); return; }
                 if (ttsRes.ok) {
                     const blob = await ttsRes.blob();
                     if (blob.size > 100) {

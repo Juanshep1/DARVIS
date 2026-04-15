@@ -2096,8 +2096,16 @@ async function send() {
                         return true;
                     }
                 }
-                // ElevenLabs failed (out of credits, 401, etc.) — gracefully fall back
-                // to the browser voice instead of going silent.
+                // Provider failed. If it was Azure returning a config 503,
+                // revert the user's selection so they stop seeing the wrong
+                // voice. Otherwise just fall back to browser silently.
+                const provider = localStorage.getItem('spectra-tts-provider') || 'browser';
+                if (provider === 'azure' && ttsRes.status === 503) {
+                    console.warn('Azure TTS not configured — reverting to browser voice.');
+                    localStorage.setItem('spectra-tts-provider', 'browser');
+                    const sel = document.getElementById('ttsProviderSelect');
+                    if (sel) { sel.value = 'browser'; updateTtsProviderUI?.(); }
+                }
                 console.warn('TTS provider failed, falling back to browser voice');
                 return browserSpeak(text);
             } catch (ttsErr) {
@@ -2321,7 +2329,7 @@ function populateBrowserVoices() {
     if (saved && sorted.find(v => v.name === saved)) sel.value = saved;
 }
 
-function setTtsProvider(provider) {
+async function setTtsProvider(provider) {
     localStorage.setItem('spectra-tts-provider', provider);
     // Reset the per-provider voice on switch so we don't carry a mis-
     // matched voice ID across providers (each uses its own namespace).
@@ -2331,10 +2339,39 @@ function setTtsProvider(provider) {
     if (provider === 'browser') localStorage.removeItem('spectra-tts-voice');
     updateTtsProviderUI();
     const status = document.getElementById('settingsStatus');
+
+    // Azure is useless without a server-side key. Probe the endpoint and
+    // if it isn't configured, loudly warn + auto-revert to browser so the
+    // user never silently hears the wrong voice.
+    if (provider === 'azure') {
+        status.textContent = 'Probing Azure…';
+        try {
+            const r = await fetch('/api/tts-azure?voice=en-GB-RyanNeural&text=ok');
+            if (r.status === 503) {
+                status.innerHTML = '<span style="color:var(--rubric)">Azure not configured — reverted to Apple voice.</span>';
+                localStorage.setItem('spectra-tts-provider', 'browser');
+                document.getElementById('ttsProviderSelect').value = 'browser';
+                updateTtsProviderUI();
+                // Surface setup instructions in the response area
+                const respEl = document.getElementById('response');
+                if (respEl) {
+                    respEl.innerHTML = `<strong style="color:var(--rubric);font-family:var(--display);font-size:1.2em">Azure Neural needs a free key, sir.</strong><br><br>` +
+                        `Five minutes of setup unlocks genuinely natural voices:<br><br>` +
+                        `<ol style="padding-left:24px;line-height:1.8"><li>Go to <em>portal.azure.com</em> and create a free account (no credit card if you choose F0 tier).</li>` +
+                        `<li>Create a new <em>Speech</em> resource. Region: <em>eastus</em>. Pricing tier: <em>Free F0</em>.</li>` +
+                        `<li>Once created, open <em>Keys and Endpoint</em> and copy <em>KEY 1</em>.</li>` +
+                        `<li>In a terminal, run:<br><code style="display:block;background:var(--paper-cool);padding:10px;margin-top:6px;color:var(--rubric);font-size:0.85em">cd /Users/juanshephard/darvis/site\nnetlify env:set AZURE_SPEECH_KEY &lt;your-key&gt;\nnetlify env:set AZURE_SPEECH_REGION eastus\nnetlify deploy --prod --dir=public --functions=netlify/functions</code></li>` +
+                        `<li>Refresh this page and pick <em>Azure Neural</em> again.</li></ol>` +
+                        `<p style="margin-top:12px;font-style:italic;color:var(--ink-soft)">500,000 characters per month, free forever. Voices are indistinguishable from paid ElevenLabs.</p>`;
+                }
+                setTimeout(() => { status.textContent = ''; }, 6000);
+                return;
+            }
+        } catch {}
+    }
+
     status.textContent = `TTS: ${provider}`;
     setTimeout(() => { status.textContent = ''; }, 1500);
-    // Speak a short sample in the newly-selected provider so the user
-    // can hear the quality immediately.
     setTimeout(() => speakText('Voice switched. Say the word, sir.'), 100);
 }
 

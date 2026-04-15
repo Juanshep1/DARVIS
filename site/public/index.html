@@ -110,44 +110,20 @@ body::after {
 .header::after  { bottom: 5px; height: 1px; background: var(--ink); opacity: 0.35; }
 
 .masthead {
-  display: flex; align-items: flex-end; justify-content: center; gap: 28px;
+  display: flex; align-items: center; justify-content: center;
   position: relative;
-}
-.masthead-flank {
-  font-family: var(--mono);
-  font-size: 9px; font-weight: 400; letter-spacing: 0.24em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-  white-space: nowrap;
-  padding-bottom: 14px;
-  min-width: 80px;
-}
-.masthead-flank.left { text-align: right; }
-.masthead-flank.right { text-align: left; }
-.masthead-flank em {
-  display: block; font-style: normal;
-  font-family: var(--display); font-size: 13px; letter-spacing: 0.06em;
-  color: var(--rubric); font-weight: 500;
-  margin-top: 2px;
 }
 
 .header-brand {
   font-family: var(--masthead);
-  font-size: clamp(38px, 5.4vw, 68px);
+  font-size: clamp(46px, 7.5vw, 84px);
   font-weight: 700;
   color: var(--ink);
   line-height: 0.95;
-  letter-spacing: 0.01em;
-  text-shadow: 0 1px 0 rgba(255,255,255,0.35);
+  letter-spacing: 0.015em;
+  text-shadow: 0 1px 0 rgba(0,0,0,0.4), 0 0 32px rgba(212,168,71,0.10);
   padding: 0 6px;
   position: relative;
-}
-.header-brand .amp {
-  font-family: var(--display); font-style: italic;
-  font-size: 0.55em; color: var(--rubric);
-  font-weight: 400;
-  vertical-align: 0.15em;
-  margin: 0 0.12em;
 }
 
 .sub-masthead {
@@ -227,56 +203,18 @@ body::after {
 }
 .orb-wrap {
   position: relative;
-  width: 320px; height: 320px;
+  width: 340px; height: 340px;
   display: flex; align-items: center; justify-content: center;
-}
-/* Outer rule — a printed circle around the orb */
-.orb-wrap::before {
-  content: ""; position: absolute; inset: -36px;
-  border: 1px solid var(--ink);
-  border-radius: 50%;
-  opacity: 0.55;
-  pointer-events: none;
-}
-.orb-wrap::after {
-  content: ""; position: absolute; inset: -52px;
-  border: 1px solid var(--rubric);
-  border-radius: 50%;
-  opacity: 0.45;
-  pointer-events: none;
-}
-
-/* Compass rose cardinal marks via SVG background on a wrapper */
-.orb-compass {
-  position: absolute; inset: -68px;
-  pointer-events: none;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 400' fill='none' stroke='%23ece1c6' stroke-width='1'><circle cx='200' cy='200' r='198' opacity='0.35'/><g font-family='serif' font-size='16' fill='%23d4a847' stroke='none' text-anchor='middle' font-style='italic'><text x='200' y='18'>N</text><text x='200' y='396'>S</text><text x='10' y='206'>W</text><text x='390' y='206'>E</text></g><g opacity='0.55'><line x1='200' y1='0' x2='200' y2='20'/><line x1='200' y1='380' x2='200' y2='400'/><line x1='0' y1='200' x2='20' y2='200'/><line x1='380' y1='200' x2='400' y2='200'/><line x1='60' y1='60' x2='74' y2='74'/><line x1='340' y1='60' x2='326' y2='74'/><line x1='60' y1='340' x2='74' y2='326'/><line x1='340' y1='340' x2='326' y2='326'/></g><g opacity='0.25'><line x1='200' y1='30' x2='200' y2='46'/><line x1='200' y1='354' x2='200' y2='370'/><line x1='30' y1='200' x2='46' y2='200'/><line x1='354' y1='200' x2='370' y2='200'/></g></svg>");
-  background-size: contain; background-repeat: no-repeat; background-position: center;
-  opacity: 0.75;
 }
 
 #orbCanvas {
-  width: 320px; height: 320px;
+  width: 340px; height: 340px;
   cursor: pointer; position: relative; z-index: 2;
   /* Dark-mode: let the orb glow naturally, boost it slightly */
-  filter: brightness(1.12) contrast(1.05) saturate(1.1);
-  mix-blend-mode: screen;
+  filter: brightness(1.15) contrast(1.05) saturate(1.1);
 }
 .orb { display: none; }
 
-/* "Plate" caption under the orb — pure almanac touch */
-.orb-wrap + .plate-caption {
-  margin-top: 18px;
-  font-family: var(--display); font-style: italic;
-  font-size: 13px; color: var(--ink-soft);
-  text-align: center;
-  letter-spacing: 0.02em;
-}
-.plate-caption .plate-num {
-  font-variant: small-caps; letter-spacing: 0.14em;
-  color: var(--rubric); margin-right: 6px;
-  font-style: normal;
-}
 
 /* ── RESPONSE COLUMN — newspaper column with drop cap ────────────── */
 .response-area {
@@ -361,7 +299,6 @@ body::after {
   border: 1px solid var(--gilt);
   background: var(--paper-warm);
   color: var(--ink);
-  font-family: var(--display); font-size: 19px; font-style: italic;
   cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   border-radius: 0;
@@ -369,7 +306,22 @@ body::after {
   position: relative;
   box-shadow: 2px 2px 0 rgba(212,168,71,0.25);
   -webkit-tap-highlight-color: transparent;
+  padding: 0;
 }
+.mic-btn span, .cam-btn span {
+  font-family: var(--display);
+  font-style: italic;
+  font-weight: 500;
+  font-size: 24px;
+  line-height: 1;
+  font-variation-settings: "opsz" 144, "SOFT" 100;
+  color: var(--gilt);
+  display: inline-block;
+  transform: translateY(-1px);
+  letter-spacing: 0;
+}
+.mic-btn:hover span, .cam-btn:hover span,
+.mic-btn.recording span, .cam-btn.active span { color: var(--paper); }
 .mic-btn:hover, .cam-btn:hover {
   background: var(--rubric); color: var(--paper);
   border-color: var(--rubric);
@@ -587,24 +539,20 @@ body::after {
 /* ── MOBILE ───────────────────────────────────────────────────────── */
 @media (max-width: 720px) {
   body { font-size: 16px; }
-  .header { padding: 18px 16px 10px; }
+  .header { padding: 16px 16px 10px; }
   .header::before, .header::after { left: 16px; right: 16px; }
-  .masthead-flank { display: none; }
-  .header-brand { font-size: clamp(34px, 11vw, 54px); }
+  .header-brand { font-size: clamp(40px, 13vw, 64px); }
   .sub-masthead { font-size: 11px; gap: 8px; margin-top: 6px; }
   .sub-masthead .folio-mid { font-size: 12px; }
   .sub-masthead .folio-left, .sub-masthead .folio-right { font-size: 8px; }
   .header-actions { gap: 2px; margin-top: 10px; }
-  .header-btn { min-width: 48px; padding: 4px 6px 2px; }
-  .header-btn .glyph { font-size: 17px; }
+  .header-btn { min-width: 50px; padding: 5px 6px 3px; }
+  .header-btn .glyph { font-size: 18px; }
   .header-btn { font-size: 6px; letter-spacing: 0.18em; }
 
-  .orb-area { padding: 6px 12px; }
-  .orb-wrap { width: 240px; height: 240px; }
-  #orbCanvas { width: 240px; height: 240px; }
-  .orb-wrap::before { inset: -28px; }
-  .orb-wrap::after  { inset: -40px; }
-  .orb-compass { inset: -52px; }
+  .orb-area { padding: 8px 12px; }
+  .orb-wrap { width: 280px; height: 280px; }
+  #orbCanvas { width: 280px; height: 280px; }
 
   .response-area { padding: 0 24px; max-height: 26vh; margin-top: 14px; }
   #response { font-size: 15px; line-height: 1.55; }
@@ -612,17 +560,18 @@ body::after {
 
   .input-area { padding: 14px 18px calc(env(safe-area-inset-bottom, 0px) + 14px); gap: 10px; }
   .input-area input { font-size: 16px; }
-  .mic-btn, .cam-btn { width: 40px; height: 40px; min-width: 40px; font-size: 16px; }
+  .mic-btn, .cam-btn { width: 44px; height: 44px; min-width: 44px; }
+  .mic-btn span, .cam-btn span { font-size: 22px; }
 
   #statusBar { font-size: 10px; padding: 5px 0 8px; }
 
-  .settings-panel { width: calc(100vw - 32px); right: 16px; top: 120px; }
+  .settings-panel { width: calc(100vw - 32px); right: 16px; top: 110px; }
   .cam-preview { width: 110px; height: 148px; bottom: 120px; left: 14px; }
 }
 
 @media (max-width: 420px) {
-  .header { padding: 14px 12px 8px; }
-  .header-brand { font-size: clamp(30px, 12vw, 44px); }
+  .header { padding: 12px 12px 8px; }
+  .header-brand { font-size: clamp(36px, 14vw, 52px); }
   .header-actions { flex-wrap: wrap; justify-content: center; }
   .header-btn { min-width: 56px; }
 }
@@ -633,9 +582,7 @@ body::after {
 <div class="panel-scrim" id="panelScrim"></div>
 <div class="header">
   <div class="masthead">
-    <div class="masthead-flank left">Volume IV<em id="folioVol">MMXXVI</em></div>
-    <div class="header-brand">Spectra<span class="amp">&amp;</span>Co.</div>
-    <div class="masthead-flank right">№ XXIII<em id="folioEdition">Daily Edition</em></div>
+    <div class="header-brand">Spectra</div>
   </div>
   <div class="sub-masthead">
     <span class="folio-left" id="folioDate">— · — · —</span>
@@ -672,17 +619,15 @@ body::after {
 <div class="agent-panel" id="agentPanel"><div class="agent-header"><span class="agent-title">Agent Browser</span><button class="agent-close" onclick="toggleAgentView()">&times;</button></div><div class="agent-screen-wrap"><img id="agentScreen" style="display:none" alt="Agent browser view"><div class="agent-no-feed" id="agentNoFeed">No active session<br>Ask SPECTRA to browse something</div></div><div class="agent-footer"><div class="agent-status" id="agentStatus">Idle</div><div class="agent-step" id="agentStep"></div></div></div>
 <div class="orb-area">
   <div class="orb-wrap" id="orbWrap">
-    <div class="orb-compass" aria-hidden="true"></div>
     <canvas id="orbCanvas" width="600" height="600" onclick="if(!orb.classList.contains('speaking'))toggleMic()"></canvas>
     <div class="orb" id="orb"></div>
   </div>
-  <div class="plate-caption"><span class="plate-num">Plate I.</span><em>The Engine at Rest — Touch the Orb to Speak</em></div>
   <div class="response-area"><div id="response"></div></div>
 </div>
 <div class="input-area">
   <input type="text" id="input" placeholder="Enter your correspondence…" autocomplete="off" onkeydown="if(event.key==='Enter')send()">
-  <button class="mic-btn" id="micBtn" onclick="toggleMic()" title="Dictate">❦</button>
-  <button class="cam-btn" id="camBtn" onclick="toggleCamera()" title="Observe">◉</button>
+  <button class="mic-btn" id="micBtn" onclick="toggleMic()" title="Dictate"><span>v</span></button>
+  <button class="cam-btn" id="camBtn" onclick="toggleCamera()" title="Observe"><span>o</span></button>
 </div>
 <div class="situation-panel" id="situationPanel"><div class="agent-header"><span class="agent-title">Situation Room</span><button class="agent-close" onclick="toggleSituation()">&times;</button></div><div id="situationGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px;max-height:70vh;overflow-y:auto"></div></div>
 <div class="situation-panel" id="wikiPanel"><div class="agent-header"><span class="agent-title">Wiki</span><button class="agent-close" onclick="toggleWiki()">&times;</button></div><div style="padding:12px;overflow-y:auto;max-height:calc(85vh - 50px);-webkit-overflow-scrolling:touch"><div style="display:flex;gap:8px;margin-bottom:12px"><input type="text" id="wikiSearch" placeholder="Search wiki..." style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,0.04);color:var(--text);font-family:var(--mono);font-size:0.8rem;outline:none" onkeydown="if(event.key==='Enter')searchWikiUI()"><button onclick="searchWikiUI()" style="padding:8px 14px;border:1px solid rgba(0,229,255,0.3);border-radius:10px;background:rgba(0,229,255,0.08);color:var(--cyan);font-family:var(--mono);font-size:0.75rem;cursor:pointer">Search</button></div><div id="wikiContent" style="font-family:var(--mono);font-size:0.8rem;line-height:1.5"></div><div style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px"><button onclick="showIngestForm()" id="ingestToggle" style="width:100%;padding:10px;border:1px solid rgba(0,230,118,0.3);border-radius:10px;background:rgba(0,230,118,0.08);color:var(--green);font-family:var(--mono);font-size:0.8rem;cursor:pointer">+ Ingest New Source</button><div id="ingestForm" style="display:none;margin-top:10px"><input type="text" id="ingestTitle" placeholder="Source title..." style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,0.04);color:var(--text);font-family:var(--mono);font-size:0.8rem;outline:none;margin-bottom:8px;box-sizing:border-box"><textarea id="ingestContent" placeholder="Paste content to ingest..." style="width:100%;height:120px;padding:8px 12px;border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,0.04);color:var(--text);font-family:var(--mono);font-size:0.75rem;outline:none;resize:vertical;box-sizing:border-box"></textarea><button onclick="ingestFromUI()" style="margin-top:8px;width:100%;padding:10px;border:1px solid rgba(108,99,255,0.4);border-radius:10px;background:rgba(108,99,255,0.1);color:var(--accent);font-family:var(--mono);font-size:0.8rem;cursor:pointer">Process into Wiki</button></div></div></div></div>
@@ -2349,30 +2294,16 @@ async function pollAgent() {
 loadSettings();
 inputEl.focus();
 
-// ── Almanac masthead date/time ticker ────────────────────────────
+// ── Almanac sub-masthead date/time ticker ────────────────────────
 (function almanacTick() {
-  const MONTH_ROMAN = ["I","II","III","IV","V","VI","VII","VIII","IX","X","XI","XII"];
   const MONTH_NAME = ["January","February","March","April","May","June","July","August","September","October","November","December"];
   const DAY_NAME = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
   function tick() {
     const d = new Date();
     const dateEl = document.getElementById("folioDate");
     const timeEl = document.getElementById("folioTime");
-    const volEl  = document.getElementById("folioVol");
-    const editionEl = document.getElementById("folioEdition");
     if (dateEl) dateEl.textContent = `${DAY_NAME[d.getDay()]} · ${d.getDate()} ${MONTH_NAME[d.getMonth()]}`;
     if (timeEl) timeEl.textContent = `${d.toISOString().substr(11,5)} Z`;
-    if (volEl)  volEl.textContent  = toRoman(d.getFullYear());
-    if (editionEl) {
-      const h = d.getHours();
-      editionEl.textContent = h < 6 ? "Night Edition" : h < 12 ? "Morning Edition" : h < 18 ? "Afternoon Edition" : "Evening Edition";
-    }
-  }
-  function toRoman(n) {
-    const map = [["M",1000],["CM",900],["D",500],["CD",400],["C",100],["XC",90],["L",50],["XL",40],["X",10],["IX",9],["V",5],["IV",4],["I",1]];
-    let out = "";
-    for (const [s, v] of map) while (n >= v) { out += s; n -= v; }
-    return out;
   }
   tick();
   setInterval(tick, 15000);

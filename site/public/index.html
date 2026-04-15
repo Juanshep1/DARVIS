@@ -615,7 +615,7 @@ body::after {
     </button>
   </div>
 </div>
-<div class="settings-panel" id="settingsPanel"><label>Audio Mode</label><select id="audioModeSelect" onchange="setAudioMode(this.value)"><option value="classic">Classic (Ollama Brain)</option><option value="gemini">Gemini Live (native voice)</option><option value="gemma">Gemma 4 (Fast, Free)</option></select><label>Voice Provider</label><select id="ttsProviderSelect" onchange="setTtsProvider(this.value)"><option value="edge">Neural (FREE · most natural)</option><option value="elevenlabs">ElevenLabs (paid · premium)</option><option value="streamelements">StreamElements (free · classic)</option><option value="browser">Browser Native (on-device)</option></select><div id="edgeSettings" style="display:none"><label>Neural Accent</label><select id="edgeVoiceSelect" onchange="setEdgeVoice(this.value)"><option value="en-GB">British English</option><option value="en-US">American English</option><option value="en-AU">Australian English</option><option value="en-IE">Irish English</option><option value="en-IN">Indian English</option><option value="en-CA">Canadian English</option><option value="en-ZA">South African English</option><option value="fr">French</option><option value="de">German</option><option value="es">Spanish</option><option value="it">Italian</option><option value="pt">Portuguese</option><option value="ja">Japanese</option><option value="ko">Korean</option><option value="zh">Mandarin Chinese</option></select></div><div id="streamelementsSettings" style="display:none"><label>StreamElements Voice</label><select id="streamElementsVoiceSelect" onchange="setStreamElementsVoice(this.value)"><option value="Brian">Brian (UK male, classic)</option><option value="Amy">Amy (UK female)</option><option value="Emma">Emma (UK female)</option><option value="Russell">Russell (Australian male)</option><option value="Nicole">Nicole (Australian female)</option><option value="Joey">Joey (US male, deep)</option><option value="Justin">Justin (US male, young)</option><option value="Matthew">Matthew (US male)</option><option value="Joanna">Joanna (US female)</option><option value="Salli">Salli (US female)</option><option value="Kimberly">Kimberly (US female, warm)</option><option value="Kendra">Kendra (US female)</option><option value="Geraint">Geraint (Welsh male)</option><option value="Mizuki">Mizuki (Japanese female)</option><option value="Hans">Hans (German male)</option><option value="Vicki">Vicki (German female)</option><option value="Celine">Celine (French female)</option><option value="Mathieu">Mathieu (French male)</option></select></div><div id="browserVoiceSettings" style="display:none"><label>Browser Voice</label><select id="browserVoiceSelect" onchange="setBrowserVoice(this.value)"></select></div><div id="classicSettings"><label>Model</label><select id="modelSelect" onchange="setModel(this.value)"></select><label>ElevenLabs Voice</label><select id="voiceSelect" onchange="setVoice(this.value)"></select><label>Custom Voice ID</label><div style="display:flex;gap:6px"><input type="text" id="voiceIdInput" placeholder="Paste ElevenLabs Voice ID..." style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:rgba(255,255,255,0.04);color:var(--text);font-family:var(--mono);font-size:0.7rem;outline:none"><button onclick="setCustomVoiceId()" style="padding:8px 12px;border:1px solid rgba(0,229,255,0.3);border-radius:8px;background:rgba(0,229,255,0.08);color:var(--cyan);font-family:var(--mono);font-size:0.7rem;font-weight:600;cursor:pointer">Set</button></div></div><div id="geminiVoiceSettings" style="display:none"><label>Gemini Voice</label><select id="geminiVoiceSelect" onchange="setGeminiVoice(this.value)"><option value="Kore">Kore (Default, calm female)</option><option value="Puck">Puck (warm male)</option><option value="Charon">Charon (deep male)</option><option value="Fenrir">Fenrir (bold male)</option><option value="Aoede">Aoede (bright female)</option><option value="Leda">Leda (soft female)</option><option value="Orus">Orus (clear male)</option><option value="Zephyr">Zephyr (breezy female)</option></select></div><div class="settings-status" id="settingsStatus"></div><label style="margin-top:14px">Falcon Eye</label><button onclick="fe_open()" style="width:100%;padding:12px;border:1px solid rgba(255,181,71,0.4);border-radius:10px;background:rgba(255,181,71,0.08);color:#ffb547;font-family:var(--mono);font-size:0.78rem;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;cursor:pointer;margin-bottom:6px">🦅  Open Falcon Eye Command Center</button><div style="font-size:0.65rem;color:var(--text-dim);line-height:1.5">3D globe · satellites · aircraft · 430+ live cameras · weather radar · severe alerts · earthquakes · wildfires. Driveable by voice — try "Spectra, show me Ukraine" or "track the ISS".</div></div>
+<div class="settings-panel" id="settingsPanel"><label>Audio Mode</label><select id="audioModeSelect" onchange="setAudioMode(this.value)"><option value="classic">Classic (Ollama Brain)</option><option value="gemini">Gemini Live (native voice)</option><option value="gemma">Gemma 4 (Fast, Free)</option></select><label>Voice Provider</label><select id="ttsProviderSelect" onchange="setTtsProvider(this.value)"><option value="browser">Apple / System Voice (iOS &amp; macOS Siri)</option><option value="azure">Azure Neural (FREE · 500k chars/mo · most natural)</option><option value="elevenlabs">ElevenLabs (paid · premium)</option><option value="edge">Google Translate (free · decent)</option><option value="streamelements">StreamElements (free · classic)</option></select><div id="azureSettings" style="display:none"><label>Azure Neural Voice</label><select id="azureVoiceSelect" onchange="setAzureVoice(this.value)"><optgroup label="British"><option value="en-GB-RyanNeural">Ryan · UK male (warm, recommended)</option><option value="en-GB-SoniaNeural">Sonia · UK female</option><option value="en-GB-AlfieNeural">Alfie · UK male (deep)</option><option value="en-GB-LibbyNeural">Libby · UK female</option><option value="en-GB-NoahNeural">Noah · UK male</option><option value="en-GB-ThomasNeural">Thomas · UK male</option><option value="en-GB-OliverNeural">Oliver · UK male</option></optgroup><optgroup label="American"><option value="en-US-GuyNeural">Guy · US male</option><option value="en-US-DavisNeural">Davis · US male (warm)</option><option value="en-US-TonyNeural">Tony · US male</option><option value="en-US-AndrewNeural">Andrew · US male</option><option value="en-US-BrianNeural">Brian · US male</option><option value="en-US-SteffanNeural">Steffan · US male</option><option value="en-US-AriaNeural">Aria · US female</option><option value="en-US-JennyNeural">Jenny · US female (warm)</option><option value="en-US-EmmaNeural">Emma · US female</option><option value="en-US-AvaNeural">Ava · US female</option></optgroup><optgroup label="Australian / Irish"><option value="en-AU-WilliamNeural">William · Australian male</option><option value="en-AU-NatashaNeural">Natasha · Australian female</option><option value="en-IE-ConnorNeural">Connor · Irish male</option><option value="en-IE-EmilyNeural">Emily · Irish female</option></optgroup><optgroup label="Other English"><option value="en-CA-LiamNeural">Liam · Canadian male</option><option value="en-CA-ClaraNeural">Clara · Canadian female</option><option value="en-IN-PrabhatNeural">Prabhat · Indian male</option><option value="en-IN-NeerjaNeural">Neerja · Indian female</option><option value="en-ZA-LukeNeural">Luke · South African male</option></optgroup></select><div style="font-size:10px;font-style:italic;color:var(--ink-soft);margin-top:8px;line-height:1.5">⚠ Requires a free Azure key. Setup: portal.azure.com → create a Speech resource (F0 tier) → copy Key 1 and the Region → run <code style="color:var(--rubric)">netlify env:set AZURE_SPEECH_KEY …</code> and <code style="color:var(--rubric)">AZURE_SPEECH_REGION eastus</code>. 500k chars/month free forever.</div></div><div id="edgeSettings" style="display:none"><label>Google Translate Accent</label><select id="edgeVoiceSelect" onchange="setEdgeVoice(this.value)"><option value="en-GB">British English</option><option value="en-US">American English</option><option value="en-AU">Australian English</option><option value="en-IE">Irish English</option><option value="en-IN">Indian English</option><option value="en-CA">Canadian English</option><option value="en-ZA">South African English</option><option value="fr">French</option><option value="de">German</option><option value="es">Spanish</option><option value="it">Italian</option><option value="pt">Portuguese</option><option value="ja">Japanese</option><option value="ko">Korean</option><option value="zh">Mandarin Chinese</option></select></div><div id="streamelementsSettings" style="display:none"><label>StreamElements Voice</label><select id="streamElementsVoiceSelect" onchange="setStreamElementsVoice(this.value)"><option value="Brian">Brian (UK male, classic)</option><option value="Amy">Amy (UK female)</option><option value="Emma">Emma (UK female)</option><option value="Russell">Russell (Australian male)</option><option value="Nicole">Nicole (Australian female)</option><option value="Joey">Joey (US male, deep)</option><option value="Justin">Justin (US male, young)</option><option value="Matthew">Matthew (US male)</option><option value="Joanna">Joanna (US female)</option><option value="Salli">Salli (US female)</option><option value="Kimberly">Kimberly (US female, warm)</option><option value="Kendra">Kendra (US female)</option><option value="Geraint">Geraint (Welsh male)</option><option value="Mizuki">Mizuki (Japanese female)</option><option value="Hans">Hans (German male)</option><option value="Vicki">Vicki (German female)</option><option value="Celine">Celine (French female)</option><option value="Mathieu">Mathieu (French male)</option></select></div><div id="browserVoiceSettings" style="display:none"><label>Browser Voice</label><select id="browserVoiceSelect" onchange="setBrowserVoice(this.value)"></select></div><div id="classicSettings"><label>Model</label><select id="modelSelect" onchange="setModel(this.value)"></select><label>ElevenLabs Voice</label><select id="voiceSelect" onchange="setVoice(this.value)"></select><label>Custom Voice ID</label><div style="display:flex;gap:6px"><input type="text" id="voiceIdInput" placeholder="Paste ElevenLabs Voice ID..." style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:rgba(255,255,255,0.04);color:var(--text);font-family:var(--mono);font-size:0.7rem;outline:none"><button onclick="setCustomVoiceId()" style="padding:8px 12px;border:1px solid rgba(0,229,255,0.3);border-radius:8px;background:rgba(0,229,255,0.08);color:var(--cyan);font-family:var(--mono);font-size:0.7rem;font-weight:600;cursor:pointer">Set</button></div></div><div id="geminiVoiceSettings" style="display:none"><label>Gemini Voice</label><select id="geminiVoiceSelect" onchange="setGeminiVoice(this.value)"><option value="Kore">Kore (Default, calm female)</option><option value="Puck">Puck (warm male)</option><option value="Charon">Charon (deep male)</option><option value="Fenrir">Fenrir (bold male)</option><option value="Aoede">Aoede (bright female)</option><option value="Leda">Leda (soft female)</option><option value="Orus">Orus (clear male)</option><option value="Zephyr">Zephyr (breezy female)</option></select></div><div class="settings-status" id="settingsStatus"></div><label style="margin-top:14px">Falcon Eye</label><button onclick="fe_open()" style="width:100%;padding:12px;border:1px solid rgba(255,181,71,0.4);border-radius:10px;background:rgba(255,181,71,0.08);color:#ffb547;font-family:var(--mono);font-size:0.78rem;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;cursor:pointer;margin-bottom:6px">🦅  Open Falcon Eye Command Center</button><div style="font-size:0.65rem;color:var(--text-dim);line-height:1.5">3D globe · satellites · aircraft · 430+ live cameras · weather radar · severe alerts · earthquakes · wildfires. Driveable by voice — try "Spectra, show me Ukraine" or "track the ISS".</div></div>
 <div class="agent-panel" id="agentPanel"><div class="agent-header"><span class="agent-title">Agent Browser</span><button class="agent-close" onclick="toggleAgentView()">&times;</button></div><div class="agent-screen-wrap"><img id="agentScreen" style="display:none" alt="Agent browser view"><div class="agent-no-feed" id="agentNoFeed">No active session<br>Ask SPECTRA to browse something</div></div><div class="agent-footer"><div class="agent-status" id="agentStatus">Idle</div><div class="agent-step" id="agentStep"></div></div></div>
 <div class="orb-area">
   <div class="orb-wrap" id="orbWrap">
@@ -1962,16 +1962,27 @@ async function send() {
 
         // Classic TTS — speak the reply, then follow-up if present
         // Pick the right TTS endpoint based on the user's chosen provider.
-        // Default = Edge Neural — free, no key, most natural-sounding option.
-        //   edge           → /api/tts-edge (Microsoft neural voices)
+        // Default = browser (Apple Siri voices are genuinely natural on
+        // macOS/iOS and require no setup; everything else needs a key or
+        // is audibly robotic).
+        //   browser        → SpeechSynthesis (on-device; smart picker)
+        //   azure          → /api/tts-azure (free 500k/mo, needs one env key)
         //   elevenlabs     → /api/tts (premium, paid)
-        //   streamelements → /api/tts-stream (free, classic Brian/Amy voices)
-        //   browser        → SpeechSynthesis (on-device, handled separately)
+        //   edge           → /api/tts-edge (Google Translate fallback)
+        //   streamelements → /api/tts-stream (classic Brian/Amy voices)
         async function ttsFetch(text) {
-            const provider = localStorage.getItem('spectra-tts-provider') || 'edge';
+            const provider = localStorage.getItem('spectra-tts-provider') || 'browser';
             const voice = localStorage.getItem('spectra-tts-voice') || '';
 
             if (provider === 'browser') return null;
+
+            if (provider === 'azure') {
+                return fetch('/api/tts-azure', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ voice: voice || 'en-GB-RyanNeural', text }),
+                });
+            }
 
             if (provider === 'edge') {
                 return fetch('/api/tts-edge', {
@@ -1997,19 +2008,52 @@ async function send() {
             });
         }
 
+        // Browser-native TTS with smart voice selection. On macOS/iOS this
+        // picks the actually-natural Apple Siri / Enhanced voices
+        // (Daniel Enhanced, Samantha Enhanced, Siri Voice 1–4, etc.) which
+        // sound indistinguishable from paid cloud TTS. On Windows/Android
+        // it falls back to whatever neural voices the browser exposes.
+        function pickBestBrowserVoice() {
+            const voices = (typeof speechSynthesis !== 'undefined' ? speechSynthesis.getVoices() : []) || [];
+            if (!voices.length) return null;
+            const desired = localStorage.getItem('spectra-tts-voice') || '';
+            if (desired) {
+                const exact = voices.find(v => v.name === desired);
+                if (exact) return exact;
+            }
+            // Priority stack — best to worst, English voices only
+            const tiers = [
+                // Tier 1: iOS / macOS neural Siri voices (most natural)
+                v => /^Siri/i.test(v.name) && /en/i.test(v.lang),
+                v => /\(Premium\)/i.test(v.name) && /en[-_]?GB/i.test(v.lang),
+                v => /\(Premium\)/i.test(v.name) && /en/i.test(v.lang),
+                v => /\(Enhanced\)/i.test(v.name) && /en[-_]?GB/i.test(v.lang),
+                v => /\(Enhanced\)/i.test(v.name) && /en/i.test(v.lang),
+                // Tier 2: named Apple voices that are usually neural on recent OSes
+                v => /^(Daniel|Oliver|Serena|Arthur|Martha|Jamie)/i.test(v.name) && /en[-_]?GB/i.test(v.lang),
+                v => /^(Samantha|Alex|Karen|Moira|Tessa|Nicky|Allison|Ava|Evan|Susan|Tom|Fred)/i.test(v.name) && /en/i.test(v.lang),
+                // Tier 3: Google / Microsoft neural voices in the browser
+                v => /Google .* en[-_]?GB/i.test(v.name) || /Microsoft (Ryan|Sonia|Libby|Noah|Thomas).*en[-_]?GB/i.test(v.name),
+                v => /Google .* en/i.test(v.name) || /Microsoft (Guy|Davis|Jenny|Aria|Brian|Andrew).*en/i.test(v.name),
+                // Tier 4: anything en-GB, then any en
+                v => /en[-_]?GB/i.test(v.lang),
+                v => /en/i.test(v.lang),
+            ];
+            for (const test of tiers) {
+                const found = voices.find(test);
+                if (found) return found;
+            }
+            return voices[0];
+        }
+
         function browserSpeak(text) {
             return new Promise((resolve) => {
                 try {
                     speechSynthesis.cancel();
                     const u = new SpeechSynthesisUtterance(text.replace(/```[\s\S]*?```/g, '').slice(0, 1500));
-                    const desired = localStorage.getItem('spectra-tts-voice') || '';
-                    const voices = speechSynthesis.getVoices() || [];
-                    let pick = null;
-                    if (desired) pick = voices.find(v => v.name === desired);
-                    if (!pick) pick = voices.find(v => /Daniel|Oliver|George|Arthur|Brian/i.test(v.name) && /en[-_]?GB/i.test(v.lang));
-                    if (!pick) pick = voices.find(v => /en[-_]?GB/i.test(v.lang)) || voices.find(v => /en/i.test(v.lang));
+                    const pick = pickBestBrowserVoice();
                     if (pick) u.voice = pick;
-                    u.rate = 1.05; u.pitch = 0.95; u.volume = 1.0;
+                    u.rate = 1.0; u.pitch = 1.0; u.volume = 1.0;
                     u.onend = () => { orb.className = 'orb'; resolve(true); };
                     u.onerror = () => { orb.className = 'orb'; resolve(false); };
                     orb.className = 'orb speaking';
@@ -2219,24 +2263,28 @@ async function loadSettings() {
         });
     } catch(e) { console.warn('Failed to load voices', e); }
 
-    // Load TTS provider preference (localStorage) — Edge Neural default
+    // Load TTS provider preference (localStorage). Default = browser —
+    // Apple Siri / Enhanced voices on macOS/iOS are genuinely natural
+    // with zero setup. Users can switch to Azure Neural for best quality
+    // if they grab a free key.
     try {
-        // First-time users get Edge Neural by default (free + most natural)
         if (!localStorage.getItem('spectra-tts-provider')) {
-            localStorage.setItem('spectra-tts-provider', 'edge');
-            localStorage.setItem('spectra-tts-voice', 'en-GB');
+            localStorage.setItem('spectra-tts-provider', 'browser');
         }
-        const provider = localStorage.getItem('spectra-tts-provider') || 'edge';
+        const provider = localStorage.getItem('spectra-tts-provider') || 'browser';
         const sel = document.getElementById('ttsProviderSelect');
         if (sel) { sel.value = provider; updateTtsProviderUI(); }
-        // Restore provider-specific voice
+        // Restore provider-specific voice into its own dropdown
         const voice = localStorage.getItem('spectra-tts-voice');
         if (voice) {
-            if (provider === 'edge' && document.getElementById('edgeVoiceSelect')) {
-                document.getElementById('edgeVoiceSelect').value = voice;
-            } else if (provider === 'streamelements' && document.getElementById('streamElementsVoiceSelect')) {
-                document.getElementById('streamElementsVoiceSelect').value = voice;
-            }
+            const map = {
+                'azure': 'azureVoiceSelect',
+                'edge': 'edgeVoiceSelect',
+                'streamelements': 'streamElementsVoiceSelect',
+                'browser': 'browserVoiceSelect',
+            };
+            const el = document.getElementById(map[provider]);
+            if (el) el.value = voice;
         }
     } catch {}
 
@@ -2275,14 +2323,27 @@ function populateBrowserVoices() {
 
 function setTtsProvider(provider) {
     localStorage.setItem('spectra-tts-provider', provider);
-    // Reset the per-provider voice when switching so we don't carry over
-    // a StreamElements voice name into Edge (which uses different IDs)
+    // Reset the per-provider voice on switch so we don't carry a mis-
+    // matched voice ID across providers (each uses its own namespace).
+    if (provider === 'azure') localStorage.setItem('spectra-tts-voice', 'en-GB-RyanNeural');
     if (provider === 'edge') localStorage.setItem('spectra-tts-voice', 'en-GB');
     if (provider === 'streamelements') localStorage.setItem('spectra-tts-voice', 'Brian');
     if (provider === 'browser') localStorage.removeItem('spectra-tts-voice');
     updateTtsProviderUI();
     const status = document.getElementById('settingsStatus');
     status.textContent = `TTS: ${provider}`;
+    setTimeout(() => { status.textContent = ''; }, 1500);
+    // Speak a short sample in the newly-selected provider so the user
+    // can hear the quality immediately.
+    setTimeout(() => speakText('Voice switched. Say the word, sir.'), 100);
+}
+
+function setAzureVoice(voice) {
+    localStorage.setItem('spectra-tts-voice', voice);
+    const status = document.getElementById('settingsStatus');
+    const pretty = voice.replace(/Neural$/, '').replace(/^en-[A-Z]{2}-/, '');
+    speakText(`Voice set to ${pretty}.`);
+    status.textContent = `Voice: ${pretty}`;
     setTimeout(() => { status.textContent = ''; }, 1500);
 }
 
@@ -2319,11 +2380,16 @@ function setBrowserVoice(voice) {
 }
 
 function updateTtsProviderUI() {
-    const provider = document.getElementById('ttsProviderSelect')?.value || 'edge';
-    document.getElementById('edgeSettings').style.display            = provider === 'edge' ? 'block' : 'none';
-    document.getElementById('streamelementsSettings').style.display  = provider === 'streamelements' ? 'block' : 'none';
-    document.getElementById('browserVoiceSettings').style.display    = provider === 'browser' ? 'block' : 'none';
-    document.getElementById('classicSettings').style.display          = provider === 'elevenlabs' ? 'block' : 'none';
+    const provider = document.getElementById('ttsProviderSelect')?.value || 'browser';
+    const show = (id, match) => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = provider === match ? 'block' : 'none';
+    };
+    show('azureSettings', 'azure');
+    show('edgeSettings', 'edge');
+    show('streamelementsSettings', 'streamelements');
+    show('browserVoiceSettings', 'browser');
+    show('classicSettings', 'elevenlabs');
 }
 
 async function setModel(model) {

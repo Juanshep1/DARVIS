@@ -197,20 +197,22 @@ body::after {
 /* ── ORB AREA — compass rose frame around the canvas ─────────────── */
 .orb-area {
   flex: 1;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
   position: relative; min-height: 0;
-  padding: 10px 20px;
+  padding: 10px 20px 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .orb-wrap {
   position: relative;
-  width: 340px; height: 340px;
+  width: 280px; height: 280px;
   display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
 }
 
 #orbCanvas {
-  width: 340px; height: 340px;
+  width: 280px; height: 280px;
   cursor: pointer; position: relative; z-index: 2;
-  /* Dark-mode: let the orb glow naturally, boost it slightly */
   filter: brightness(1.15) contrast(1.05) saturate(1.1);
 }
 .orb { display: none; }
@@ -219,13 +221,28 @@ body::after {
 /* ── RESPONSE COLUMN — newspaper column with drop cap ────────────── */
 .response-area {
   width: 100%; max-width: 640px;
-  margin: 22px auto 0;
+  margin: 14px auto 0;
   padding: 0 40px;
-  max-height: 32vh;
+  min-height: 60px;
+  max-height: 40vh;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--paper-edge) transparent;
   position: relative;
+  border-top: 1px solid var(--paper-edge);
+  padding-top: 16px;
+}
+/* "Transcript" label above the response so it's unmissable */
+.response-area::before {
+  content: "TRANSCRIPT";
+  display: block;
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 0.28em;
+  color: var(--gilt);
+  text-transform: uppercase;
+  margin-bottom: 10px;
+  text-align: center;
 }
 .response-area::-webkit-scrollbar { width: 4px; }
 .response-area::-webkit-scrollbar-thumb { background: var(--paper-edge); border-radius: 2px; }
@@ -1920,6 +1937,7 @@ async function send() {
                 });
                 const classicData = await classicRes.json();
                 responseEl.textContent = classicData.reply || 'No results.';
+                try { responseEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch(e) {}
                 // Play the reply via the selected TTS provider
                 if (classicData.reply) speakText(classicData.reply);
                 // Handle actions
@@ -2095,6 +2113,8 @@ async function send() {
     }
 
     responseEl.textContent = data.reply;
+    // Scroll the response text into view so it's visible even if the orb pushed it down
+    try { responseEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch(e) {}
     lastFailedRequest = httpError ? text : null;
 
     // Action processing — every action wrapped so a single bad field can't

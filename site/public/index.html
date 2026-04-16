@@ -1010,7 +1010,7 @@ async function geminiConnect() {
     // Clean up any stale connection
     if (geminiWs) {
         if (geminiWs.readyState === WebSocket.OPEN && geminiSessionActive) return true;
-        try { geminiWs.close(); } catch {}
+        try { geminiWs.close(); } catch(e) {}
         geminiWs = null;
         geminiSessionActive = false;
     }
@@ -1047,7 +1047,7 @@ async function geminiConnect() {
                         keys.map(k => `- ${pages[k].title}: ${pages[k].summary || ''}`).join('\n');
                 }
             }
-        } catch {}
+        } catch(e) {}
 
         return new Promise((resolve, reject) => {
             let settled = false;
@@ -1179,7 +1179,7 @@ Use the wiki knowledge to answer questions about topics you have pages on — th
                                 micBtn.classList.remove('recording');
                                 orb.className = 'orb';
                             }
-                        } catch {
+                        } catch(e) {
                             isRecording = false;
                             micBtn.classList.remove('recording');
                             orb.className = 'orb';
@@ -1192,7 +1192,7 @@ Use the wiki knowledge to answer questions about topics you have pages on — th
             setTimeout(() => {
                 if (!settled) {
                     settled = true;
-                    try { ws.close(); } catch {}
+                    try { ws.close(); } catch(e) {}
                     reject(new Error('Connection timeout (10s)'));
                 }
             }, 10000);
@@ -1206,7 +1206,7 @@ Use the wiki knowledge to answer questions about topics you have pages on — th
 function fallbackToClassic() {
     stopGeminiPlayback();
     stopGeminiMic();
-    if (geminiWs) { try { geminiWs.close(); } catch {} geminiWs = null; }
+    if (geminiWs) { try { geminiWs.close(); } catch(e) {} geminiWs = null; }
     geminiSessionActive = false;
     isRecording = false;
     micBtn.classList.remove('recording');
@@ -1271,7 +1271,7 @@ function playGeminiAudio(base64Data) {
 function stopGeminiPlayback() {
     // Immediately stop all queued audio (for interruption)
     for (const source of geminiPlaybackSources) {
-        try { source.stop(); } catch {}
+        try { source.stop(); } catch(e) {}
     }
     geminiPlaybackSources = [];
     geminiNextPlayTime = 0;
@@ -1413,7 +1413,7 @@ async function handleMemoryFromUserInput(userText) {
                     return true;
                 }
             }
-        } catch {}
+        } catch(e) {}
         return true;
     }
     return false;
@@ -1514,7 +1514,7 @@ Describe EXACTLY what is in this image — the actual objects, text, colors, peo
                         return;
                     }
                 }
-            } catch {}
+            } catch(e) {}
         }
 
         orb.className = isRecording ? 'orb listening' : 'orb';
@@ -1554,7 +1554,7 @@ async function toggleCamera() {
                 stream = await navigator.mediaDevices.getUserMedia({
                     video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
                 });
-            } catch {
+            } catch(e) {
                 stream = await navigator.mediaDevices.getUserMedia({ video: true });
             }
             cameraStream = stream;
@@ -1620,7 +1620,7 @@ function createRecognition() {
     if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) return;
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     // Stop old instance if it exists
-    if (recognition) { try { recognition.abort(); } catch {} }
+    if (recognition) { try { recognition.abort(); } catch(e) {} }
     recognition = new SR();
     recognition.continuous = true;
     recognition.interimResults = true;
@@ -1652,12 +1652,12 @@ function createRecognition() {
                 send();
                 setTimeout(() => {
                     if (isRecording && audioMode === 'gemini') {
-                        try { recognition.start(); } catch {}
+                        try { recognition.start(); } catch(e) {}
                     }
                 }, 500);
             } else {
                 if (isRecording) {
-                    try { recognition.start(); } catch {}
+                    try { recognition.start(); } catch(e) {}
                 }
             }
             return;
@@ -1697,7 +1697,7 @@ async function toggleMic() {
             orb.className = 'orb';
             statusBar.textContent = 'GEMINI PAUSED — TAP MIC TO RESUME';
             // Also stop Web Speech if it was running for camera mode
-            if (recognition) try { recognition.stop(); } catch {}
+            if (recognition) try { recognition.stop(); } catch(e) {}
         } else {
             orb.className = 'orb thinking';
             responseEl.textContent = 'Connecting to Gemini...';
@@ -1896,12 +1896,12 @@ async function send() {
                         body: JSON.stringify({ message: '__SEARCH_ONLY__:' + text }),
                     });
                     // Actually just use the classic endpoint for search queries in Gemini mode
-                } catch {}
+                } catch(e) {}
                 // Better approach: fetch Tavily directly via a lightweight endpoint
                 try {
                     const searchRes = await fetch('/api/situation', { signal: AbortSignal.timeout(5000) });
                     // Use situation data as context if relevant
-                } catch {}
+                } catch(e) {}
             }
 
             // Gemini mode now ALWAYS routes text through /api/chat (which has
@@ -1992,7 +1992,7 @@ async function send() {
                 const memRes = await fetch('/api/memory');
                 const memData = await memRes.json();
                 if (memData.memories?.length) memCtx = '\nUser memories: ' + memData.memories.map(m => m.content).join('; ');
-            } catch {}
+            } catch(e) {}
 
             const gemmaRes = await fetch(
                 `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${tokenData.token}`,
@@ -2032,7 +2032,7 @@ async function send() {
                         return;
                     }
                 }
-            } catch {}
+            } catch(e) {}
             orb.className = 'orb';
         } catch (err) {
             responseEl.textContent = 'Gemma error: ' + err.message;
@@ -2059,8 +2059,8 @@ async function send() {
     responseEl.textContent = '';
 
     // Helpers — never let an invalid URL or a bad parse blow up the chat
-    const safeUrl = (u) => { try { return new URL(u).toString(); } catch { return null; } };
-    const safeOpenTab = (u) => { try { const v = safeUrl(u); if (v) window.open(v, '_blank', 'noopener'); } catch {} };
+    const safeUrl = (u) => { try { return new URL(u).toString(); } catch(e) { return null; } };
+    const safeOpenTab = (u) => { try { const v = safeUrl(u); if (v) window.open(v, '_blank', 'noopener'); } catch(e) {} };
 
     let data = null;
     let httpError = null;
@@ -2076,7 +2076,7 @@ async function send() {
         const raw = await res.text();
         try {
             data = raw ? JSON.parse(raw) : { reply: '(empty response)' };
-        } catch {
+        } catch(e) {
             // Not JSON. Show whatever text we got so the user has something.
             const looksLikeHtml = /<html|<!DOCTYPE/i.test(raw);
             data = { reply: looksLikeHtml ? 'The brain returned an HTML error page. Try again, sir.' : (raw.slice(0, 600) || '(no response)') };
@@ -2133,10 +2133,10 @@ async function send() {
                 console.warn('action failed:', actErr, act);
             }
         }
-        if (pendingTab && !usedPending) { try { pendingTab.close(); } catch {} }
+        if (pendingTab && !usedPending) { try { pendingTab.close(); } catch(e) {} }
         pendingTab = null;
     } else if (pendingTab) {
-        try { pendingTab.close(); } catch {}
+        try { pendingTab.close(); } catch(e) {}
         pendingTab = null;
     }
 
@@ -2419,7 +2419,7 @@ async function setAudioMode(mode) {
             body: JSON.stringify({ audio_mode: mode }),
         });
         status.textContent = mode === 'gemini' ? 'Gemini Live Audio' : 'Classic mode';
-    } catch { status.textContent = 'Error switching mode'; }
+    } catch(e) { status.textContent = 'Error switching mode'; }
 }
 
 async function loadSettings() {
@@ -2434,7 +2434,7 @@ async function loadSettings() {
             document.getElementById('audioModeSelect').value = audioMode;
             updateModeUI();
         }
-    } catch {}
+    } catch(e) {}
 
     // Load models
     try {
@@ -2488,7 +2488,7 @@ async function loadSettings() {
             const el = document.getElementById(map[provider]);
             if (el) el.value = voice;
         }
-    } catch {}
+    } catch(e) {}
 
     // Populate browser native voices (loads asynchronously in some browsers)
     populateBrowserVoices();
@@ -2561,7 +2561,7 @@ async function setTtsProvider(provider) {
                 setTimeout(() => { status.textContent = ''; }, 6000);
                 return;
             }
-        } catch {}
+        } catch(e) {}
     }
 
     status.textContent = `TTS: ${provider}`;
@@ -2629,7 +2629,7 @@ async function setModel(model) {
     try {
         await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model }) });
         status.textContent = 'Model: ' + model;
-    } catch { status.textContent = 'Error switching model'; }
+    } catch(e) { status.textContent = 'Error switching model'; }
 }
 
 async function setVoice(voice_id) {
@@ -2638,7 +2638,7 @@ async function setVoice(voice_id) {
     try {
         await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ voice_id }) });
         status.textContent = 'Voice updated';
-    } catch { status.textContent = 'Error switching voice'; }
+    } catch(e) { status.textContent = 'Error switching voice'; }
 }
 
 function setCustomVoiceId() {
@@ -2721,7 +2721,7 @@ async function pollAgent() {
                     screenEl.src = lastScreenshotUrl;
                     screenEl.style.display = 'block';
                 }
-            } catch {}
+            } catch(e) {}
         } else if (status.done && status.thinking) {
             toggleBtn.classList.remove('active');
             statusEl.textContent = 'Complete';
@@ -2736,7 +2736,7 @@ async function pollAgent() {
                 screenEl.style.display = 'none';
             }
         }
-    } catch {}
+    } catch(e) {}
 }
 
 loadSettings();
@@ -2818,7 +2818,7 @@ async function runBriefing() {
                         return;
                     }
                 }
-            } catch {}
+            } catch(e) {}
         } else {
             responseEl.textContent = 'Briefing unavailable — try again later.';
         }
@@ -2847,7 +2847,7 @@ async function fixYourself() {
         const r = await fetch('/api/settings', { signal: AbortSignal.timeout(5000) });
         if (r.ok) results.push('Backend: ✓ OK');
         else results.push('Backend: ✗ HTTP ' + r.status);
-    } catch { results.push('Backend: ✗ Unreachable'); }
+    } catch(e) { results.push('Backend: ✗ Unreachable'); }
 
     // 2. Ollama Cloud (models)
     status('Checking Ollama Cloud...');
@@ -2865,7 +2865,7 @@ async function fixYourself() {
                 results.push('Ollama Cloud: ✓ OK');
             }
         } else results.push('Ollama Cloud: ✗ HTTP ' + r.status);
-    } catch { results.push('Ollama Cloud: ✗ Unreachable'); }
+    } catch(e) { results.push('Ollama Cloud: ✗ Unreachable'); }
 
     // 3. ElevenLabs TTS (voices)
     status('Checking ElevenLabs...');
@@ -2873,7 +2873,7 @@ async function fixYourself() {
         const r = await fetch('/api/voices', { signal: AbortSignal.timeout(5000) });
         if (r.ok) results.push('ElevenLabs: ✓ OK');
         else results.push('ElevenLabs: ✗ HTTP ' + r.status);
-    } catch { results.push('ElevenLabs: ✗ Unreachable'); }
+    } catch(e) { results.push('ElevenLabs: ✗ Unreachable'); }
 
     // 4. Gemini API key
     status('Checking Gemini...');
@@ -2883,7 +2883,7 @@ async function fixYourself() {
             const data = await r.json();
             results.push(data.token ? 'Gemini API: ✓ OK' : 'Gemini API: ✗ No key configured');
         } else results.push('Gemini API: ✗ HTTP ' + r.status);
-    } catch { results.push('Gemini API: ✗ Unreachable'); }
+    } catch(e) { results.push('Gemini API: ✗ Unreachable'); }
 
     // 5. WebSocket (Gemini Live — only if in gemini mode)
     if (audioMode === 'gemini') {
@@ -2911,11 +2911,11 @@ async function fixYourself() {
     try {
         const mic = await navigator.permissions.query({ name: 'microphone' });
         results.push('Mic permission: ' + (mic.state === 'granted' ? '✓' : '⚠ ' + mic.state));
-    } catch { results.push('Mic permission: ⚠ unknown'); }
+    } catch(e) { results.push('Mic permission: ⚠ unknown'); }
     try {
         const cam = await navigator.permissions.query({ name: 'camera' });
         results.push('Camera permission: ' + (cam.state === 'granted' ? '✓' : '⚠ ' + cam.state));
-    } catch { results.push('Camera permission: ⚠ unknown'); }
+    } catch(e) { results.push('Camera permission: ⚠ unknown'); }
 
     // 7. Reset stuck states
     status('Resetting stuck states...');
@@ -2942,7 +2942,7 @@ async function fixYourself() {
         try {
             await geminiAudioCtx.resume();
             fixed.push('resumed suspended audio context');
-        } catch {}
+        } catch(e) {}
     }
     if (!audioUnlocked) {
         unlockAudio();
@@ -3002,7 +3002,7 @@ function fe_post(intent, extra = {}) {
 }
 
 function fe_open() {
-    if (falconEyeWin && !falconEyeWin.closed) { try { falconEyeWin.focus(); return; } catch {} }
+    if (falconEyeWin && !falconEyeWin.closed) { try { falconEyeWin.focus(); return; } catch(e) {} }
     falconEyeWin = window.open(FALCON_EYE_URL, 'falcon-eye');
     // If the browser blocked the popup (async context after a chat response),
     // show a prominent toast with a user-gesture link so they can click it.
@@ -3255,7 +3255,7 @@ setInterval(async () => {
                 setTimeout(() => { if (orb.className === 'orb listening') orb.className = 'orb'; }, 3000);
             }
         }
-    } catch {}
+    } catch(e) {}
 }, 60000);
 
 function showAlertToast(message) {
@@ -3290,7 +3290,7 @@ document.addEventListener('visibilitychange', async () => {
 
     // Always try to resume AudioContext
     if (geminiAudioCtx && geminiAudioCtx.state === 'suspended') {
-        try { await geminiAudioCtx.resume(); } catch {}
+        try { await geminiAudioCtx.resume(); } catch(e) {}
     }
 
     // Always recover dead Gemini sessions if we were in Gemini mode
@@ -3306,7 +3306,7 @@ document.addEventListener('visibilitychange', async () => {
             // Tear down everything
             stopGeminiMic();
             stopGeminiPlayback();
-            if (geminiWs) { try { geminiWs.close(); } catch {} geminiWs = null; }
+            if (geminiWs) { try { geminiWs.close(); } catch(e) {} geminiWs = null; }
             geminiSessionActive = false;
             isRecording = false;
 
@@ -3321,7 +3321,7 @@ document.addEventListener('visibilitychange', async () => {
                     if (cameraActive && recognition) {
                         // Recreate recognition in case it's dead
                         createRecognition();
-                        try { recognition.start(); } catch {}
+                        try { recognition.start(); } catch(e) {}
                         statusBar.textContent = 'GEMINI LIVE + CAMERA — SPEAK NATURALLY';
                     } else {
                         await startGeminiMic();

@@ -61,11 +61,7 @@ export default async (req) => {
         } : null,
         isFree: m.pricing?.prompt === "0" || m.pricing?.prompt === 0,
       }))
-      .sort((a, b) => {
-        // Free models first, then by provider name, then model name
-        if (a.isFree !== b.isFree) return a.isFree ? -1 : 1;
-        return a.id.localeCompare(b.id);
-      });
+      .sort((a, b) => a.id.localeCompare(b.id));
 
     // Get current model setting
     let current = "anthropic/claude-sonnet-4";

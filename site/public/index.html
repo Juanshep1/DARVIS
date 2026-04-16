@@ -2108,7 +2108,7 @@ async function send() {
                     if (!validUrl) continue;
                     if (pendingTab && !usedPending) {
                         try { pendingTab.location.href = validUrl; usedPending = true; }
-                        catch { safeOpenTab(validUrl); }
+                        catch(e) { safeOpenTab(validUrl); }
                     } else {
                         safeOpenTab(validUrl);
                     }

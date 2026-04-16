@@ -2143,6 +2143,7 @@ async function send() {
     // If we only have a connection error, stop here — no TTS on error msgs
     if (httpError) { orb.className = 'orb'; return; }
 
+    try {
         // Classic TTS — speak the reply, then follow-up if present
         // Pick the right TTS endpoint based on the user's chosen provider.
         // Default = browser (Apple Siri voices are genuinely natural on

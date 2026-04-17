@@ -864,9 +864,35 @@ class Ear:
                     os.dup2(old_stderr, 2)
                     os.close(devnull)
                     os.close(old_stderr)
+
+                wav_data = audio.get_wav_data()
+
+                # Local Whisper STT — if SPECTRA_LOCAL=1 or LOCAL_WHISPER=1,
+                # route audio to the local Whisper server instead of Google
+                use_local_whisper = os.environ.get("SPECTRA_LOCAL") == "1" or os.environ.get("LOCAL_WHISPER") == "1"
+                if use_local_whisper:
+                    whisper_url = os.environ.get("WHISPER_URL", "http://localhost:9000")
+                    try:
+                        req = urllib.request.Request(
+                            f"{whisper_url}/transcribe",
+                            data=wav_data,
+                            headers={"Content-Type": "audio/wav"},
+                            method="POST",
+                        )
+                        with urllib.request.urlopen(req, timeout=30) as resp:
+                            result = json.loads(resp.read().decode())
+                            text = result.get("text", "").strip()
+                            if not text:
+                                return (None, None) if return_audio else None
+                            return (text, wav_data) if return_audio else text
+                    except Exception as e:
+                        console.print(f"  [red]Local Whisper error: {e}[/red]")
+                        console.print(f"  [dim]Falling back to Google STT...[/dim]")
+                        # Fall through to Google STT below
+
                 text = self.recognizer.recognize_google(audio)
                 if return_audio:
-                    return (text, audio.get_wav_data())
+                    return (text, wav_data)
                 return text
             except (sr.WaitTimeoutError, sr.UnknownValueError):
                 return (None, None) if return_audio else None

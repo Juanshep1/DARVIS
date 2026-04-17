@@ -24,8 +24,13 @@ from memory import get_memory_context, add_memory, forget_memory
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
-OLLAMA_URL = "https://ollama.com/api"
+# Local mode: set SPECTRA_LOCAL=1 to route LLM to localhost Ollama
+# and TTS to localhost Piper instead of cloud APIs.
+IS_LOCAL = os.environ.get("SPECTRA_LOCAL", "0") == "1"
+OLLAMA_URL = os.environ.get("OLLAMA_LOCAL_URL", "http://localhost:11434/api") if IS_LOCAL else "https://ollama.com/api"
 ELEVENLABS_URL = "https://api.elevenlabs.io/v1"
+WHISPER_URL = os.environ.get("WHISPER_URL", "http://localhost:9000")
+PIPER_URL = os.environ.get("PIPER_URL", "http://localhost:9001")
 HOME_DIR = str(Path.home())
 CONFIG_PATH = BASE_DIR / ".env"
 SETTINGS_PATH = BASE_DIR / "settings.json"
@@ -92,13 +97,18 @@ def call_ollama(user_input: str) -> str:
     prompt = SYSTEM_PROMPT + get_memory_context()
     messages = [{"role": "system", "content": prompt}] + history
 
-    payload = json.dumps({"model": MODEL, "messages": messages, "stream": False}).encode()
+    local_model = os.environ.get("OLLAMA_LOCAL_MODEL", MODEL)
+    actual_model = local_model if IS_LOCAL else MODEL
+    payload = json.dumps({"model": actual_model, "messages": messages, "stream": False}).encode()
+    headers = {"Content-Type": "application/json"}
+    if not IS_LOCAL and OLLAMA_KEY:
+        headers["Authorization"] = f"Bearer {OLLAMA_KEY}"
     req = urllib.request.Request(
         f"{OLLAMA_URL}/chat", data=payload,
-        headers={"Content-Type": "application/json", "Authorization": f"Bearer {OLLAMA_KEY}"},
+        headers=headers,
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=120) as resp:
+    with urllib.request.urlopen(req, timeout=300 if IS_LOCAL else 120) as resp:
         data = json.loads(resp.read().decode())
         reply = data["message"]["content"]
 
@@ -129,11 +139,27 @@ def call_ollama(user_input: str) -> str:
 
 
 def tts_audio(text: str) -> bytes | None:
-    """Generate TTS audio via ElevenLabs, return mp3 bytes."""
-    if not ELEVENLABS_KEY:
-        return None
+    """Generate TTS audio — routes to Piper (local) or ElevenLabs (cloud)."""
     clean = re.sub(r'[*_`#\[\]()]', '', text)
     clean = re.sub(r'\n+', '. ', clean)[:2000]
+
+    # Local mode → Piper TTS server
+    if IS_LOCAL:
+        try:
+            payload = json.dumps({"text": clean}).encode()
+            req = urllib.request.Request(
+                f"{PIPER_URL}/speak", data=payload,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                return resp.read()
+        except Exception:
+            return None
+
+    # Cloud mode → ElevenLabs
+    if not ELEVENLABS_KEY:
+        return None
     try:
         payload = json.dumps({
             "text": clean,

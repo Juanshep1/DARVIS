@@ -687,7 +687,8 @@ class SpectraHandler(BaseHTTPRequestHandler):
             def _keepalive():
                 while keep_alive:
                     try:
-                        self.wfile.write(b' ')
+                        # Properly-framed 1-byte chunk: "1\r\n \r\n"
+                        self.wfile.write(b'1\r\n \r\n')
                         self.wfile.flush()
                     except Exception:
                         break
@@ -720,10 +721,12 @@ class SpectraHandler(BaseHTTPRequestHandler):
             ka_thread.join(timeout=1)
 
             try:
-                self.wfile.write(json.dumps({
+                payload = json.dumps({
                     'reply': reply,
                     'audio_url': audio_url,
-                }).encode())
+                }).encode()
+                # Frame the payload as one chunk, then send the zero-length terminator.
+                self.wfile.write(f'{len(payload):x}\r\n'.encode() + payload + b'\r\n0\r\n\r\n')
                 self.wfile.flush()
             except Exception:
                 pass

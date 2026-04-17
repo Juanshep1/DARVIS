@@ -596,6 +596,18 @@ class SpectraHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         pass  # Suppress request logs
 
+    def _cors(self):
+        """Add CORS headers so the Netlify-hosted browser can call the Pi."""
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+
+    def do_OPTIONS(self):
+        """Handle CORS preflight."""
+        self.send_response(200)
+        self._cors()
+        self.end_headers()
+
     def do_GET(self):
         if self.path == '/' or self.path == '/index.html':
             self.send_response(200)
@@ -614,6 +626,7 @@ class SpectraHandler(BaseHTTPRequestHandler):
                 self.send_header('Content-Length', str(len(audio_bytes)))
                 self.send_header('Accept-Ranges', 'none')
                 self.send_header('Cache-Control', 'no-cache')
+                self._cors()
                 self.end_headers()
                 self.wfile.write(audio_bytes)
                 # Delete after a delay so browser can re-request if needed
@@ -677,6 +690,7 @@ class SpectraHandler(BaseHTTPRequestHandler):
 
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
+            self._cors()
             self.end_headers()
             self.wfile.write(json.dumps({
                 'reply': reply,

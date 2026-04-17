@@ -671,6 +671,33 @@ class SpectraHandler(BaseHTTPRequestHandler):
             body = json.loads(self.rfile.read(length))
             message = body.get('message', '')
 
+            # Send headers IMMEDIATELY so the browser knows the connection
+            # is alive while Ollama thinks (55s+ on a Pi). Without this,
+            # Safari's cross-origin fetch timeout kills the request at ~16s.
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Transfer-Encoding', 'chunked')
+            self._cors()
+            self.end_headers()
+
+            # Send a keep-alive space every 5s in a background thread so
+            # the browser doesn't think the connection died.
+            import threading
+            keep_alive = True
+            def _keepalive():
+                while keep_alive:
+                    try:
+                        self.wfile.write(b' ')
+                        self.wfile.flush()
+                    except Exception:
+                        break
+                    for _ in range(50):  # 5 seconds in 0.1s ticks
+                        if not keep_alive:
+                            break
+                        import time; time.sleep(0.1)
+            ka_thread = threading.Thread(target=_keepalive, daemon=True)
+            ka_thread.start()
+
             try:
                 reply = call_ollama(message)
             except Exception as e:
@@ -688,14 +715,18 @@ class SpectraHandler(BaseHTTPRequestHandler):
             except Exception:
                 pass
 
-            self.send_response(200)
-            self.send_header('Content-Type', 'application/json')
-            self._cors()
-            self.end_headers()
-            self.wfile.write(json.dumps({
-                'reply': reply,
-                'audio_url': audio_url,
-            }).encode())
+            # Stop keepalive and send the real payload
+            keep_alive = False
+            ka_thread.join(timeout=1)
+
+            try:
+                self.wfile.write(json.dumps({
+                    'reply': reply,
+                    'audio_url': audio_url,
+                }).encode())
+                self.wfile.flush()
+            except Exception:
+                pass
 
         elif self.path == '/api/set_model':
             length = int(self.headers.get('Content-Length', 0))

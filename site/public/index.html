@@ -1903,16 +1903,25 @@ async function send() {
         const piUrl = `${piBase}/api/chat`;
         orb.className = 'orb thinking';
         responseEl.textContent = `Connecting to Pi…`;
+        // Show elapsed time so the user knows it's still working (Pi is slow)
+        const piStartTime = Date.now();
+        const piTimer = setInterval(() => {
+            const elapsed = Math.round((Date.now() - piStartTime) / 1000);
+            if (orb.className.includes('thinking')) {
+                responseEl.textContent = `Pi is thinking… ${elapsed}s`;
+            }
+        }, 1000);
         try {
             const res = await fetch(piUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ message: text }),
-                signal: AbortSignal.timeout(120000), // Pi is slow, 2 min timeout
+                signal: AbortSignal.timeout(180000), // Pi is slow, 3 min timeout (cold start can take 60s+)
             });
             const raw = await res.text();
             let data;
             try { data = JSON.parse(raw); } catch(e) { data = { reply: raw.slice(0, 600) || '(no response from Pi)' }; }
+            clearInterval(piTimer);
             const reply = data.reply || 'No response from Pi.';
             responseEl.textContent = reply;
             try { responseEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch(e) {}
@@ -1933,7 +1942,9 @@ async function send() {
             }
             orb.className = orb.className.includes('speaking') ? orb.className : 'orb';
         } catch(e) {
-            responseEl.textContent = `Pi unreachable at ${piBase} — ${e?.message || e}. Check your Pi is running and Tailscale Funnel is active.`;
+            clearInterval(piTimer);
+            const elapsed = Math.round((Date.now() - piStartTime) / 1000);
+            responseEl.textContent = `Pi timed out after ${elapsed}s at ${piBase}. The Pi's Ollama may need a restart — try asking the Pi's Claude to run: sudo systemctl restart ollama`;
             orb.className = 'orb';
         }
         return;

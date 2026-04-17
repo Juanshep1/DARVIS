@@ -7,6 +7,7 @@ Falls back to local memory.json if the cloud is unreachable.
 
 import json
 import datetime
+import os
 import urllib.request
 import urllib.error
 from pathlib import Path
@@ -14,10 +15,14 @@ from pathlib import Path
 CLOUD_URL = "https://darvis1.netlify.app/api/memory"
 LOCAL_PATH = Path(__file__).parent / "memory.json"
 TIMEOUT = 8  # seconds
+# In local mode, skip all cloud calls — use only local memory.json
+IS_LOCAL = os.environ.get("SPECTRA_LOCAL", "0") == "1"
 
 
 def _cloud_get() -> list[dict] | None:
-    """Fetch all memories from the cloud store."""
+    """Fetch all memories from the cloud store. Skipped in local mode."""
+    if IS_LOCAL:
+        return None
     try:
         req = urllib.request.Request(CLOUD_URL, method="GET")
         with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
@@ -28,7 +33,9 @@ def _cloud_get() -> list[dict] | None:
 
 
 def _cloud_post(content: str, category: str) -> dict | None:
-    """Add a memory via the cloud API."""
+    """Add a memory via the cloud API. Skipped in local mode."""
+    if IS_LOCAL:
+        return None
     try:
         payload = json.dumps({"content": content, "category": category}).encode()
         req = urllib.request.Request(
@@ -43,7 +50,9 @@ def _cloud_post(content: str, category: str) -> dict | None:
 
 
 def _cloud_delete(memory_id: int) -> bool:
-    """Delete a memory via the cloud API."""
+    """Delete a memory via the cloud API. Skipped in local mode."""
+    if IS_LOCAL:
+        return False
     try:
         payload = json.dumps({"id": memory_id}).encode()
         req = urllib.request.Request(

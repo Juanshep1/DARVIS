@@ -5,6 +5,7 @@ Falls back to local history.json if the cloud is unreachable.
 """
 
 import json
+import os
 import urllib.request
 import urllib.error
 from pathlib import Path
@@ -13,9 +14,12 @@ CLOUD_URL = "https://darvis1.netlify.app/api/history"
 LOCAL_PATH = Path(__file__).parent / "history.json"
 MAX_MESSAGES = 40
 TIMEOUT = 8
+IS_LOCAL = os.environ.get("SPECTRA_LOCAL", "0") == "1"
 
 
 def _cloud_get() -> list[dict] | None:
+    if IS_LOCAL:
+        return None
     try:
         req = urllib.request.Request(CLOUD_URL, method="GET")
         with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
@@ -26,6 +30,8 @@ def _cloud_get() -> list[dict] | None:
 
 
 def _cloud_save(messages: list[dict]) -> bool:
+    if IS_LOCAL:
+        return False
     try:
         payload = json.dumps({"messages": messages}).encode()
         req = urllib.request.Request(

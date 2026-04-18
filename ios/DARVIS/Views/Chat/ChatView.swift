@@ -2,73 +2,127 @@ import SwiftUI
 
 struct ChatView: View {
     @StateObject private var vm = ChatViewModel()
+    @State private var currentTime = ""
+
+    let dateTimer = Timer.publish(every: 15, on: .main, in: .common).autoconnect()
 
     var body: some View {
         ZStack {
-            Color.spectraBackground.ignoresSafeArea()
+            // ── Leather ground ──
+            Color.paper.ignoresSafeArea()
+
+            // Subtle oil-lamp glow from above
+            RadialGradient(
+                colors: [Color.gilt.opacity(0.06), Color.clear],
+                center: .init(x: 0.5, y: 0.2),
+                startRadius: 0,
+                endRadius: 400
+            )
+            .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // Title bar
-                HStack {
-                    Text("S.P.E.C.T.R.A.")
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
-                        .tracking(5)
-                        .foregroundColor(.spectraCyan)
-                        .textCase(.uppercase)
+                // ── Almanac Masthead ──
+                VStack(spacing: 6) {
+                    Text("Spectra")
+                        .font(.almanacMasthead(48))
+                        .foregroundColor(.ink)
+                        .shadow(color: Color.gilt.opacity(0.1), radius: 12)
 
-                    Spacer()
+                    // Sub-masthead date line
+                    HStack(spacing: 10) {
+                        Text(currentTime)
+                            .font(.almanacMono(8))
+                            .foregroundColor(.inkFaint)
+                            .tracking(2)
 
-                    Button(action: { vm.cycleMode() }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: vm.modeIcon)
-                                .font(.system(size: 9))
-                            Text(vm.modeLabel)
-                                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                        Text("✦")
+                            .font(.almanacBody(10))
+                            .foregroundColor(.rubric)
+
+                        // Mode indicator
+                        Button(action: { vm.cycleMode() }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: vm.modeIcon)
+                                    .font(.system(size: 8))
+                                Text(vm.modeLabel.uppercased())
+                                    .font(.almanacMono(7, weight: .medium))
+                                    .tracking(1.5)
+                            }
+                            .foregroundColor(.gilt)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(Color.paperWarm)
+                            .overlay(Rectangle().stroke(Color.gilt.opacity(0.4), lineWidth: 0.5))
                         }
-                        .foregroundColor(vm.modeColor)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.spectraBackground)
-                        .cornerRadius(4)
-                        .overlay(RoundedRectangle(cornerRadius: 4).stroke(vm.modeColor.opacity(0.3), lineWidth: 0.5))
                     }
                 }
-                .padding(.horizontal, 16)
                 .padding(.top, 12)
+                .padding(.bottom, 8)
 
-                // Orb area — takes up available space, orb centered
+                // Double rule
+                VStack(spacing: 2) {
+                    Rectangle().fill(Color.ink.opacity(0.3)).frame(height: 0.5)
+                    Rectangle().fill(Color.ink.opacity(0.15)).frame(height: 0.5)
+                }
+                .padding(.horizontal, 30)
+
+                // ── Orb area ──
                 GeometryReader { geo in
                     VStack(spacing: 0) {
-                        Spacer()
+                        Spacer(minLength: 8)
 
-                        // Orb
+                        // Orb — warm-tinted for the leather ground
                         OrbView(state: vm.orbState)
+                            .saturation(0.85)
+                            .brightness(0.05)
                             .onTapGesture { vm.toggleMic() }
 
-                        // Response text — sits below orb, scrollable, fills remaining space
-                        ScrollViewReader { proxy in
-                            ScrollView {
-                                Text(vm.responseText)
-                                    .font(.system(size: 14, design: .monospaced))
-                                    .foregroundColor(Color(red: 0.69, green: 0.77, blue: 0.87))
-                                    .multilineTextAlignment(.center)
-                                    .padding(.horizontal, 20)
-                                    .frame(maxWidth: .infinity)
-                                    .id("response")
-                            }
-                            .frame(maxHeight: geo.size.height * 0.4) // Up to 40% of orb area
-                            .opacity(vm.responseText.isEmpty ? 0 : 1)
-                            .onChange(of: vm.responseText) {
-                                proxy.scrollTo("response", anchor: .bottom)
-                            }
-                        }
-                        .padding(.top, 8)
+                        // ── Transcript ──
+                        if !vm.responseText.isEmpty {
+                            VStack(spacing: 0) {
+                                // Separator + label
+                                Rectangle().fill(Color.paperEdge).frame(height: 0.5)
+                                    .padding(.horizontal, 40)
 
-                        Spacer()
+                                Text("TRANSCRIPT")
+                                    .font(.almanacMono(7))
+                                    .foregroundColor(.gilt)
+                                    .tracking(3)
+                                    .padding(.top, 10)
+                                    .padding(.bottom, 6)
+
+                                ScrollViewReader { proxy in
+                                    ScrollView {
+                                        Text(vm.responseText)
+                                            .font(.almanacBody(16))
+                                            .foregroundColor(.ink)
+                                            .lineSpacing(4)
+                                            .multilineTextAlignment(.leading)
+                                            .padding(.horizontal, 28)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                            .id("response")
+                                    }
+                                    .frame(maxHeight: geo.size.height * 0.38)
+                                    .onChange(of: vm.responseText) {
+                                        proxy.scrollTo("response", anchor: .bottom)
+                                    }
+                                }
+                            }
+                            .padding(.top, 10)
+                        } else {
+                            // Empty state
+                            Text("The engine is idle, sir.\nTouch the orb to speak.")
+                                .font(.almanacBodyItalic(14))
+                                .foregroundColor(.inkGhost)
+                                .multilineTextAlignment(.center)
+                                .padding(.top, 16)
+                        }
+
+                        Spacer(minLength: 8)
                     }
                 }
 
-                // Input bar — pinned to bottom
+                // ── Input bar ──
                 InputBar(
                     text: $vm.inputText,
                     isRecording: vm.isRecording,
@@ -81,52 +135,66 @@ struct ChatView: View {
                 )
             }
 
-            // Camera preview — bottom left so it doesn't overlap response text
+            // ── Camera preview — bottom left ──
             if vm.cameraActive {
                 VStack {
                     Spacer()
                     HStack {
                         ZStack(alignment: .topLeading) {
                             CameraPreviewView(session: vm.cameraService.captureSession)
-                                .frame(width: 130, height: 175)
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
-                                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.spectraGreen.opacity(0.5), lineWidth: 2))
-                                .shadow(color: .spectraGreen.opacity(0.2), radius: 10)
+                                .frame(width: 120, height: 160)
+                                .clipShape(Rectangle())
+                                .overlay(Rectangle().stroke(Color.gilt.opacity(0.5), lineWidth: 1))
+                                .shadow(color: Color.paperFold, radius: 0, x: 3, y: 4)
 
                             Text("LIVE")
-                                .font(.system(size: 7, weight: .bold, design: .monospaced))
-                                .foregroundColor(.spectraGreen)
+                                .font(.almanacMono(7, weight: .medium))
+                                .foregroundColor(.stateLive)
                                 .padding(.horizontal, 5)
                                 .padding(.vertical, 2)
-                                .background(Color.black.opacity(0.7))
-                                .cornerRadius(3)
-                                .padding(5)
+                                .background(Color.paper.opacity(0.9))
+                                .padding(4)
                         }
-                        .padding(.leading, 12)
+                        .padding(.leading, 14)
                         .padding(.bottom, 80)
                         Spacer()
                     }
                 }
             }
 
-            // Status message
+            // ── Status toast ──
             if !vm.statusMessage.isEmpty {
                 VStack {
                     Text(vm.statusMessage)
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundColor(.spectraOrange)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(Color.black.opacity(0.8))
-                        .cornerRadius(8)
-                        .padding(.top, 50)
+                        .font(.almanacMono(9))
+                        .foregroundColor(.gilt)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(Color.paperWarm)
+                        .overlay(Rectangle().stroke(Color.gilt.opacity(0.4), lineWidth: 0.5))
+                        .shadow(color: Color.paperFold, radius: 0, x: 2, y: 3)
+                        .padding(.top, 55)
                     Spacer()
                 }
+                .transition(.move(edge: .top).combined(with: .opacity))
                 .onAppear {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 3) { vm.statusMessage = "" }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                        withAnimation { vm.statusMessage = "" }
+                    }
                 }
             }
         }
-        .onAppear { vm.requestPermissions() }
+        .onAppear {
+            vm.requestPermissions()
+            updateTime()
+        }
+        .onReceive(dateTimer) { _ in updateTime() }
+    }
+
+    private func updateTime() {
+        let f = DateFormatter()
+        f.dateFormat = "EEEE · d MMMM · HH:mm 'Z'"
+        f.timeZone = TimeZone(identifier: "UTC")
+        currentTime = f.string(from: Date())
     }
 }

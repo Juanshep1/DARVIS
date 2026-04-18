@@ -179,7 +179,22 @@ def tts_audio(text: str) -> bytes | None:
 
 # ── Web Server ────────────────────────────────────────────────────────────────
 
-HTML = """<!DOCTYPE html>
+# Load the SAME HTML that the Netlify browser serves so local dashboard at
+# :2414 looks identical to darvis1.netlify.app. API calls are relative (/api/*)
+# so they hit web.py's own endpoints on the same origin.
+_browser_html_path = BASE_DIR / "site" / "public" / "index.html"
+if _browser_html_path.exists():
+    HTML = _browser_html_path.read_text()
+else:
+    # Fallback — if site/public/index.html doesn't exist (standalone Pi deploy
+    # without the site directory), use a minimal page that redirects to Netlify.
+    HTML = """<!DOCTYPE html><html><head><meta charset="utf-8">
+<meta http-equiv="refresh" content="0;url=https://darvis1.netlify.app">
+</head><body>Redirecting to Spectra…</body></html>"""
+
+# Legacy inline HTML removed — was 410 lines of a separate minimal dashboard.
+# Now both local and cloud share the same almanac UI.
+_LEGACY_HTML_REMOVED = """<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -589,7 +604,7 @@ loadSettings();
 inputEl.focus();
 </script>
 </body>
-</html>"""
+</html>"""  # end of _LEGACY_HTML_REMOVED (never used)
 
 
 # Pending chat jobs — background threads write results here, GET /api/chat/status polls them

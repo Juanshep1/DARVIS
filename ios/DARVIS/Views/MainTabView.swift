@@ -7,35 +7,47 @@ struct MainTabView: View {
         TabView(selection: $selectedTab) {
             ChatView()
                 .tabItem {
-                    Image(systemName: "bubble.left.fill")
-                    Text("Chat")
+                    Label("Spectra", systemImage: "moon.stars")
                 }
                 .tag(0)
 
             AgentView()
                 .tabItem {
-                    Image(systemName: "eye.fill")
-                    Text("Agent")
+                    Label("Agent", systemImage: "eye")
                 }
                 .tag(1)
 
             MemoryView()
                 .tabItem {
-                    Image(systemName: "brain")
-                    Text("Memory")
+                    Label("Archive", systemImage: "book.closed")
                 }
                 .tag(2)
 
             SettingsView()
                 .tabItem {
-                    Image(systemName: "gearshape.fill")
-                    Text("Settings")
+                    Label("Ledger", systemImage: "gearshape")
                 }
                 .tag(3)
+
+            // Falcon Eye — opens the browser
+            Text("") // Placeholder view, immediately opens Safari
+                .tabItem {
+                    Label("Falcon Eye", systemImage: "globe.americas")
+                }
+                .tag(4)
+                .onAppear {
+                    if let url = URL(string: "https://darvis1.netlify.app/falcon-eye/") {
+                        UIApplication.shared.open(url)
+                    }
+                    // Switch back to the previous tab
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        selectedTab = 0
+                    }
+                }
         }
-        .tint(.spectraCyan)
+        .tint(.gilt)
         .onReceive(NotificationCenter.default.publisher(for: .agentStarted)) { _ in
-            selectedTab = 1 // Switch to Agent tab
+            selectedTab = 1
         }
     }
 }

@@ -11,59 +11,94 @@ struct InputBar: View {
     let onFixYourself: () -> Void
 
     var body: some View {
-        HStack(spacing: 10) {
-            TextField("Talk to SPECTRA...", text: $text)
-                .textFieldStyle(.plain)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(Color(red: 0.06, green: 0.06, blue: 0.10))
-                .cornerRadius(25)
-                .overlay(RoundedRectangle(cornerRadius: 25).stroke(Color.spectraCyan.opacity(0.3), lineWidth: 1))
-                .foregroundColor(.spectraText)
-                .font(.system(.body, design: .monospaced))
-                .onSubmit {
-                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-                    onSend()
-                }
-
-            // Mic button
-            Button(action: onMicToggle) {
-                Image(systemName: isRecording ? "mic.fill" : "mic")
-                    .font(.system(size: 18))
-                    .foregroundColor(isRecording ? .spectraRed : .spectraCyan)
-                    .frame(width: 44, height: 44)
-                    .background(Color(red: 0.06, green: 0.06, blue: 0.10))
-                    .clipShape(Circle())
-                    .overlay(Circle().stroke(isRecording ? Color.spectraRed.opacity(0.5) : Color.spectraCyan.opacity(0.3), lineWidth: 1))
+        VStack(spacing: 0) {
+            // Ornament divider
+            ZStack {
+                Rectangle().fill(Color.paperEdge).frame(height: 0.5)
+                Text("◈")
+                    .font(.almanacBody(14))
+                    .foregroundColor(.rubric)
+                    .padding(.horizontal, 10)
+                    .background(Color.paper)
             }
+            .padding(.horizontal, 30)
 
-            // Camera button
-            Button(action: onCameraToggle) {
-                Image(systemName: cameraActive ? "camera.fill" : "camera")
-                    .font(.system(size: 16))
-                    .foregroundColor(cameraActive ? .spectraGreen : .spectraCyan)
-                    .frame(width: 44, height: 44)
-                    .background(Color(red: 0.06, green: 0.06, blue: 0.10))
-                    .clipShape(Circle())
-                    .overlay(Circle().stroke(cameraActive ? Color.spectraGreen.opacity(0.5) : Color.spectraCyan.opacity(0.3), lineWidth: 1))
-            }
+            HStack(spacing: 12) {
+                // Dip-pen text field — underline only, no border
+                TextField("", text: $text, prompt: Text("Enter your correspondence…")
+                    .font(.almanacBodyItalic(16))
+                    .foregroundColor(.inkGhost))
+                    .textFieldStyle(.plain)
+                    .padding(.vertical, 10)
+                    .padding(.horizontal, 4)
+                    .font(.almanacBody(17))
+                    .foregroundColor(.ink)
+                    .overlay(
+                        Rectangle()
+                            .fill(text.isEmpty ? Color.ink.opacity(0.4) : Color.rubric)
+                            .frame(height: 1),
+                        alignment: .bottom
+                    )
+                    .onSubmit {
+                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                        onSend()
+                    }
 
-            // Fix Yourself button
-            Button(action: onFixYourself) {
-                Image(systemName: "wrench.and.screwdriver")
-                    .font(.system(size: 14))
-                    .foregroundColor(.spectraOrange)
-                    .frame(width: 44, height: 44)
-                    .background(Color(red: 0.06, green: 0.06, blue: 0.10))
-                    .clipShape(Circle())
-                    .overlay(Circle().stroke(Color.spectraOrange.opacity(isFixing ? 0.8 : 0.3), lineWidth: 1))
-                    .opacity(isFixing ? 0.6 : 1.0)
-                    .animation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true), value: isFixing)
+                // Stamp buttons — square wax seals with gilt border
+                stampButton(
+                    label: "v",
+                    active: isRecording,
+                    activeColor: .rubric,
+                    action: onMicToggle
+                )
+
+                stampButton(
+                    label: "o",
+                    active: cameraActive,
+                    activeColor: .stateLive,
+                    action: onCameraToggle
+                )
+
+                stampButton(
+                    systemIcon: "wrench",
+                    active: isFixing,
+                    activeColor: .gilt,
+                    action: onFixYourself
+                )
+                .disabled(isFixing)
             }
-            .disabled(isFixing)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 14)
+            .padding(.bottom, 4)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(LinearGradient(colors: [.clear, .black.opacity(0.6)], startPoint: .top, endPoint: .bottom))
+        .background(Color.paper)
+    }
+
+    // Wax-seal stamp button
+    @ViewBuilder
+    private func stampButton(
+        label: String? = nil,
+        systemIcon: String? = nil,
+        active: Bool,
+        activeColor: Color,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Group {
+                if let label = label {
+                    Text(label)
+                        .font(.almanacDisplay(22).italic())
+                        .foregroundColor(active ? .paper : .gilt)
+                } else if let icon = systemIcon {
+                    Image(systemName: icon)
+                        .font(.system(size: 14))
+                        .foregroundColor(active ? .paper : .gilt)
+                }
+            }
+            .frame(width: 44, height: 44)
+            .background(active ? activeColor : Color.paperWarm)
+            .overlay(Rectangle().stroke(active ? activeColor : Color.gilt.opacity(0.5), lineWidth: 1))
+            .shadow(color: Color.paperFold.opacity(0.5), radius: 0, x: 2, y: 2)
+        }
     }
 }

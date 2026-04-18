@@ -25,10 +25,21 @@ class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
 @main
 struct SPECTRAApp: App {
     init() {
-        // Dark tab bar
+        // Almanac dark leather tab bar
         let tabBarAppearance = UITabBarAppearance()
         tabBarAppearance.configureWithOpaqueBackground()
-        tabBarAppearance.backgroundColor = UIColor(red: 0.04, green: 0.04, blue: 0.06, alpha: 1)
+        tabBarAppearance.backgroundColor = UIColor(red: 0.051, green: 0.039, blue: 0.027, alpha: 1) // paper #0d0a07
+        // Gilt tint for selected items, ink-ghost for unselected
+        let normalAttrs: [NSAttributedString.Key: Any] = [
+            .foregroundColor: UIColor(red: 0.353, green: 0.329, blue: 0.267, alpha: 1) // inkGhost
+        ]
+        let selectedAttrs: [NSAttributedString.Key: Any] = [
+            .foregroundColor: UIColor(red: 0.831, green: 0.659, blue: 0.278, alpha: 1) // gilt
+        ]
+        tabBarAppearance.stackedLayoutAppearance.normal.titleTextAttributes = normalAttrs
+        tabBarAppearance.stackedLayoutAppearance.selected.titleTextAttributes = selectedAttrs
+        tabBarAppearance.stackedLayoutAppearance.normal.iconColor = UIColor(red: 0.353, green: 0.329, blue: 0.267, alpha: 1)
+        tabBarAppearance.stackedLayoutAppearance.selected.iconColor = UIColor(red: 0.831, green: 0.659, blue: 0.278, alpha: 1)
         UITabBar.appearance().standardAppearance = tabBarAppearance
         UITabBar.appearance().scrollEdgeAppearance = tabBarAppearance
 

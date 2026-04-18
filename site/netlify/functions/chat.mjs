@@ -247,6 +247,41 @@ export default async (req) => {
     searchContext = `\n\nWEB SEARCH RESULTS for "${message}":\n${searchResults}\nIMPORTANT: Use ONLY these search results to answer. Do NOT use your training data for facts that could be outdated. The search results are current and accurate. Cite specific facts, numbers, and standings exactly as shown.`;
   }
 
+  // ── Pre-fetch weather if the query mentions weather/forecast/temperature ──
+  // This injects the data directly into the prompt so the LLM doesn't need to
+  // emit a command block — it just reads the data and responds naturally.
+  let weatherContext = "";
+  const lowerMsg = message.toLowerCase();
+  const weatherTriggers = ["weather", "forecast", "temperature", "rain", "snow", "wind", "humidity", "outside", "cold", "hot", "warm", "storm", "sunny", "cloudy"];
+  if (weatherTriggers.some((t) => lowerMsg.includes(t))) {
+    // Extract city name — look for "in <city>" or "for <city>" patterns
+    let city = "";
+    const inMatch = lowerMsg.match(/(?:weather|forecast|temperature|rain|snow|wind|storm|humidity)\s+(?:in|for|at|near)\s+([a-zA-Z\s,]+?)(?:\?|$|\.|\!)/i);
+    if (inMatch) city = inMatch[1].trim();
+    if (!city) {
+      const forMatch = message.match(/(?:in|for|at|near)\s+([A-Z][a-zA-Z\s,]+?)(?:\?|$|\.|\!)/);
+      if (forMatch) city = forMatch[1].trim();
+    }
+    if (!city) city = "Dallas"; // user's default location
+
+    try {
+      const wRes = await fetch(`https://darvis1.netlify.app/api/weather?q=${encodeURIComponent(city)}`, { signal: AbortSignal.timeout(8000) });
+      const w = await wRes.json();
+      if (w.current) {
+        const c = w.current;
+        weatherContext = `\n\nREAL-TIME WEATHER DATA (just fetched, accurate right now):\nLocation: ${w.location}\n`;
+        weatherContext += `Current: ${c.emoji} ${c.description} · ${c.temperature}°F (feels like ${c.feelsLike}°F) · Humidity ${c.humidity}% · Wind ${c.windSpeed} mph (gusts ${c.windGusts} mph)\n`;
+        if (w.forecast?.length) {
+          weatherContext += `Forecast:\n`;
+          for (const d of w.forecast) {
+            weatherContext += `  ${d.date}: ${d.emoji} ${d.description} · High ${d.high}°F / Low ${d.low}°F · ${d.precipChance}% precip chance\n`;
+          }
+        }
+        weatherContext += `\nIMPORTANT: This weather data is LIVE. Use it directly in your response. Do NOT say you can't access weather — the data is right here.`;
+      }
+    } catch (e) {}
+  }
+
   // Force Central Time
   const d = new Date();
   const userTZ = "America/Chicago";
@@ -265,7 +300,8 @@ CRITICAL: Pay attention to conversation history for context — don't ask the us
 ${timeBlock}
 
 IMPORTANT RULES:
-- SEARCH AGGRESSIVELY. When in doubt about whether something is current or factual, USE THE search_web COMMAND BLOCK. Your training data is frozen — the web is live. Default to searching for: any person, event, price, score, location, statistic, ranking, record, release, date, product, news story, weather, or specific fact.
+- SEARCH AGGRESSIVELY. When in doubt about whether something is current or factual, USE THE search_web COMMAND BLOCK. Your training data is frozen — the web is live. Default to searching for: any person, event, price, score, location, statistic, ranking, record, release, date, product, news story, or specific fact.
+- WEATHER: You have DIRECT access to real-time weather via the get_weather command. When the user asks about weather, temperature, forecast, rain, snow, wind, humidity, or "what's it like outside" for ANY city, ALWAYS emit a get_weather command block with the city name. NEVER say "I don't have access to weather data" — you DO. If weather data is already provided below, use it directly.
 - When web search results ARE provided below, use ONLY those results for factual claims. Quote numbers, dates, names EXACTLY as they appear. Do not blend in your training-data memory.
 - When search results are NOT provided and the query needs current info, OUTPUT a search_web command block AS PART OF YOUR REPLY. The user will see your initial reply, the search will run, and then you'll get a second turn with the results to give the thorough answer.
 - ALWAYS give a spoken text response alongside any command blocks. Never output ONLY command blocks — the user hears what you say.
@@ -428,7 +464,7 @@ Common shortcuts:
 \`\`\`
 CRITICAL — Use Falcon Eye when the user mentions anything like: "falcon eye", "show me <country/city>", "take me to <place>", "zoom into X", "track planes/satellites over X", "what's happening in <region>", "war alerts", "track the ISS / Hubble / Starlink", "follow that satellite", "open the globe", "satellites above", "earthquakes", "wildfires", "severe weather", or any request to add a camera/webcam to the map.
 
-For Falcon Eye requests you MUST emit a \`\`\`command ... \`\`\` block — do NOT respond with only prose like "Tracking the ISS, sir". The prose reply is fine but the command block is REQUIRED or nothing actually happens on the globe. You do NOT need to know coordinates; the server auto-geocodes region names. Just use the region field with the country/city name (e.g. "region": "Ukraine", "region": "Tokyo"). For satellites/aircraft use the query field (e.g. "query": "ISS", "query": "UAL123"). Set "open": true to open Falcon Eye in a new tab if it isn't already.${memoryContext}${wikiContext}${searchContext}`;
+For Falcon Eye requests you MUST emit a \`\`\`command ... \`\`\` block — do NOT respond with only prose like "Tracking the ISS, sir". The prose reply is fine but the command block is REQUIRED or nothing actually happens on the globe. You do NOT need to know coordinates; the server auto-geocodes region names. Just use the region field with the country/city name (e.g. "region": "Ukraine", "region": "Tokyo"). For satellites/aircraft use the query field (e.g. "query": "ISS", "query": "UAL123"). Set "open": true to open Falcon Eye in a new tab if it isn't already.${memoryContext}${wikiContext}${searchContext}${weatherContext}`;
 
   const userMsg = { role: "user", content: `${timeBlock}\n${message}` };
   const messages = [

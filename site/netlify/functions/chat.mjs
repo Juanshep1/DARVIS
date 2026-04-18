@@ -38,6 +38,66 @@ async function tavilySearch(query, maxResults = 8) {
   }
 }
 
+// ── Follow-up detection + query rewrite ────────────────────────────────────
+// Tavily does literal keyword search — it can't resolve pronouns. When a user
+// asks "how long till it starts" after talking about the Super Bowl, we need
+// to rewrite the query to "how long until Super Bowl LIX starts" before the
+// search, or Tavily will return unrelated results.
+
+function isAmbiguousFollowup(msg, historyLen) {
+  if (historyLen < 2) return false;
+  const lower = msg.toLowerCase().trim();
+  // Pronouns and deixis that depend on prior context
+  if (/\b(it|its|that|this|they|them|those|these|there|their|he|she|his|her|him)\b/.test(lower)) return true;
+  // Elliptical follow-ups with no explicit subject
+  if (/\b(till|until|by then|since then|what about|how about|and (you|then)|more about|same|also|too|instead)\b/.test(lower)) return true;
+  // Very short questions rarely stand alone
+  if (msg.trim().split(/\s+/).length <= 5) return true;
+  return false;
+}
+
+async function rewriteSearchQuery(msg, history) {
+  const GEMINI_KEY = Netlify.env.get("GEMINI_API_KEY");
+  if (!GEMINI_KEY) return null;
+  const last = (history || []).slice(-6).filter(m => m?.role && m?.content);
+  if (last.length < 2) return null;
+  const ctx = last.map(m => `${m.role === 'assistant' ? 'assistant' : 'user'}: ${String(m.content).substring(0, 400)}`).join('\n');
+  const prompt = `Rewrite the user's latest message into a standalone web search query. Expand pronouns ("it", "that", "they", "there") using the conversation. Keep proper nouns, dates, and numbers. If the latest message already stands alone, return it unchanged. Output ONLY the rewritten query on a single line — no quotes, no explanation.
+
+Conversation:
+${ctx}
+
+Latest message: ${msg}
+
+Standalone search query:`;
+  try {
+    const r = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { maxOutputTokens: 100, temperature: 0.1 },
+        }),
+        signal: AbortSignal.timeout(8000),
+      }
+    );
+    if (!r.ok) return null;
+    const d = await r.json();
+    let rewritten = d.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('').trim();
+    if (!rewritten) return null;
+    // Strip wrapping quotes / trailing punctuation noise
+    rewritten = rewritten.replace(/^["'`]+|["'`]+$/g, '').split('\n')[0].trim();
+    // Guard: if the rewrite is nonsense (too long, or identical, or empty) bail
+    if (rewritten.length < 2 || rewritten.length > 300) return null;
+    if (rewritten.toLowerCase() === msg.toLowerCase().trim()) return null;
+    return rewritten;
+  } catch {
+    return null;
+  }
+}
+
 // ── Detect if a message needs browser agent ─────────────────────────────────
 
 function needsBrowse(msg) {
@@ -197,19 +257,28 @@ export default async (req) => {
     wikiStore.get("index", { type: "json" }).catch(() => null),
   ]);
 
-  // Build contextual search query using conversation history
+  // Build contextual search query using conversation history.
+  // For ambiguous follow-ups ("how long till it starts"), ask Gemini Flash
+  // to rewrite the query into a standalone form before hitting Tavily so
+  // pronouns get resolved to the actual subject from earlier turns.
   let searchQuery = message;
-  if (needsSearch(message)) {
+  const shouldSearch = needsSearch(message);
+  if (shouldSearch) {
     const rawHistory = Array.isArray(historyData) ? historyData : [];
-    const words = message.trim().split(/\s+/);
-    if (words.length <= 6 && rawHistory.length >= 2) {
-      const recentCtx = rawHistory.slice(-4).map(m => m.content || '').join(' ').substring(0, 300);
-      searchQuery = `${message} ${recentCtx}`;
+    if (isAmbiguousFollowup(message, rawHistory.length)) {
+      const rewritten = await rewriteSearchQuery(message, rawHistory);
+      if (rewritten) {
+        searchQuery = rewritten;
+      } else {
+        // Fallback: prepend last assistant/user turn so Tavily at least has
+        // the prior subject in its keyword pool
+        const recentCtx = rawHistory.slice(-4).map(m => m.content || '').join(' ').substring(0, 300);
+        if (recentCtx) searchQuery = `${recentCtx} ${message}`.substring(0, 400);
+      }
     }
   }
 
-  // Now search with context-enhanced query
-  const searchResults = needsSearch(message) ? await tavilySearch(searchQuery, 10) : null;
+  const searchResults = shouldSearch ? await tavilySearch(searchQuery, 10) : null;
 
   let MODEL = settingsData?.model || Netlify.env.get("DARVIS_MODEL") || "glm-5";
   const isLocalModel = MODEL.startsWith("local:");
@@ -264,7 +333,10 @@ export default async (req) => {
 
   let searchContext = "";
   if (searchResults) {
-    searchContext = `\n\nWEB SEARCH RESULTS for "${message}":\n${searchResults}\nIMPORTANT: Use ONLY these search results to answer. Do NOT use your training data for facts that could be outdated. The search results are current and accurate. Cite specific facts, numbers, and standings exactly as shown.`;
+    const queryNote = searchQuery !== message
+      ? `User asked: "${message}"\nResolved search query (pronouns expanded from conversation): "${searchQuery}"`
+      : `Search query: "${message}"`;
+    searchContext = `\n\nWEB SEARCH RESULTS\n${queryNote}\n\n${searchResults}\nIMPORTANT: Use ONLY these search results for factual claims. Do NOT use your training data for facts that could be outdated. The results are current. Answer the user's ORIGINAL question directly, using the resolved subject from the search. Cite specific facts, numbers, dates exactly as shown.`;
   }
 
   // ── Pre-fetch weather if the query mentions weather/forecast/temperature ──

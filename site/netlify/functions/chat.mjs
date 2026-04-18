@@ -251,12 +251,12 @@ export default async (req) => {
   // This injects the data directly into the prompt so the LLM doesn't need to
   // emit a command block — it just reads the data and responds naturally.
   let weatherContext = "";
-  const lowerMsg = message.toLowerCase();
+  const lowerMsgW = message.toLowerCase();
   const weatherTriggers = ["weather", "forecast", "temperature", "rain", "snow", "wind", "humidity", "outside", "cold", "hot", "warm", "storm", "sunny", "cloudy"];
-  if (weatherTriggers.some((t) => lowerMsg.includes(t))) {
+  if (weatherTriggers.some((t) => lowerMsgW.includes(t))) {
     // Extract city name — look for "in <city>" or "for <city>" patterns
     let city = "";
-    const inMatch = lowerMsg.match(/(?:weather|forecast|temperature|rain|snow|wind|storm|humidity)\s+(?:in|for|at|near)\s+([a-zA-Z\s,]+?)(?:\?|$|\.|\!)/i);
+    const inMatch = lowerMsgW.match(/(?:weather|forecast|temperature|rain|snow|wind|storm|humidity)\s+(?:in|for|at|near)\s+([a-zA-Z\s,]+?)(?:\?|$|\.|\!)/i);
     if (inMatch) city = inMatch[1].trim();
     if (!city) {
       const forMatch = message.match(/(?:in|for|at|near)\s+([A-Z][a-zA-Z\s,]+?)(?:\?|$|\.|\!)/);

@@ -9,30 +9,49 @@ class SettingsViewModel: ObservableObject {
     @Published var currentVoice = ""
     @Published var customVoiceId = ""
     @Published var voiceStatus = ""
+    @Published var piAddress: String = UserDefaults.standard.string(forKey: "piAddress") ?? "juanspi5.tailc0f840.ts.net"
+    @Published var ttsProvider: String = UserDefaults.standard.string(forKey: "ttsProvider") ?? "browser"
     @Published var geminiVoice: String = UserDefaults.standard.string(forKey: "geminiVoice") ?? "Kore" {
         didSet { UserDefaults.standard.set(geminiVoice, forKey: "geminiVoice") }
     }
 
+    // OpenRouter
+    @Published var openRouterModels: [(id: String, name: String, isFree: Bool)] = []
+    @Published var openRouterModel: String = UserDefaults.standard.string(forKey: "openRouterModel") ?? "anthropic/claude-sonnet-4"
+
     static let geminiVoices = [
-        ("Kore", "Calm female (default)"),
-        ("Puck", "Warm male"),
-        ("Charon", "Deep male"),
-        ("Fenrir", "Bold male"),
-        ("Aoede", "Bright female"),
-        ("Leda", "Soft female"),
-        ("Orus", "Clear male"),
-        ("Zephyr", "Breezy female"),
+        ("Kore", "Calm female"), ("Puck", "Warm male"), ("Charon", "Deep male"),
+        ("Fenrir", "Bold male"), ("Aoede", "Bright female"), ("Leda", "Soft female"),
+        ("Orus", "Clear male"), ("Zephyr", "Breezy female"),
+    ]
+
+    static let ttsProviders = [
+        ("browser", "Apple / System Voice"),
+        ("edge", "Google Translate (free)"),
+        ("streamelements", "StreamElements (free)"),
+        ("elevenlabs", "ElevenLabs (paid)"),
     ]
 
     func load() async {
         do {
             settings = try await APIClient.shared.getSettings()
             let m = try await APIClient.shared.getModels()
-            models = m.models
-            currentModel = m.current
+            models = m.models; currentModel = m.current
             let v = try await APIClient.shared.getVoices()
-            voices = v.voices
-            currentVoice = v.current
+            voices = v.voices; currentVoice = v.current
+        } catch {}
+    }
+
+    func loadOpenRouterModels() async {
+        guard openRouterModels.isEmpty else { return }
+        do {
+            let url = URL(string: "https://darvis1.netlify.app/api/openrouter/models")!
+            let (data, _) = try await URLSession.shared.data(from: url)
+            struct ORResponse: Decodable { let models: [ORModel]; let current: String }
+            struct ORModel: Decodable { let id: String; let name: String; let isFree: Bool }
+            let resp = try JSONDecoder().decode(ORResponse.self, from: data)
+            openRouterModels = resp.models.map { ($0.id, $0.name, $0.isFree) }
+            openRouterModel = resp.current
         } catch {}
     }
 
@@ -40,19 +59,32 @@ class SettingsViewModel: ObservableObject {
         settings.model = model
         do { try await APIClient.shared.updateSettings(settings) } catch {}
     }
-
     func setVoice(_ voiceId: String) async {
         settings.voice_id = voiceId
         do { try await APIClient.shared.updateSettings(settings) } catch {}
-        // If custom ID not in voice list, add it
-        if !voices.contains(where: { $0.id == voiceId }) {
-            voices.append(VoiceOption(id: voiceId, name: "Custom (\(String(voiceId.prefix(8)))...)", category: "custom"))
-        }
     }
-
     func setAudioMode(_ mode: String) async {
         settings.audio_mode = mode
         do { try await APIClient.shared.updateSettings(settings) } catch {}
+    }
+    func savePiAddress(_ addr: String) {
+        piAddress = addr
+        UserDefaults.standard.set(addr, forKey: "piAddress")
+    }
+    func saveTtsProvider(_ p: String) {
+        ttsProvider = p
+        UserDefaults.standard.set(p, forKey: "ttsProvider")
+    }
+    func saveOpenRouterModel(_ m: String) {
+        openRouterModel = m
+        UserDefaults.standard.set(m, forKey: "openRouterModel")
+        Task {
+            var req = URLRequest(url: URL(string: "https://darvis1.netlify.app/api/openrouter/set-model")!)
+            req.httpMethod = "POST"
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.httpBody = try? JSONEncoder().encode(["model": m])
+            _ = try? await URLSession.shared.data(for: req)
+        }
     }
 }
 
@@ -61,117 +93,194 @@ struct SettingsView: View {
 
     var body: some View {
         ZStack {
-            Color.spectraBackground.ignoresSafeArea()
+            Color.paper.ignoresSafeArea()
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    Text("SETTINGS")
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
-                        .tracking(3)
-                        .foregroundColor(.spectraCyan)
+                VStack(alignment: .leading, spacing: 16) {
+                    // Masthead
+                    Text("Ledger")
+                        .font(.almanacMasthead(32))
+                        .foregroundColor(.ink)
                         .frame(maxWidth: .infinity)
                         .padding(.top, 16)
 
-                    // Audio Mode
-                    settingSection("AUDIO MODE") {
-                        Picker("Mode", selection: Binding(
-                            get: { vm.settings.audio_mode },
-                            set: { val in vm.settings.audio_mode = val; Task { await vm.setAudioMode(val) } }
-                        )) {
-                            Text("Classic (Ollama + ElevenLabs)").tag("classic")
-                            Text("Gemini Live Audio").tag("gemini")
+                    // ── 01 // AUDIO MODE ──
+                    AlmanacSectionHeader(number: "01", title: "Audio Mode")
+
+                    Picker("Mode", selection: Binding(
+                        get: { vm.settings.audio_mode },
+                        set: { val in vm.settings.audio_mode = val; Task { await vm.setAudioMode(val) } }
+                    )) {
+                        Text("Classic").tag("classic")
+                        Text("OpenRouter").tag("openrouter")
+                        Text("Local Pi").tag("local")
+                        Text("Gemini").tag("gemini")
+                        Text("Gemma").tag("gemma")
+                    }
+                    .pickerStyle(.segmented)
+                    .tint(.gilt)
+                    .almanacCard()
+                    .padding(.horizontal, 4)
+
+                    // ── OpenRouter settings ──
+                    if vm.settings.audio_mode == "openrouter" {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("OPENROUTER MODEL")
+                                .font(.almanacMono(8, weight: .medium))
+                                .foregroundColor(.gilt)
+                                .tracking(2)
+                            if vm.openRouterModels.isEmpty {
+                                Button("Load Models…") { Task { await vm.loadOpenRouterModels() } }
+                                    .font(.almanacMono(11))
+                                    .foregroundColor(.gilt)
+                            } else {
+                                Picker("Model", selection: Binding(
+                                    get: { vm.openRouterModel },
+                                    set: { vm.saveOpenRouterModel($0) }
+                                )) {
+                                    ForEach(vm.openRouterModels, id: \.id) { m in
+                                        Text("\(m.isFree ? "★ " : "")\(m.name)").tag(m.id)
+                                    }
+                                }
+                                .pickerStyle(.menu)
+                                .tint(.gilt)
+                                .almanacCard()
+                            }
                         }
-                        .pickerStyle(.segmented)
-                        .tint(.spectraCyan)
+                        .padding(.horizontal, 4)
+                        .task { await vm.loadOpenRouterModels() }
                     }
 
-                    // Model
-                    settingSection("MODEL") {
+                    // ── Local Pi settings ──
+                    if vm.settings.audio_mode == "local" {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("PI ADDRESS")
+                                .font(.almanacMono(8, weight: .medium))
+                                .foregroundColor(.gilt)
+                                .tracking(2)
+                            HStack(spacing: 8) {
+                                TextField("juanspi5.tailc0f840.ts.net", text: $vm.piAddress)
+                                    .font(.almanacMono(13))
+                                    .foregroundColor(.ink)
+                                    .padding(10)
+                                    .background(Color.paperWarm)
+                                    .overlay(Rectangle().stroke(Color.gilt.opacity(0.3), lineWidth: 0.5))
+                                    .onSubmit { vm.savePiAddress(vm.piAddress) }
+                                Button("Save") { vm.savePiAddress(vm.piAddress) }
+                                    .font(.almanacMono(10, weight: .medium))
+                                    .foregroundColor(.gilt)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 10)
+                                    .overlay(Rectangle().stroke(Color.gilt.opacity(0.5), lineWidth: 0.5))
+                            }
+                            Text("Your Pi via Tailscale Funnel. Works from anywhere.")
+                                .font(.almanacBodyItalic(11))
+                                .foregroundColor(.inkGhost)
+                        }
+                        .padding(.horizontal, 4)
+                    }
+
+                    // ── Gemini voice ──
+                    if vm.settings.audio_mode == "gemini" {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("GEMINI VOICE")
+                                .font(.almanacMono(8, weight: .medium))
+                                .foregroundColor(.gilt)
+                                .tracking(2)
+                            Picker("Voice", selection: $vm.geminiVoice) {
+                                ForEach(SettingsViewModel.geminiVoices, id: \.0) { v in
+                                    Text("\(v.0) — \(v.1)").tag(v.0)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .tint(.gilt)
+                            .almanacCard()
+                        }
+                        .padding(.horizontal, 4)
+                    }
+
+                    // ── 02 // VOICE PROVIDER ──
+                    AlmanacSectionHeader(number: "02", title: "Voice Provider")
+
+                    Picker("TTS", selection: Binding(
+                        get: { vm.ttsProvider },
+                        set: { vm.saveTtsProvider($0) }
+                    )) {
+                        ForEach(SettingsViewModel.ttsProviders, id: \.0) { p in
+                            Text(p.1).tag(p.0)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .tint(.gilt)
+                    .almanacCard()
+                    .padding(.horizontal, 4)
+
+                    // ── Classic model + voice (when in classic mode) ──
+                    if vm.settings.audio_mode == "classic" {
+                        AlmanacSectionHeader(number: "03", title: "Ollama Model")
                         Picker("Model", selection: Binding(
                             get: { vm.settings.model },
                             set: { val in vm.settings.model = val; Task { await vm.setModel(val) } }
                         )) {
-                            ForEach(vm.models, id: \.self) { model in
-                                Text(model).tag(model)
-                            }
+                            ForEach(vm.models, id: \.self) { Text($0).tag($0) }
                         }
                         .pickerStyle(.menu)
-                        .tint(.spectraCyan)
-                    }
+                        .tint(.gilt)
+                        .almanacCard()
+                        .padding(.horizontal, 4)
 
-                    // Voice
-                    if vm.settings.audio_mode == "classic" {
-                        settingSection("VOICE") {
+                        if vm.ttsProvider == "elevenlabs" {
+                            AlmanacSectionHeader(number: "04", title: "ElevenLabs Voice")
                             Picker("Voice", selection: Binding(
                                 get: { vm.settings.voice_id },
                                 set: { val in vm.settings.voice_id = val; Task { await vm.setVoice(val) } }
                             )) {
-                                ForEach(vm.voices) { voice in
-                                    Text("\(voice.name) (\(voice.category))").tag(voice.id)
+                                ForEach(vm.voices) { v in
+                                    Text("\(v.name)").tag(v.id)
                                 }
                             }
                             .pickerStyle(.menu)
-                            .tint(.spectraCyan)
-
-                            // Custom voice ID input
-                            HStack(spacing: 8) {
-                                TextField("Paste ElevenLabs Voice ID...", text: $vm.customVoiceId)
-                                    .textFieldStyle(.plain)
-                                    .font(.system(size: 12, design: .monospaced))
-                                    .foregroundColor(.spectraText)
-                                    .padding(10)
-                                    .background(Color(red: 0.06, green: 0.06, blue: 0.10))
-                                    .cornerRadius(8)
-                                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.spectraCyan.opacity(0.2), lineWidth: 1))
-
-                                Button("Set") {
-                                    let vid = vm.customVoiceId.trimmingCharacters(in: .whitespacesAndNewlines)
-                                    guard !vid.isEmpty else { return }
-                                    vm.settings.voice_id = vid
-                                    Task { await vm.setVoice(vid) }
-                                    vm.voiceStatus = "Voice ID set"
-                                }
-                                .font(.system(size: 11, weight: .bold, design: .monospaced))
-                                .foregroundColor(.spectraCyan)
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 8)
-                                .background(Color.spectraCyan.opacity(0.1))
-                                .cornerRadius(8)
-                                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.spectraCyan.opacity(0.3), lineWidth: 1))
-                            }
-
-                            if !vm.voiceStatus.isEmpty {
-                                Text(vm.voiceStatus)
-                                    .font(.system(size: 10, design: .monospaced))
-                                    .foregroundColor(.spectraGreen)
-                            }
+                            .tint(.gilt)
+                            .almanacCard()
+                            .padding(.horizontal, 4)
                         }
                     }
 
-                    // Gemini Voice (shown in gemini mode)
-                    if vm.settings.audio_mode == "gemini" {
-                        settingSection("GEMINI VOICE") {
-                            Picker("Voice", selection: $vm.geminiVoice) {
-                                ForEach(SettingsViewModel.geminiVoices, id: \.0) { voice in
-                                    Text("\(voice.0) — \(voice.1)").tag(voice.0)
-                                }
-                            }
-                            .pickerStyle(.menu)
-                            .tint(.spectraCyan)
+                    // ── Falcon Eye ──
+                    AlmanacSectionHeader(number: "05", title: "Falcon Eye")
+                    Button(action: {
+                        if let url = URL(string: "https://darvis1.netlify.app/falcon-eye/") {
+                            UIApplication.shared.open(url)
                         }
+                    }) {
+                        HStack {
+                            Text("♆")
+                                .font(.almanacDisplay(20))
+                            Text("Open Falcon Eye Command Center")
+                                .font(.almanacMono(11, weight: .medium))
+                                .tracking(1)
+                        }
+                        .foregroundColor(.gilt)
+                        .frame(maxWidth: .infinity)
+                        .padding(14)
+                        .background(Color.paperWarm)
+                        .overlay(Rectangle().stroke(Color.gilt.opacity(0.4), lineWidth: 0.5))
                     }
+                    .padding(.horizontal, 4)
 
-                    // On-Device Models
-                    settingSection("ON-DEVICE MODELS") {
-                        OnDeviceModelSection()
-                    }
-
-                    // Info
-                    settingSection("STATUS") {
+                    // ── Status ──
+                    AlmanacSectionHeader(number: "06", title: "System Status")
+                    VStack(alignment: .leading, spacing: 6) {
                         infoRow("Platform", "iOS")
                         infoRow("Backend", "darvis1.netlify.app")
-                        infoRow("Audio", vm.settings.audio_mode == "gemini" ? "Gemini Live" : "Ollama + ElevenLabs")
+                        infoRow("Audio", vm.settings.audio_mode)
+                        infoRow("TTS", vm.ttsProvider)
                     }
+                    .padding(12)
+                    .almanacCard()
+                    .padding(.horizontal, 4)
+
+                    Spacer(minLength: 40)
                 }
                 .padding(.horizontal, 16)
             }
@@ -179,28 +288,16 @@ struct SettingsView: View {
         .task { await vm.load() }
     }
 
-    @ViewBuilder
-    private func settingSection(_ title: String, @ViewBuilder content: () -> some View) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.system(size: 9, weight: .bold, design: .monospaced))
-                .tracking(2)
-                .foregroundColor(.spectraCyan.opacity(0.7))
-            content()
-                .padding(12)
-                .hudCard()
-        }
-    }
-
     private func infoRow(_ label: String, _ value: String) -> some View {
         HStack {
-            Text(label)
-                .font(.system(size: 12, design: .monospaced))
-                .foregroundColor(.spectraDim)
+            Text(label.uppercased())
+                .font(.almanacMono(9))
+                .foregroundColor(.inkFaint)
+                .tracking(1.5)
             Spacer()
             Text(value)
-                .font(.system(size: 12, design: .monospaced))
-                .foregroundColor(.spectraText)
+                .font(.almanacMono(11))
+                .foregroundColor(.ink)
         }
     }
 }

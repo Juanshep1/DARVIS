@@ -1918,7 +1918,11 @@ async function send() {
                 body: JSON.stringify({ message: text }),
                 signal: AbortSignal.timeout(180000), // Pi is slow, 3 min timeout (cold start can take 60s+)
             });
-            const raw = (await res.text()).trim(); // trim keep-alive spaces
+            let raw = (await res.text()).trim();
+            // The Pi's keep-alive sends chunked heartbeat spaces before the
+            // JSON payload. Strip everything before the first { character.
+            const jsonStart = raw.indexOf('{');
+            if (jsonStart > 0) raw = raw.slice(jsonStart);
             let data;
             try { data = JSON.parse(raw); } catch(e) { data = { reply: raw.slice(0, 600) || '(no response from Pi)' }; }
             clearInterval(piTimer);

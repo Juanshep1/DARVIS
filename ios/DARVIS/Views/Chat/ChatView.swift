@@ -66,61 +66,53 @@ struct ChatView: View {
                 }
                 .padding(.horizontal, 30)
 
-                // ── Orb area ──
-                GeometryReader { geo in
-                    VStack(spacing: 0) {
-                        Spacer(minLength: 8)
+                // ── Orb — centered in its own fixed frame ──
+                OrbView(state: vm.orbState)
+                    .saturation(0.85)
+                    .brightness(0.05)
+                    .frame(maxWidth: .infinity)
+                    .onTapGesture { vm.toggleMic() }
+                    .padding(.top, 6)
 
-                        // Orb — warm-tinted for the leather ground
-                        OrbView(state: vm.orbState)
-                            .saturation(0.85)
-                            .brightness(0.05)
-                            .onTapGesture { vm.toggleMic() }
+                // ── Transcript — takes all remaining space ──
+                VStack(spacing: 0) {
+                    if !vm.responseText.isEmpty {
+                        // Separator + label
+                        Rectangle().fill(Color.paperEdge).frame(height: 0.5)
+                            .padding(.horizontal, 40)
 
-                        // ── Transcript ──
-                        if !vm.responseText.isEmpty {
-                            VStack(spacing: 0) {
-                                // Separator + label
-                                Rectangle().fill(Color.paperEdge).frame(height: 0.5)
-                                    .padding(.horizontal, 40)
-
-                                Text("TRANSCRIPT")
-                                    .font(.almanacMono(7))
-                                    .foregroundColor(.gilt)
-                                    .tracking(3)
-                                    .padding(.top, 10)
-                                    .padding(.bottom, 6)
-
-                                ScrollViewReader { proxy in
-                                    ScrollView {
-                                        Text(vm.responseText)
-                                            .font(.almanacBody(16))
-                                            .foregroundColor(.ink)
-                                            .lineSpacing(4)
-                                            .multilineTextAlignment(.leading)
-                                            .padding(.horizontal, 28)
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                            .id("response")
-                                    }
-                                    .frame(maxHeight: geo.size.height * 0.38)
-                                    .onChange(of: vm.responseText) {
-                                        proxy.scrollTo("response", anchor: .bottom)
-                                    }
-                                }
-                            }
+                        Text("TRANSCRIPT")
+                            .font(.almanacMono(7))
+                            .foregroundColor(.gilt)
+                            .tracking(3)
                             .padding(.top, 10)
-                        } else {
-                            // Empty state
-                            Text("The engine is idle, sir.\nTouch the orb to speak.")
-                                .font(.almanacBodyItalic(14))
-                                .foregroundColor(.inkGhost)
-                                .multilineTextAlignment(.center)
-                                .padding(.top, 16)
-                        }
+                            .padding(.bottom, 6)
 
-                        Spacer(minLength: 8)
+                        ScrollViewReader { proxy in
+                            ScrollView {
+                                Text(vm.responseText)
+                                    .font(.almanacBody(17))
+                                    .foregroundColor(.ink)
+                                    .lineSpacing(5)
+                                    .multilineTextAlignment(.leading)
+                                    .padding(.horizontal, 24)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .id("response")
+                            }
+                            .onChange(of: vm.responseText) {
+                                proxy.scrollTo("response", anchor: .bottom)
+                            }
+                        }
+                    } else {
+                        Spacer(minLength: 20)
+                        Text("The engine is idle, sir.\nTouch the orb to speak.")
+                            .font(.almanacBodyItalic(14))
+                            .foregroundColor(.inkGhost)
+                            .multilineTextAlignment(.center)
+                        Spacer()
                     }
                 }
+                .frame(maxHeight: .infinity)
 
                 // ── Input bar ──
                 InputBar(
@@ -179,6 +171,26 @@ struct ChatView: View {
                 .transition(.move(edge: .top).combined(with: .opacity))
                 .onAppear {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                        withAnimation { vm.statusMessage = "" }
+                    }
+                }
+            }
+        }
+        .onAppear {
+            vm.requestPermissions()
+            updateTime()
+        }
+        .onReceive(dateTimer) { _ in updateTime() }
+    }
+
+    private func updateTime() {
+        let f = DateFormatter()
+        f.dateFormat = "EEEE · d MMMM · HH:mm 'Z'"
+        f.timeZone = TimeZone(identifier: "UTC")
+        currentTime = f.string(from: Date())
+    }
+}
+ne: .now() + 3) {
                         withAnimation { vm.statusMessage = "" }
                     }
                 }

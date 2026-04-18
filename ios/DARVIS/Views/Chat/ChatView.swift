@@ -190,23 +190,3 @@ struct ChatView: View {
         currentTime = f.string(from: Date())
     }
 }
-ne: .now() + 3) {
-                        withAnimation { vm.statusMessage = "" }
-                    }
-                }
-            }
-        }
-        .onAppear {
-            vm.requestPermissions()
-            updateTime()
-        }
-        .onReceive(dateTimer) { _ in updateTime() }
-    }
-
-    private func updateTime() {
-        let f = DateFormatter()
-        f.dateFormat = "EEEE · d MMMM · HH:mm 'Z'"
-        f.timeZone = TimeZone(identifier: "UTC")
-        currentTime = f.string(from: Date())
-    }
-}

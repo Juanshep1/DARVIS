@@ -298,7 +298,7 @@ class ChatViewModel: ObservableObject {
             // ── Local Pi mode (polling) ──
             if audioMode == "local" {
                 let piAddr = UserDefaults.standard.string(forKey: "piAddress") ?? "juanspi5.tailc0f840.ts.net"
-                let isHostname = piAddr.contains(".") && !piAddr.range(of: #"^\d+\.\d+\.\d+\.\d+$"#, options: .regularExpression).map({ _ in true }) ?? false
+                let isHostname = piAddr.contains(".") && piAddr.range(of: #"^\d+\.\d+\.\d+\.\d+$"#, options: .regularExpression) == nil
                 let piBase = isHostname ? "https://\(piAddr)" : "http://\(piAddr):2414"
                 do {
                     // Step 1: POST — starts the job, returns instantly with an ID

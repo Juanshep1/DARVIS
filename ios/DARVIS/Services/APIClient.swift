@@ -73,9 +73,36 @@ class APIClient {
         return try JSONDecoder().decode(ChatResponse.self, from: data)
     }
 
+    /// Fetch TTS audio from the user's selected provider.
+    /// Routes to the correct endpoint based on the ttsProvider UserDefault.
     func fetchTTS(text: String) async throws -> Data {
-        let body = try JSONEncoder().encode(["text": text])
-        return try await request("/api/tts", method: "POST", body: body)
+        let provider = UserDefaults.standard.string(forKey: "ttsProvider") ?? "browser"
+
+        switch provider {
+        case "edge":
+            // Google Translate neural TTS
+            let voice = UserDefaults.standard.string(forKey: "ttsVoice") ?? "en-GB"
+            let body = try JSONEncoder().encode(["text": text, "voice": voice])
+            return try await request("/api/tts-edge", method: "POST", body: body)
+
+        case "streamelements":
+            let voice = UserDefaults.standard.string(forKey: "ttsVoice") ?? "Brian"
+            let body = try JSONEncoder().encode(["text": text, "voice": voice, "provider": "streamelements"])
+            return try await request("/api/tts-stream", method: "POST", body: body)
+
+        case "azure":
+            let voice = UserDefaults.standard.string(forKey: "ttsVoice") ?? "en-GB-RyanNeural"
+            let body = try JSONEncoder().encode(["text": text, "voice": voice])
+            return try await request("/api/tts-azure", method: "POST", body: body)
+
+        case "elevenlabs":
+            let body = try JSONEncoder().encode(["text": text])
+            return try await request("/api/tts", method: "POST", body: body)
+
+        default:
+            // "browser" → use AVSpeechSynthesizer locally, no network call
+            throw URLError(.cancelled) // Signal to playTTS to use local speech
+        }
     }
 
     func sendVision(imageBase64: String, prompt: String? = nil) async throws -> String {

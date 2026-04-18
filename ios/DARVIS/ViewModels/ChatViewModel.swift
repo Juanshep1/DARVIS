@@ -286,6 +286,13 @@ class ChatViewModel: ObservableObject {
                     let reply = (try? JSONDecoder().decode(ORReply.self, from: data))?.reply ?? "No response."
                     responseText = reply
                     messages.append(ChatMessage(role: "assistant", content: reply))
+                    // Save to shared history so Spectra remembers across all surfaces
+                    Task.detached {
+                        try? await APIClient.shared.appendHistory(messages: [
+                            ChatMessage(role: "user", content: text),
+                            ChatMessage(role: "assistant", content: reply)
+                        ])
+                    }
                     await sendResponseNotificationIfBackgrounded(reply)
                     await playTTS(reply)
                 } catch {
@@ -315,6 +322,12 @@ class ChatViewModel: ObservableObject {
                     if let directReply = startReply.reply, !directReply.isEmpty {
                         responseText = directReply
                         messages.append(ChatMessage(role: "assistant", content: directReply))
+                        Task.detached {
+                            try? await APIClient.shared.appendHistory(messages: [
+                                ChatMessage(role: "user", content: text),
+                                ChatMessage(role: "assistant", content: directReply)
+                            ])
+                        }
                         await playTTS(directReply)
                         orbState = .idle
                         return
@@ -338,6 +351,12 @@ class ChatViewModel: ObservableObject {
                             let reply = poll.reply ?? "No response from Pi."
                             responseText = reply
                             messages.append(ChatMessage(role: "assistant", content: reply))
+                            Task.detached {
+                                try? await APIClient.shared.appendHistory(messages: [
+                                    ChatMessage(role: "user", content: text),
+                                    ChatMessage(role: "assistant", content: reply)
+                                ])
+                            }
                             await sendResponseNotificationIfBackgrounded(reply)
                             await playTTS(reply)
                             orbState = .idle
@@ -674,12 +693,13 @@ class ChatViewModel: ObservableObject {
 
     // MARK: - TTS
 
+    private let localSynth = AVSpeechSynthesizer()
+
     func playTTS(_ text: String) async {
         guard !text.isEmpty else { orbState = .idle; return }
 
         // Always stop mic before TTS — prevents feedback loop
-        let wasRecording = isRecording
-        if wasRecording || speechEngine != nil {
+        if isRecording || speechEngine != nil {
             isRecording = false
             stopSpeechRecognition()
         }
@@ -687,26 +707,70 @@ class ChatViewModel: ObservableObject {
         silenceTimer = nil
 
         orbState = .speaking
-        do {
-            let data = try await APIClient.shared.fetchTTS(text: text)
-            guard data.count > 100 else { orbState = .idle; return }
 
-            // Playback mode (no mic input)
-            let session = AVAudioSession.sharedInstance()
-            try? session.setCategory(.playback, mode: .default)
-            try? session.setActive(true)
+        let provider = UserDefaults.standard.string(forKey: "ttsProvider") ?? "browser"
 
-            audioService.playMP3(data)
-            for _ in 0..<150 {
-                try await Task.sleep(nanoseconds: 200_000_000)
-                if !audioService.isPlayingMP3 { break }
+        // Try the selected provider. If it fails or is "browser", use iOS native speech.
+        var usedNetwork = false
+        if provider != "browser" {
+            do {
+                let data = try await APIClient.shared.fetchTTS(text: text)
+                guard data.count > 100 else { throw URLError(.badServerResponse) }
+
+                let session = AVAudioSession.sharedInstance()
+                try? session.setCategory(.playback, mode: .default)
+                try? session.setActive(true)
+
+                audioService.playMP3(data)
+                for _ in 0..<150 {
+                    try await Task.sleep(nanoseconds: 200_000_000)
+                    if !audioService.isPlayingMP3 { break }
+                }
+                usedNetwork = true
+            } catch {
+                // Network TTS failed — fall through to local speech below
             }
-        } catch {}
+        }
 
-        // After TTS: go to idle. Do NOT auto-restart mic.
-        // User must tap mic button again to start listening.
+        // Fallback or "browser" provider → iOS native AVSpeechSynthesizer
+        if !usedNetwork {
+            await speakLocally(text)
+        }
+
         orbState = .idle
         inputText = ""
+    }
+
+    /// Speak using iOS native AVSpeechSynthesizer (free, on-device, no network)
+    private func speakLocally(_ text: String) async {
+        let clean = text
+            .replacingOccurrences(of: "```[\\s\\S]*?```", with: "", options: .regularExpression)
+            .replacingOccurrences(of: "[*_`#\\[\\]()]", with: "", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty else { return }
+
+        let utterance = AVSpeechUtterance(string: String(clean.prefix(1500)))
+        utterance.rate = 0.52
+        utterance.pitchMultiplier = 1.0
+        utterance.volume = 1.0
+
+        // Prefer a British English voice (Daniel, etc.)
+        let voices = AVSpeechSynthesisVoice.speechVoices()
+        let preferred = voices.first(where: { $0.language.hasPrefix("en-GB") && $0.quality == .enhanced })
+            ?? voices.first(where: { $0.language.hasPrefix("en-GB") })
+            ?? voices.first(where: { $0.language.hasPrefix("en") && $0.quality == .enhanced })
+            ?? voices.first(where: { $0.language.hasPrefix("en") })
+        if let voice = preferred { utterance.voice = voice }
+
+        let session = AVAudioSession.sharedInstance()
+        try? session.setCategory(.playback, mode: .default)
+        try? session.setActive(true)
+
+        localSynth.speak(utterance)
+        // Wait for speech to finish
+        while localSynth.isSpeaking {
+            try? await Task.sleep(nanoseconds: 200_000_000)
+        }
     }
 
     // MARK: - Fix Yourself

@@ -364,6 +364,15 @@ Do NOT use for simple searches or general questions.
 {"action": "schedule", "at": "2026-04-09T08:00:00", "task": "remind me to call mom"}
 \`\`\`
 
+### Weather (real-time, any city):
+\`\`\`command
+{"action": "get_weather", "location": "Dallas"}
+\`\`\`
+\`\`\`command
+{"action": "get_weather", "location": "Tokyo"}
+\`\`\`
+Use when the user asks about weather, temperature, forecast, rain, snow, wind, or "what's it like outside". The location should be a city name. Results will be injected and you'll give a follow-up with the actual conditions.
+
 ### Alerts:
 \`\`\`command
 {"action": "alert_add", "type": "news_keyword", "config": {"keyword": "SpaceX"}}
@@ -692,6 +701,29 @@ For Falcon Eye requests you MUST emit a \`\`\`command ... \`\`\` block — do NO
             cmdResults.push(`Fetched ${cmd.url}: ${clean}`);
           } catch (e) {
             cmdResults.push(`Fetch error: ${e.message}`);
+          }
+        } else if (cmd.action === "get_weather" && cmd.location) {
+          try {
+            const wUrl = `https://darvis1.netlify.app/api/weather?q=${encodeURIComponent(cmd.location)}`;
+            const wRes = await fetch(wUrl, { signal: AbortSignal.timeout(10000) });
+            const w = await wRes.json();
+            if (w.current) {
+              const c = w.current;
+              let weatherText = `Weather for ${w.location}:\n`;
+              weatherText += `${c.emoji} ${c.description} · ${c.temperature}°F (feels like ${c.feelsLike}°F)\n`;
+              weatherText += `Humidity: ${c.humidity}% · Wind: ${c.windSpeed} mph (gusts ${c.windGusts} mph)\n`;
+              if (w.forecast?.length) {
+                weatherText += `\n7-day forecast:\n`;
+                for (const d of w.forecast) {
+                  weatherText += `  ${d.date}: ${d.emoji} ${d.description} · High ${d.high}°F / Low ${d.low}°F · ${d.precipChance}% precip · Wind ${d.windMax} mph\n`;
+                }
+              }
+              cmdResults.push(weatherText);
+            } else {
+              cmdResults.push(`Weather lookup failed for "${cmd.location}": ${w.error || "unknown error"}`);
+            }
+          } catch (e) {
+            cmdResults.push(`Weather error: ${e.message}`);
           }
         } else if (cmd.action === "search_web" && cmd.query) {
           const searchText = await tavilySearch(cmd.query, 8);

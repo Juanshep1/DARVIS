@@ -68,7 +68,9 @@ class APIClient {
     }
 
     func sendChat(message: String) async throws -> ChatResponse {
-        let body = try JSONEncoder().encode(["message": message])
+        // Send device timezone so the server injects the correct local time
+        // into the system prompt (otherwise falls back to Central).
+        let body = try JSONEncoder().encode(["message": message, "tz": TimeZone.current.identifier])
         let data = try await request("/api/chat", method: "POST", body: body, retries: 2)
         return try JSONDecoder().decode(ChatResponse.self, from: data)
     }

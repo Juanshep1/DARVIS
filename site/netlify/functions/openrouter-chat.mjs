@@ -49,7 +49,14 @@ export default async (req) => {
   } catch (e) {}
 
   const now = new Date();
-  const timeBlock = `Current time: ${now.toLocaleString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric", hour: "numeric", minute: "numeric", hour12: true })} (${Intl.DateTimeFormat().resolvedOptions().timeZone})`;
+  const userTZ = (typeof body.tz === "string" && body.tz.length > 0 && body.tz.length < 64) ? body.tz : "America/Chicago";
+  let localTime;
+  try {
+    localTime = now.toLocaleString("en-US", { timeZone: userTZ, weekday: "long", month: "long", day: "numeric", year: "numeric", hour: "numeric", minute: "numeric", hour12: true, timeZoneName: "short" });
+  } catch {
+    localTime = now.toLocaleString("en-US", { timeZone: "America/Chicago", weekday: "long", month: "long", day: "numeric", year: "numeric", hour: "numeric", minute: "numeric", hour12: true });
+  }
+  const timeBlock = `CURRENT DATE/TIME (ground truth — the REAL time on the user's device, NOT your training cutoff): ${localTime} (timezone: ${userTZ}, epoch: ${now.getTime()}). Do NOT guess — if asked the time, use exactly this.`;
 
   const historyCount = history.length;
   const systemPrompt = `You are the user's personal AI assistant. Be helpful, loyal, and concise.

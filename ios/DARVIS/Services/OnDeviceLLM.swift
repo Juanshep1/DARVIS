@@ -33,14 +33,38 @@ class OnDeviceLLM: ObservableObject {
         } catch {}
     }
 
+    /// Device-local time block injected into every system instruction so
+    /// the model never hallucinates the time.
+    static func currentTimeBlock() -> String {
+        let d = Date()
+        let tz = TimeZone.current.identifier
+        let f = DateFormatter()
+        f.dateStyle = .full
+        f.timeStyle = .short
+        f.timeZone = TimeZone.current
+        let dateStr = f.string(from: d)
+        let hour = Calendar.current.component(.hour, from: d)
+        let period: String
+        switch hour {
+        case 0..<6: period = "LATE NIGHT"
+        case 6..<12: period = "MORNING"
+        case 12..<17: period = "AFTERNOON"
+        case 17..<21: period = "EVENING"
+        default: period = "NIGHT"
+        }
+        return "CURRENT DATE/TIME (ground truth — the REAL time on the user's device, NOT your training cutoff): \(dateStr). Period: \(period). Timezone: \(tz). Epoch: \(Int(d.timeIntervalSince1970)). Do NOT guess — if asked the time, use exactly this."
+    }
+
     func generate(prompt: String, maxTokens: Int = 200) async -> String? {
         if apiKey == nil { await fetchKey() }
         guard let key = apiKey else { return nil }
         let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=\(key)")!
 
+        let sysText = "You are the user's personal AI assistant. NEVER say \"Spectra\" or your name unless directly asked \"who are you?\". NEVER describe your personality. Be concise with subtle British wit. Running Gemma 4 on iOS. 1-3 sentences.\n\n\(Self.currentTimeBlock())\n\nYou have the googleSearch tool — USE IT for anything current (news, scores, prices, weather, people, events). Training data is frozen; the web is live."
+
         let body: [String: Any] = [
             "contents": [["parts": [["text": prompt]]]],
-            "systemInstruction": ["parts": [["text": "You are the user's personal AI assistant. NEVER say \"Spectra\" or your name unless directly asked \"who are you?\". NEVER describe your personality. Be concise with subtle British wit. Running Gemma 4 on iOS. 1-3 sentences. You have the googleSearch tool — USE IT for anything current (news, scores, prices, weather, people, events). Training data is frozen; the web is live."]]],
+            "systemInstruction": ["parts": [["text": sysText]]],
             "tools": [["googleSearch": [:]]],
             "generationConfig": ["maxOutputTokens": maxTokens, "temperature": 0.7]
         ]

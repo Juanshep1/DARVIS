@@ -1038,6 +1038,19 @@ let currentAudio = null;
 let silenceTimer = null;
 const SILENCE_DELAY = 3000;
 
+// ── Device-local time helper (used everywhere so LLMs never guess) ──
+function currentTimeBlock() {
+    const d = new Date();
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    const dateStr = d.toLocaleString(undefined, {
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+        hour: 'numeric', minute: 'numeric', hour12: true, timeZoneName: 'short'
+    });
+    const hour = d.getHours();
+    const period = hour < 6 ? 'LATE NIGHT' : hour < 12 ? 'MORNING' : hour < 17 ? 'AFTERNOON' : hour < 21 ? 'EVENING' : 'NIGHT';
+    return `CURRENT DATE/TIME (ground truth — this is the REAL current time on the user's device, not your training cutoff): ${dateStr}\nPeriod: ${period}\nTimezone: ${tz}\nEpoch: ${d.getTime()}\nDo NOT guess the time — use exactly this. If asked "what time is it?", answer using this value.`;
+}
+
 // Camera state
 let cameraStream = null;
 let cameraCanvas = null;
@@ -1052,6 +1065,22 @@ let geminiMicProcessor = null;
 let geminiAudioQueue = [];
 let geminiPlaying = false;
 let geminiSessionActive = false;
+let geminiSessionStartMs = 0;
+const GEMINI_SESSION_REFRESH_MS = 20 * 60 * 1000; // reconnect if older — keeps time fresh
+
+// Reconnect Gemini Live if the current session is older than the refresh
+// window. Gemini Live doesn't let us update system_instruction mid-session,
+// so we rebuild the session periodically to keep the injected time current.
+async function ensureFreshGeminiSession() {
+    if (!geminiSessionActive || !geminiWs) return await geminiConnect();
+    if (Date.now() - geminiSessionStartMs > GEMINI_SESSION_REFRESH_MS) {
+        try { geminiWs.close(); } catch(e) {}
+        geminiWs = null;
+        geminiSessionActive = false;
+        return await geminiConnect();
+    }
+    return true;
+}
 
 // ── Audio unlock (classic mode) ──
 let persistentAudio = new Audio();
@@ -1148,6 +1177,8 @@ NEVER say "Spectra" or your name in responses. Only say your name if the user di
 Addresses the user as "sir" (user is male, NEVER say "ma'am").
 Keep responses concise (1-3 sentences unless more detail is needed).
 
+${currentTimeBlock()}
+
 You are running on the Gemini 2.5 Flash Native Audio model in Gemini Live mode via the browser at darvis1.netlify.app. When asked what model you are, say Gemini 2.5 Flash Native Audio. You run across iPhone, browser, terminal, and Android — all share memory and history.
 
 You have access to the google_search tool for live web data. USE IT for any question about current events, scores, prices, news, weather, people, or anything that may have changed since your training. When in doubt, search — your training data is frozen, the web is live.
@@ -1179,6 +1210,7 @@ Use the wiki knowledge to answer questions about topics you have pages on — th
                         console.log('Gemini setup complete');
                         geminiWs = ws;
                         geminiSessionActive = true;
+                        geminiSessionStartMs = Date.now();
                         statusBar.textContent = 'GEMINI LIVE — SPEAK NATURALLY';
                         if (!settled) { settled = true; resolve(true); }
                         return;
@@ -2091,7 +2123,7 @@ async function send() {
             const res = await fetch('/api/openrouter/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: text }),
+                body: JSON.stringify({ message: text, tz: Intl.DateTimeFormat().resolvedOptions().timeZone }),
                 signal: AbortSignal.timeout(60000),
             });
             const raw = await res.text();
@@ -2168,12 +2200,13 @@ async function send() {
                 }
             } catch(e) {}
 
-            const localTime = new Date().toLocaleString('en-US', { timeZone: 'America/Chicago', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: 'numeric', hour12: true });
             const systemText = `You are the user's personal AI assistant running on Gemini 2.5 Flash with live Google Search grounding. You are in Gemini mode — NOT classical Ollama, NOT OpenRouter, NOT local.
 Be helpful, loyal, concise. Subtle wit, British tone. NEVER describe your own personality traits.
 NEVER say "Spectra" or your name unless the user directly asks "who are you?" — then say "Spectra on Gemini 2.5 Flash".
 Address the user as "sir" (male). NEVER "ma'am".
-Current date/time (Central): ${localTime}.
+
+${currentTimeBlock()}
+
 CRITICAL: For ANY question about current events, people, prices, scores, news, weather, or anything that could have changed since your training — USE the google_search tool. Your training data is frozen; the web is live. When in doubt, search.${memCtx}${wikiCtx}`;
 
             const body = {
@@ -2227,7 +2260,7 @@ CRITICAL: For ANY question about current events, people, prices, scores, news, w
                 const res = await fetch('/api/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: text }),
+                    body: JSON.stringify({ message: text, tz: Intl.DateTimeFormat().resolvedOptions().timeZone }),
                     signal: AbortSignal.timeout(90000),
                 });
                 const data = await res.json();
@@ -2264,7 +2297,10 @@ CRITICAL: For ANY question about current events, people, prices, scores, news, w
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         contents: [{ parts: [{ text }] }],
-                        systemInstruction: { parts: [{ text: `You are the user's personal AI assistant. NEVER say "Spectra" or your name — only if directly asked "who are you?". NEVER describe your personality traits. Be concise, witty, helpful with a British tone. Running on Gemma 4 / Gemini 2.5 Flash. You run across iPhone, browser, terminal, and Android.${memCtx}` }] },
+                        systemInstruction: { parts: [{ text: `You are the user's personal AI assistant. NEVER say "Spectra" or your name — only if directly asked "who are you?". NEVER describe your personality traits. Be concise, witty, helpful with a British tone. Running on Gemma 4 / Gemini 2.5 Flash. You run across iPhone, browser, terminal, and Android.
+
+${currentTimeBlock()}
+${memCtx}` }] },
                         generationConfig: { maxOutputTokens: 500, temperature: 0.7 }
                     })
                 }
@@ -2333,7 +2369,7 @@ CRITICAL: For ANY question about current events, people, prices, scores, news, w
         const res = await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: text }),
+            body: JSON.stringify({ message: text, tz: Intl.DateTimeFormat().resolvedOptions().timeZone }),
             signal: AbortSignal.timeout(90000),
         });
         // Parse defensively — some errors return HTML / partial bodies

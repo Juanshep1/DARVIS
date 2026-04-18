@@ -279,7 +279,7 @@ class ChatViewModel: ObservableObject {
                     var req = URLRequest(url: URL(string: "https://darvis1.netlify.app/api/openrouter/chat")!)
                     req.httpMethod = "POST"
                     req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                    req.httpBody = try JSONEncoder().encode(["message": text, "model": orModel])
+                    req.httpBody = try JSONEncoder().encode(["message": text, "model": orModel, "tz": TimeZone.current.identifier])
                     req.timeoutInterval = 60
                     let (data, _) = try await URLSession.shared.data(for: req)
                     struct ORReply: Decodable { let reply: String? }

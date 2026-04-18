@@ -201,7 +201,7 @@ export default async (req) => {
     return new Response("Method not allowed", { status: 405 });
   }
 
-  const { message } = await req.json();
+  const { message, tz: clientTZ } = await req.json();
   if (!message) {
     return Response.json({ error: "No message" }, { status: 400 });
   }
@@ -374,13 +374,21 @@ export default async (req) => {
     } catch (e) {}
   }
 
-  // Force Central Time
+  // Use the device-reported timezone if the client sent one; otherwise fall
+  // back to Central (the user's home TZ). This lets every surface — browser,
+  // iOS, daemon — get accurate local time without hardcoding.
   const d = new Date();
-  const userTZ = "America/Chicago";
-  const localTime = d.toLocaleString("en-US", { timeZone: userTZ, weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "numeric", minute: "numeric", hour12: true });
-  const localHour = parseInt(d.toLocaleString("en-US", { timeZone: userTZ, hour: "numeric", hour12: false }));
+  const userTZ = (typeof clientTZ === "string" && clientTZ.length > 0 && clientTZ.length < 64) ? clientTZ : "America/Chicago";
+  let localTime, localHour;
+  try {
+    localTime = d.toLocaleString("en-US", { timeZone: userTZ, weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "numeric", minute: "numeric", hour12: true, timeZoneName: "short" });
+    localHour = parseInt(d.toLocaleString("en-US", { timeZone: userTZ, hour: "numeric", hour12: false }));
+  } catch {
+    localTime = d.toLocaleString("en-US", { timeZone: "America/Chicago", weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "numeric", minute: "numeric", hour12: true });
+    localHour = parseInt(d.toLocaleString("en-US", { timeZone: "America/Chicago", hour: "numeric", hour12: false }));
+  }
   const period = localHour < 6 ? "LATE NIGHT" : localHour < 12 ? "MORNING" : localHour < 17 ? "AFTERNOON" : localHour < 21 ? "EVENING" : "NIGHT";
-  const timeBlock = `CURRENT DATE/TIME (accurate, trust this):\n  Date: ${localTime}\n  Period: ${period}\n  Timezone: CDT (Central)`;
+  const timeBlock = `CURRENT DATE/TIME (ground truth — the REAL time on the user's device, NOT your training cutoff):\n  Date: ${localTime}\n  Period: ${period}\n  Timezone: ${userTZ}\n  Epoch: ${d.getTime()}\nDo NOT guess the time. If asked "what time is it?", answer using this value exactly.`;
 
   const systemPrompt = `You are the user's personal AI assistant. Be helpful, loyal, and concise.
 Respond with subtle wit and a British tone — but NEVER describe your own personality traits. No self-referential statements like "ever efficient" or "ever sardonic". Just answer the question.

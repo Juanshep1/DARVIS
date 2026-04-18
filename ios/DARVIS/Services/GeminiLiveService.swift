@@ -16,6 +16,34 @@ class GeminiLiveService: ObservableObject {
     var onTurnComplete: (() -> Void)?
     var onInterrupted: (() -> Void)?
 
+    /// Device-local time block — injected into every Gemini system instruction
+    /// so the model never hallucinates the time.
+    static func currentTimeBlock() -> String {
+        let d = Date()
+        let tz = TimeZone.current.identifier
+        let f = DateFormatter()
+        f.dateStyle = .full
+        f.timeStyle = .short
+        f.timeZone = TimeZone.current
+        let dateStr = f.string(from: d)
+        let hour = Calendar.current.component(.hour, from: d)
+        let period: String
+        switch hour {
+        case 0..<6: period = "LATE NIGHT"
+        case 6..<12: period = "MORNING"
+        case 12..<17: period = "AFTERNOON"
+        case 17..<21: period = "EVENING"
+        default: period = "NIGHT"
+        }
+        return """
+        CURRENT DATE/TIME (ground truth — this is the REAL current time on the user's device, not your training cutoff): \(dateStr)
+        Period: \(period)
+        Timezone: \(tz)
+        Epoch: \(Int(d.timeIntervalSince1970))
+        Do NOT guess the time — use exactly this. If asked "what time is it?", answer using this value.
+        """
+    }
+
     func connect() async -> Bool {
         do {
             // Load voice preference
@@ -73,6 +101,9 @@ class GeminiLiveService: ObservableObject {
                         You are the user's personal AI assistant. NEVER say "Spectra" or your name unless directly asked "who are you?". NEVER describe your personality traits.
                         British-accented. Addresses user as "sir" (user is male, NEVER say "ma'am").
                         Keep responses concise (1-3 sentences).
+
+                        \(Self.currentTimeBlock())
+
                         You are running on the Gemini 2.5 Flash Native Audio model in Gemini Live mode on the iOS SPECTRA app. When asked what model you are, say Gemini 2.5 Flash Native Audio. You run across iPhone, browser, terminal, and Android — all share memory and history.
                         You have the google_search tool — USE IT for anything current (scores, news, prices, weather, people, events). Your training data is frozen; the web is live. When in doubt, search.
                         Use the wiki knowledge below to answer questions about topics you have pages on.\(memoryCtx)\(wikiCtx)

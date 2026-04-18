@@ -35,22 +35,43 @@ class ChatViewModel: ObservableObject {
     private static let saveRegex = try? NSRegularExpression(pattern: "(?:remember|don'?t forget|save|note|memorize)\\s+(?:that\\s+)?(.+)", options: .caseInsensitive)
     private static let forgetRegex = try? NSRegularExpression(pattern: "(?:forget|delete|remove|erase)\\s+(?:the\\s+)?(?:memory\\s+)?(?:about\\s+)?(.+)", options: .caseInsensitive)
 
-    // Mode cycling
-    var modeLabel: String { useOnDevice ? "ON-DEVICE" : audioMode == "gemini" ? "GEMINI" : "CLOUD" }
-    var modeIcon: String { useOnDevice ? "cpu.fill" : audioMode == "gemini" ? "bolt.fill" : "cloud.fill" }
-    var modeColor: Color { useOnDevice ? .spectraOrange : audioMode == "gemini" ? .spectraGreen : .spectraCyan }
+    // Mode cycling — 5 modes: classic → openrouter → local → gemini → gemma → classic
+    private static let modes = ["classic", "openrouter", "local", "gemini", "gemma"]
+    var modeLabel: String {
+        switch audioMode {
+        case "openrouter": return "OPENROUTER"
+        case "local": return "LOCAL PI"
+        case "gemini": return "GEMINI"
+        case "gemma": return "GEMMA"
+        default: return useOnDevice ? "ON-DEVICE" : "CLASSIC"
+        }
+    }
+    var modeIcon: String {
+        switch audioMode {
+        case "openrouter": return "globe"
+        case "local": return "desktopcomputer"
+        case "gemini": return "bolt.fill"
+        case "gemma": return "sparkles"
+        default: return useOnDevice ? "cpu.fill" : "cloud.fill"
+        }
+    }
+    var modeColor: Color {
+        switch audioMode {
+        case "openrouter": return .gilt
+        case "local": return .stateLive
+        case "gemini": return .stateLive
+        case "gemma": return .gilt
+        default: return useOnDevice ? .stateWarn : .gilt
+        }
+    }
 
     func cycleMode() {
         phoneControl.haptic(.light)
-        if audioMode == "classic" && !useOnDevice {
-            audioMode = "gemini"; useOnDevice = false
-            Task { try? await APIClient.shared.updateSettings(AppSettings(model: "", voice_id: "", audio_mode: "gemini")) }
-        } else if audioMode == "gemini" {
-            audioMode = "classic"; useOnDevice = true
-        } else {
-            audioMode = "classic"; useOnDevice = false
-            Task { try? await APIClient.shared.updateSettings(AppSettings(model: "", voice_id: "", audio_mode: "classic")) }
-        }
+        useOnDevice = false
+        let current = Self.modes.firstIndex(of: audioMode) ?? 0
+        let next = (current + 1) % Self.modes.count
+        audioMode = Self.modes[next]
+        Task { try? await APIClient.shared.updateSettings(AppSettings(model: "", voice_id: "", audio_mode: audioMode)) }
     }
 
     @Published var ambientMode = false
@@ -246,6 +267,86 @@ class ChatViewModel: ObservableObject {
                     await playTTS(response)
                 } else {
                     responseText = "No response — check your connection, sir."
+                }
+                orbState = .idle
+                return
+            }
+
+            // ── OpenRouter mode ──
+            if audioMode == "openrouter" {
+                do {
+                    let orModel = UserDefaults.standard.string(forKey: "openRouterModel") ?? "anthropic/claude-sonnet-4"
+                    var req = URLRequest(url: URL(string: "https://darvis1.netlify.app/api/openrouter/chat")!)
+                    req.httpMethod = "POST"
+                    req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                    req.httpBody = try JSONEncoder().encode(["message": text, "model": orModel])
+                    req.timeoutInterval = 60
+                    let (data, _) = try await URLSession.shared.data(for: req)
+                    struct ORReply: Decodable { let reply: String? }
+                    let reply = (try? JSONDecoder().decode(ORReply.self, from: data))?.reply ?? "No response."
+                    responseText = reply
+                    messages.append(ChatMessage(role: "assistant", content: reply))
+                    await sendResponseNotificationIfBackgrounded(reply)
+                    await playTTS(reply)
+                } catch {
+                    responseText = "OpenRouter error: \(error.localizedDescription)"
+                }
+                orbState = .idle
+                return
+            }
+
+            // ── Local Pi mode (polling) ──
+            if audioMode == "local" {
+                let piAddr = UserDefaults.standard.string(forKey: "piAddress") ?? "juanspi5.tailc0f840.ts.net"
+                let isHostname = piAddr.contains(".") && !piAddr.range(of: #"^\d+\.\d+\.\d+\.\d+$"#, options: .regularExpression).map({ _ in true }) ?? false
+                let piBase = isHostname ? "https://\(piAddr)" : "http://\(piAddr):2414"
+                do {
+                    // Step 1: POST — starts the job, returns instantly with an ID
+                    var req = URLRequest(url: URL(string: "\(piBase)/api/chat")!)
+                    req.httpMethod = "POST"
+                    req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                    req.httpBody = try JSONEncoder().encode(["message": text])
+                    req.timeoutInterval = 30
+                    let (startData, _) = try await URLSession.shared.data(for: req)
+                    struct StartReply: Decodable { let id: String?; let reply: String? }
+                    let startReply = try JSONDecoder().decode(StartReply.self, from: startData)
+
+                    // If the Pi returned a reply directly (old web.py), use it
+                    if let directReply = startReply.reply, !directReply.isEmpty {
+                        responseText = directReply
+                        messages.append(ChatMessage(role: "assistant", content: directReply))
+                        await playTTS(directReply)
+                        orbState = .idle
+                        return
+                    }
+
+                    guard let jobId = startReply.id else {
+                        responseText = "Pi returned no job ID."
+                        orbState = .idle
+                        return
+                    }
+
+                    // Step 2: Poll every 2s until done (max 90 attempts = 3 min)
+                    responseText = "Pi is thinking…"
+                    for attempt in 1...90 {
+                        try await Task.sleep(nanoseconds: 2_000_000_000)
+                        responseText = "Pi is thinking… \(attempt * 2)s"
+                        let pollURL = URL(string: "\(piBase)/api/chat/status?id=\(jobId)")!
+                        let (pollData, _) = try await URLSession.shared.data(from: pollURL)
+                        struct PollReply: Decodable { let status: String?; let reply: String? }
+                        if let poll = try? JSONDecoder().decode(PollReply.self, from: pollData), poll.status == "done" {
+                            let reply = poll.reply ?? "No response from Pi."
+                            responseText = reply
+                            messages.append(ChatMessage(role: "assistant", content: reply))
+                            await sendResponseNotificationIfBackgrounded(reply)
+                            await playTTS(reply)
+                            orbState = .idle
+                            return
+                        }
+                    }
+                    responseText = "Pi timed out after 3 minutes."
+                } catch {
+                    responseText = "Pi error: \(error.localizedDescription)"
                 }
                 orbState = .idle
                 return

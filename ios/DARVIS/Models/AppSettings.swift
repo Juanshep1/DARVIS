@@ -3,7 +3,7 @@ import Foundation
 struct AppSettings: Codable {
     var model: String
     var voice_id: String
-    var audio_mode: String // "classic" or "gemini"
+    var audio_mode: String // "classic", "openrouter", "local", "gemini", "gemma"
 }
 
 struct ModelsResponse: Codable {

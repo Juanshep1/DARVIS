@@ -39,12 +39,13 @@ struct OrbView: View {
     @State private var startDate = Date()
     @State private var speakIntensity: Double = 0
 
+    // Almanac-warm orb colors: gilt idle, amber thinking, gilt speaking, rubric listening
     var stateColor: (r: Double, g: Double, b: Double) {
         switch state {
-        case .idle:      return (0.31, 0.71, 1.0)
-        case .thinking:  return (1.0, 0.67, 0.25)
-        case .speaking:  return (0.0, 0.9, 1.0)
-        case .listening: return (1.0, 0.32, 0.32)
+        case .idle:      return (0.831, 0.659, 0.278) // gilt #d4a847
+        case .thinking:  return (1.0, 0.71, 0.31)     // warm amber
+        case .speaking:  return (0.925, 0.882, 0.776) // ink cream
+        case .listening: return (0.890, 0.322, 0.322) // rubric red
         }
     }
 

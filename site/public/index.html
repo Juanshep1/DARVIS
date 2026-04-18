@@ -1137,6 +1137,9 @@ async function geminiConnect() {
                                 }
                             }
                         },
+                        // Google Search grounding so live voice queries get
+                        // real-time web info (scores, news, prices, weather).
+                        tools: [{ google_search: {} }],
                         system_instruction: {
                             parts: [{
                                 text: `You are the user's personal AI assistant. Be helpful, loyal, and concise. Respond with subtle wit and a British tone.
@@ -1146,6 +1149,8 @@ Addresses the user as "sir" (user is male, NEVER say "ma'am").
 Keep responses concise (1-3 sentences unless more detail is needed).
 
 You are running on the Gemini 2.5 Flash Native Audio model in Gemini Live mode via the browser at darvis1.netlify.app. When asked what model you are, say Gemini 2.5 Flash Native Audio. You run across iPhone, browser, terminal, and Android — all share memory and history.
+
+You have access to the google_search tool for live web data. USE IT for any question about current events, scores, prices, news, weather, people, or anything that may have changed since your training. When in doubt, search — your training data is frozen, the web is live.
 
 You may receive camera images from the user's device. When you see images, describe what you see accurately.
 
@@ -2114,71 +2119,98 @@ async function send() {
         }
 
         orb.className = 'orb thinking';
-        responseEl.textContent = '';
-        try {
-            // Pre-fetch search results for real-time queries
-            let searchCtx = '';
-            if (needsSearchLocal(text)) {
-                try {
-                    const sRes = await fetch('/api/chat', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ message: '__SEARCH_ONLY__:' + text }),
-                    });
-                    // Actually just use the classic endpoint for search queries in Gemini mode
-                } catch(e) {}
-                // Better approach: fetch Tavily directly via a lightweight endpoint
-                try {
-                    const searchRes = await fetch('/api/situation', { signal: AbortSignal.timeout(5000) });
-                    // Use situation data as context if relevant
-                } catch(e) {}
-            }
+        responseEl.textContent = needsSearchLocal(text) ? 'Searching the web...' : '';
 
-            // Gemini mode now ALWAYS routes text through /api/chat (which has
-            // Tavily search, wiki, memory, falcon_eye actions, etc.) and plays
-            // the reply via the user's chosen TTS provider — same path as
-            // classic mode, just with a different brand label. The previous
-            // approach asked Gemini to "Say this exactly" via a separate WS
-            // round-trip which was fragile and often paraphrased the reply.
+        try {
+            // Gemini mode — go DIRECTLY to Gemini 2.5 Flash with Google Search
+            // grounding enabled. This is distinct from classical (Ollama),
+            // openrouter, and local modes. When the query needs current info,
+            // Gemini itself runs a web search via the googleSearch tool.
+            const tokenRes = await fetch('/api/gemini-token');
+            const tokenData = await tokenRes.json();
+            if (!tokenData.token) throw new Error('No Gemini token');
+
+            // Pull memories + wiki summaries for system context
+            let memCtx = '', wikiCtx = '';
             try {
-                responseEl.textContent = needsSearchLocal(text) ? 'Searching...' : '';
-                const classicRes = await fetch('/api/chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: text }),
-                    signal: AbortSignal.timeout(90000),
-                });
-                const classicData = await classicRes.json();
-                responseEl.textContent = classicData.reply || 'No results.';
-                try { responseEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch(e) {}
-                // Play the reply via the selected TTS provider
-                if (classicData.reply) speakText(classicData.reply);
-                // Handle actions
-                if (classicData.actions) {
-                    classicData.actions.forEach(act => {
-                        if (act.action === 'open_url' && act.url) window.open(act.url, '_blank');
-                        else if (act.action === 'open_maps') handleMaps(act);
-                        else if (act.action === 'play_music' && act.query) handlePlayMusic(act.query);
-                        else if (act.action === 'music_control' && act.command) handleMusicControl(act.command);
-                        else if (act.action === 'falcon_eye') handleFalconEyeAction(act);
-                    });
+                const [memRes, wikiRes] = await Promise.all([
+                    fetch('/api/memory').catch(() => null),
+                    fetch('/api/wiki').catch(() => null),
+                ]);
+                if (memRes && memRes.ok) {
+                    const memData = await memRes.json();
+                    if (memData.memories?.length) {
+                        memCtx = '\n\nUser memories:\n' + memData.memories.map(m => `- [${m.category}] ${m.content}`).join('\n');
+                    }
                 }
-                if (classicData.followUp) {
-                    setTimeout(() => {
-                        responseEl.textContent = classicData.followUp;
-                        speakText(classicData.followUp);
-                    }, 3000);
+                if (wikiRes && wikiRes.ok) {
+                    const wikiData = await wikiRes.json();
+                    const pages = wikiData.index?.pages || {};
+                    const keys = Object.keys(pages);
+                    if (keys.length > 0) {
+                        wikiCtx = '\n\nWiki pages (' + keys.length + '): ' +
+                            keys.slice(0, 40).map(k => `${pages[k].title}`).join('; ');
+                    }
                 }
-            } catch (innerErr) {
-                console.warn('Gemini /api/chat error:', innerErr);
-                responseEl.textContent = 'Brain unreachable. Retry, sir.';
+            } catch(e) {}
+
+            // Grab recent conversation history
+            let historyParts = [];
+            try {
+                const hRes = await fetch('/api/history');
+                if (hRes.ok) {
+                    const hData = await hRes.json();
+                    const msgs = Array.isArray(hData.messages) ? hData.messages : (Array.isArray(hData) ? hData : []);
+                    historyParts = msgs.slice(-12).map(m => ({
+                        role: m.role === 'assistant' ? 'model' : 'user',
+                        parts: [{ text: m.content || '' }]
+                    })).filter(m => m.parts[0].text);
+                }
+            } catch(e) {}
+
+            const localTime = new Date().toLocaleString('en-US', { timeZone: 'America/Chicago', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: 'numeric', hour12: true });
+            const systemText = `You are the user's personal AI assistant running on Gemini 2.5 Flash with live Google Search grounding. You are in Gemini mode — NOT classical Ollama, NOT OpenRouter, NOT local.
+Be helpful, loyal, concise. Subtle wit, British tone. NEVER describe your own personality traits.
+NEVER say "Spectra" or your name unless the user directly asks "who are you?" — then say "Spectra on Gemini 2.5 Flash".
+Address the user as "sir" (male). NEVER "ma'am".
+Current date/time (Central): ${localTime}.
+CRITICAL: For ANY question about current events, people, prices, scores, news, weather, or anything that could have changed since your training — USE the google_search tool. Your training data is frozen; the web is live. When in doubt, search.${memCtx}${wikiCtx}`;
+
+            const body = {
+                systemInstruction: { parts: [{ text: systemText }] },
+                contents: [...historyParts, { role: 'user', parts: [{ text }] }],
+                tools: [{ googleSearch: {} }],
+                generationConfig: { maxOutputTokens: 1024, temperature: 0.7 }
+            };
+
+            const gRes = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${tokenData.token}`,
+                { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(60000) }
+            );
+            const gData = await gRes.json();
+            let reply = gData.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('').trim() || '';
+            if (!reply) {
+                const errMsg = gData.error?.message || 'No response';
+                reply = `Gemini error: ${errMsg}`;
             }
+            responseEl.textContent = reply;
+            try { responseEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch(e) {}
+
+            // Save history
+            fetch('/api/history', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ messages: [{ role: 'user', content: text }, { role: 'assistant', content: reply }] })
+            }).catch(() => {});
+
+            // Speak via selected TTS provider
+            if (reply && !reply.startsWith('Gemini error')) speakText(reply);
+            else orb.className = 'orb';
             return;
         } catch (err) {
             console.warn('Gemini send error:', err);
-            fallbackToClassic();
-            inputEl.value = text;
-            send();
+            responseEl.textContent = 'Gemini unreachable: ' + (err?.message || err);
+            orb.className = 'orb';
         }
         return;
     }
@@ -3391,12 +3423,46 @@ function handleFalconEyeAction(act) {
 
 // Client-side search detection (mirrors server needsSearch)
 function needsSearchLocal(msg) {
-    const lower = msg.toLowerCase();
-    const triggers = ['search','look up','google','find out','latest','today','tonight',
-        'yesterday','this week','score','scores','standings','weather','forecast','news',
-        'price','stock','who won','who lost','how much','how many','when is','where is',
-        'recent','update','results','live','current','tell me about','what happened',
-        'details about','info on','what is the','what\'s the','catch me up'];
+    const lower = (msg || '').toLowerCase().trim();
+    if (!lower) return false;
+    const chatter = [
+        /^(hi|hey|hello|yo|sup|good (morning|afternoon|evening|night))\b/,
+        /^(thanks|thank you|thx|cheers|nice|cool|awesome|great|ok|okay|k)\b/,
+        /^(are you there|you there|you awake|can you hear me)\b/,
+        /^(what can you do|what are you|who are you)\b/,
+        /^(shut up|stop|pause|be quiet|nevermind|never mind|cancel)\b/,
+        /^(yes|yeah|yep|yup|no|nope|nah|sure|fine|maybe)[\s.!?]*$/,
+    ];
+    if (chatter.some(re => re.test(lower))) return false;
+    const nonSearch = [
+        /^(open|launch|start|close|quit|kill)\s/,
+        /^(create|write|make|save|generate)\s.*(file|folder|document|note|text|script)/,
+        /^(play|pause|skip|resume|next|previous|stop)\b/,
+        /^(remember|forget|remind me|set a reminder|set a timer)\b/,
+        /^(schedule|set an alert)\b/,
+        /^(run |execute |shell )/,
+    ];
+    if (nonSearch.some(re => re.test(lower))) return false;
+    if (/^(who|what|when|where|why|how|which|whose|whom)\b/.test(lower)) return true;
+    if (/^(is |are |was |were |do |does |did |has |have |had |can |could |will |would |should |may |might )/.test(lower)) return true;
+    if (/\?\s*$/.test(lower)) return true;
+    const triggers = ['search','look up','google','find out','find me','show me','tell me',
+        'check','what about','latest','today','tonight','yesterday','this week','this month',
+        'this year','right now','currently','current','recent','recently','tomorrow','upcoming',
+        'last night','last week','last month','last year','live ',
+        'score','scores','standings','playoffs','championship','who won','who lost','results',
+        'highlights','game','match','final','season','trade','signed',
+        'news','headline','breaking','update','weather','forecast','temperature',
+        'price','stock','crypto','bitcoin','ethereum','market','shares','index','earnings',
+        'inflation','fed','dow','nasdaq',
+        'president','prime minister','ceo','founder','owner','senator','governor','mayor',
+        'how much','how many','how old','when is','when does','when did','where is','where does',
+        'how long','how far','how tall',
+        'tell me about','what happened','catch me up','info on','details about','background on',
+        'history of','biography','bio of','summary of',
+        'wiki','wikipedia','encyclopedia','define','definition',
+        'trending','viral','released','box office','top 10','best ',
+        'near me','hours of','phone number','address of','directions'];
     return triggers.some(t => lower.includes(t));
 }
 

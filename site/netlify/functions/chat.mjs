@@ -60,56 +60,76 @@ function needsBrowse(msg) {
 // ── Detect if a message needs web search ────────────────────────────────────
 
 function needsSearch(msg) {
-  const lower = msg.toLowerCase();
+  const lower = msg.toLowerCase().trim();
+  if (!lower) return false;
+
   // Conversation openers / casual chat — never search
   const chatter = [
     /^(hi|hey|hello|yo|sup|good (morning|afternoon|evening|night))\b/,
-    /^(thanks|thank you|thx|cheers)\b/,
+    /^(thanks|thank you|thx|cheers|nice|cool|awesome|great|ok|okay|k)\b/,
     /^(are you there|you there|you awake|can you hear me)\b/,
     /^(what can you do|what are you|who are you)\b/,
-    /^(shut up|stop|pause|be quiet)\b/,
+    /^(shut up|stop|pause|be quiet|nevermind|never mind|cancel)\b/,
+    /^(yes|yeah|yep|yup|no|nope|nah|sure|fine|maybe)[\s.!?]*$/,
   ];
   if (chatter.some((re) => re.test(lower))) return false;
 
-  // Factual / temporal / named-entity triggers — search aggressively.
-  // The goal is "when in doubt, search" so Spectra responds with real
-  // information instead of training-data guesses.
+  // Action commands that should NOT search (they trigger other handlers)
+  const nonSearchActions = [
+    /^(open|launch|start|close|quit|kill)\s/,
+    /^(create|write|make|save|generate)\s.*(file|folder|document|note|text|script)/,
+    /^(play|pause|skip|resume|next|previous|stop)\b/,
+    /^(remember|forget|remind me|set a reminder|set a timer)\b/,
+    /^(schedule|set an alert)\b/,
+    /^(run |execute |shell )/,
+  ];
+  if (nonSearchActions.some((re) => re.test(lower))) return false;
+
+  // QUESTIONS — default to search. Your training data is frozen;
+  // the web is live. Search whenever the user asks anything factual.
+  if (/^(who|what|when|where|why|how|which|whose|whom)\b/.test(lower)) return true;
+  if (/^(is |are |was |were |do |does |did |has |have |had |can |could |will |would |should |may |might )/.test(lower)) return true;
+  if (/\?\s*$/.test(lower)) return true;
+
+  // Explicit factual / temporal / named-entity triggers
   const triggers = [
     // Direct search verbs
     "search", "look up", "google", "find out", "find me", "show me",
+    "tell me", "look it up", "check", "what about",
     // Temporal
     "latest", "today", "tonight", "yesterday", "this week", "this month",
-    "this year", "right now", "currently", "recent", "recently", "just happened",
-    "this morning", "this afternoon", "this evening", "last night",
+    "this year", "right now", "currently", "current", "recent", "recently",
+    "just happened", "this morning", "this afternoon", "this evening",
+    "last night", "last week", "last month", "last year", "now ",
+    "live ", "upcoming", "tomorrow",
     // Sports / events
     "score", "scores", "record", "standings", "playoffs", "championship",
     "who won", "who is winning", "who lost", "results", "highlights", "game",
-    "match", "final", "semifinal", "tournament", "league",
+    "match", "final", "semifinal", "tournament", "league", "season",
+    "bracket", "draft", "trade", "signed",
     // News / markets
-    "news", "headline", "breaking", "update", "weather", "forecast", "temperature",
-    "price", "stock", "crypto", "bitcoin", "market", "shares", "index",
-    "earnings", "rate", "inflation", "fed",
+    "news", "headline", "breaking", "update", "weather", "forecast",
+    "temperature", "price", "stock", "crypto", "bitcoin", "ethereum",
+    "market", "shares", "index", "earnings", "rate", "inflation", "fed",
+    "dow", "nasdaq", "s&p",
     // People / positions
-    "who is the president", "who is the prime minister", "who is the ceo",
-    "who owns", "who runs", "who leads", "who leads",
+    "president", "prime minister", "ceo", "founder", "owner", "senator",
+    "governor", "mayor", "coach", "manager",
     // Reference / factual
     "how much", "how many", "how old", "when is", "when does", "when did",
-    "where is", "where does", "how long", "how far",
+    "where is", "where does", "how long", "how far", "how tall",
     // Curiosity / lookup
     "tell me about", "what happened", "what is going on", "what's going on",
     "catch me up", "info on", "details about", "background on",
-    "history of", "details on", "biography", "bio of",
+    "history of", "details on", "biography", "bio of", "summary of",
     // Wiki-ish
-    "wiki", "wikipedia", "encyclopedia", "define",
+    "wiki", "wikipedia", "encyclopedia", "define", "definition",
     // Trending
     "trending", "viral", "going viral", "hot right now", "released",
-    "released today", "box office",
+    "released today", "box office", "rankings", "top 10", "best ",
     // Places
     "restaurant", "open right now", "near me", "hours of", "phone number",
-    "address of", "map of",
-    // General conditionals that signal a factual answer
-    "is ", "are ", "does ", "do ", "did ", "can ", "will ", "should ",
-    "which ",
+    "address of", "map of", "directions",
   ];
   return triggers.some((t) => lower.includes(t));
 }

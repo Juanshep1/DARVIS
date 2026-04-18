@@ -40,7 +40,8 @@ class OnDeviceLLM: ObservableObject {
 
         let body: [String: Any] = [
             "contents": [["parts": [["text": prompt]]]],
-            "systemInstruction": ["parts": [["text": "You are the user's personal AI assistant. NEVER say \"Spectra\" or your name unless directly asked \"who are you?\". NEVER describe your personality. Be concise with subtle British wit. Running Gemma 4 on iOS. 1-3 sentences."]]],
+            "systemInstruction": ["parts": [["text": "You are the user's personal AI assistant. NEVER say \"Spectra\" or your name unless directly asked \"who are you?\". NEVER describe your personality. Be concise with subtle British wit. Running Gemma 4 on iOS. 1-3 sentences. You have the googleSearch tool — USE IT for anything current (news, scores, prices, weather, people, events). Training data is frozen; the web is live."]]],
+            "tools": [["googleSearch": [:]]],
             "generationConfig": ["maxOutputTokens": maxTokens, "temperature": 0.7]
         ]
 

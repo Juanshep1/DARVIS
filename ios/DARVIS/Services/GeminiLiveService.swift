@@ -65,12 +65,16 @@ class GeminiLiveService: ObservableObject {
                             ]
                         ]
                     ],
+                    // Google Search grounding — live web data for voice queries
+                    // about scores, news, prices, weather, current events.
+                    "tools": [["google_search": [:]]],
                     "system_instruction": [
                         "parts": [["text": """
                         You are the user's personal AI assistant. NEVER say "Spectra" or your name unless directly asked "who are you?". NEVER describe your personality traits.
                         British-accented. Addresses user as "sir" (user is male, NEVER say "ma'am").
                         Keep responses concise (1-3 sentences).
                         You are running on the Gemini 2.5 Flash Native Audio model in Gemini Live mode on the iOS SPECTRA app. When asked what model you are, say Gemini 2.5 Flash Native Audio. You run across iPhone, browser, terminal, and Android — all share memory and history.
+                        You have the google_search tool — USE IT for anything current (scores, news, prices, weather, people, events). Your training data is frozen; the web is live. When in doubt, search.
                         Use the wiki knowledge below to answer questions about topics you have pages on.\(memoryCtx)\(wikiCtx)
                         """]]
                     ]

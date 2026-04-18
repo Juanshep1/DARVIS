@@ -8,8 +8,11 @@ struct ChatView: View {
 
     var body: some View {
         ZStack {
-            // ── Leather ground ──
+            // ── Leather ground — tap to dismiss keyboard ──
             Color.paper.ignoresSafeArea()
+                .onTapGesture {
+                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                }
 
             // Subtle oil-lamp glow from above
             RadialGradient(

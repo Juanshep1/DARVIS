@@ -27,7 +27,7 @@ class ChatViewModel: ObservableObject {
     private var recognitionTask: SFSpeechRecognitionTask?
     private var speechEngine: AVAudioEngine?
     private var silenceTimer: Timer?
-    private let silenceDelay: TimeInterval = 5.0
+    private let silenceDelay: TimeInterval = 2.0  // Auto-send 2s after user stops speaking
     private var lastTranscript = ""
     private var stableCount = 0  // How many times the same transcript was seen
 
@@ -560,13 +560,11 @@ class ChatViewModel: ObservableObject {
                     self.silenceTimer = Timer.scheduledTimer(withTimeInterval: self.silenceDelay, repeats: false) { _ in
                         DispatchQueue.main.async {
                             guard self.isRecording else { return }
-                            // Only auto-send if transcript is stable (not still changing)
+                            // Auto-send after 2s of silence — no need to tap mic again
                             let text = self.inputText.trimmingCharacters(in: .whitespacesAndNewlines)
-                            let finalWords = text.split(separator: " ").count
-                            if finalWords >= 2 && self.stableCount >= 1 {
-                                self.stopVoice()
+                            if text.split(separator: " ").count >= 2 {
+                                self.stopVoice() // stopVoice calls send() automatically
                             }
-                            // Otherwise just keep listening
                         }
                     }
                 }

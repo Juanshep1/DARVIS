@@ -1875,6 +1875,58 @@ async function send() {
     if (!text) return;
     inputEl.value = '';
 
+    // ── TTS functions — must be accessible to ALL mode paths below ──
+    if (typeof window._spectraTtsDefined === 'undefined') {
+        window._spectraTtsDefined = true;
+        window._ttsFetch = async function(t) {
+            const p = localStorage.getItem('spectra-tts-provider') || 'browser';
+            const v = localStorage.getItem('spectra-tts-voice') || '';
+            if (p === 'browser') return null;
+            if (p === 'azure') return fetch('/api/tts-azure', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ voice: v || 'en-GB-RyanNeural', text: t }) });
+            if (p === 'edge') return fetch('/api/tts-edge', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ voice: v || 'en-GB', text: t }) });
+            if (p === 'streamelements') return fetch('/api/tts-stream', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider: 'streamelements', voice: v || 'Brian', text: t }) });
+            return fetch('/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: t }) });
+        };
+        window._browserSpeak = function(t) {
+            return new Promise((resolve) => {
+                try {
+                    speechSynthesis.cancel();
+                    const u = new SpeechSynthesisUtterance(t.replace(/```[\s\S]*?```/g, '').slice(0, 1500));
+                    try { const pick = pickBestBrowserVoice(); if (pick) u.voice = pick; } catch(e) {}
+                    u.rate = 1.0; u.pitch = 1.0; u.volume = 1.0;
+                    u.onend = () => { orb.className = 'orb'; resolve(true); };
+                    u.onerror = () => { orb.className = 'orb'; resolve(false); };
+                    orb.className = 'orb speaking';
+                    speechSynthesis.speak(u);
+                } catch(e) { resolve(false); }
+            });
+        };
+        window._speakText = async function(t) {
+            const p = localStorage.getItem('spectra-tts-provider') || 'browser';
+            if (p === 'browser') return window._browserSpeak(t);
+            try {
+                const r = await window._ttsFetch(t);
+                if (!r) return window._browserSpeak(t);
+                const ct = r.headers.get('content-type') || '';
+                if (r.ok && ct.includes('audio')) {
+                    const blob = await r.blob();
+                    if (blob.size > 100) {
+                        const url = URL.createObjectURL(blob);
+                        persistentAudio.pause(); persistentAudio.currentTime = 0;
+                        persistentAudio.src = url; currentAudio = persistentAudio;
+                        orb.className = 'orb speaking';
+                        try { await persistentAudio.play(); } catch(e) { orb.className = 'orb'; return window._browserSpeak(t); }
+                        await new Promise(res => { persistentAudio.onended = () => { URL.revokeObjectURL(url); currentAudio = null; res(); }; persistentAudio.onerror = () => { orb.className = 'orb'; res(); }; });
+                        return true;
+                    }
+                }
+                return window._browserSpeak(t);
+            } catch(e) { return window._browserSpeak(t); }
+        };
+    }
+    var speakText = window._speakText;
+    var browserSpeak = window._browserSpeak;
+
     // Ambient mode: only process if "darvis" is in the text
     if (ambientMode && !text.toLowerCase().includes('spectra')) {
         return; // Silently ignore non-wake-word input in ambient mode
@@ -1912,7 +1964,7 @@ async function send() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ message: text }),
-                signal: AbortSignal.timeout(15000),
+                signal: AbortSignal.timeout(30000),
             });
             const startData = await startRes.json();
             const jobId = startData.id;
@@ -2175,61 +2227,7 @@ async function send() {
 
     if (currentAudio) { persistentAudio.pause(); persistentAudio.currentTime = 0; currentAudio = null; }
 
-    // ── TTS utility functions — defined here so ALL mode paths can use them ──
-    // (Previously these were inside the classic try block, making them invisible
-    // to OpenRouter/Local Pi/Gemini modes in Safari's strict block scoping.)
-    if (typeof window._spectraTtsDefined === 'undefined') {
-        window._spectraTtsDefined = true;
-        window._ttsFetch = async function(text) {
-            const provider = localStorage.getItem('spectra-tts-provider') || 'browser';
-            const voice = localStorage.getItem('spectra-tts-voice') || '';
-            if (provider === 'browser') return null;
-            if (provider === 'azure') return fetch('/api/tts-azure', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ voice: voice || 'en-GB-RyanNeural', text }) });
-            if (provider === 'edge') return fetch('/api/tts-edge', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ voice: voice || 'en-GB', text }) });
-            if (provider === 'streamelements') return fetch('/api/tts-stream', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider: 'streamelements', voice: voice || 'Brian', text }) });
-            return fetch('/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
-        };
-        window._browserSpeak = function(text) {
-            return new Promise((resolve) => {
-                try {
-                    speechSynthesis.cancel();
-                    const u = new SpeechSynthesisUtterance(text.replace(/```[\s\S]*?```/g, '').slice(0, 1500));
-                    const pick = pickBestBrowserVoice();
-                    if (pick) u.voice = pick;
-                    u.rate = 1.0; u.pitch = 1.0; u.volume = 1.0;
-                    u.onend = () => { orb.className = 'orb'; resolve(true); };
-                    u.onerror = () => { orb.className = 'orb'; resolve(false); };
-                    orb.className = 'orb speaking';
-                    speechSynthesis.speak(u);
-                } catch(e) { resolve(false); }
-            });
-        };
-        window._speakText = async function(text) {
-            const provider = localStorage.getItem('spectra-tts-provider') || 'browser';
-            if (provider === 'browser') return window._browserSpeak(text);
-            try {
-                const ttsRes = await window._ttsFetch(text);
-                if (!ttsRes) return window._browserSpeak(text);
-                const ct = ttsRes.headers.get('content-type') || '';
-                if (ttsRes.ok && ct.includes('audio')) {
-                    const blob = await ttsRes.blob();
-                    if (blob.size > 100) {
-                        const url = URL.createObjectURL(blob);
-                        persistentAudio.pause(); persistentAudio.currentTime = 0;
-                        persistentAudio.src = url; currentAudio = persistentAudio;
-                        orb.className = 'orb speaking';
-                        try { await persistentAudio.play(); } catch(e) { orb.className = 'orb'; return window._browserSpeak(text); }
-                        await new Promise(r => { persistentAudio.onended = () => { URL.revokeObjectURL(url); currentAudio = null; r(); }; persistentAudio.onerror = () => { orb.className = 'orb'; r(); }; });
-                        return true;
-                    }
-                }
-                return window._browserSpeak(text);
-            } catch(e) { return window._browserSpeak(text); }
-        };
-    }
-    // Aliases so all mode paths can call speakText/browserSpeak directly
-    const speakText = window._speakText;
-    const browserSpeak = window._browserSpeak;
+    // (TTS functions moved to top of send() — see above)
 
     let pendingTab = null;
     if (looksLikeOpenRequest(text)) {

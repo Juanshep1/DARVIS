@@ -1894,61 +1894,79 @@ async function send() {
     }
 
     // Gemini text mode — send via WebSocket (with Tavily search for real-time info)
-    // ── Local Pi mode — routes directly to the Pi via Tailscale Funnel or LAN
+    // ── Local Pi mode — polling approach (no long connections, no timeouts) ──
+    // POST starts the job on the Pi, returns instantly with a job ID.
+    // Then we poll GET /api/chat/status?id=<id> every 2s until the reply is ready.
+    // Every request completes in <1s so Safari/Tailscale never time out.
     if (audioMode === 'local') {
         const piAddr = localStorage.getItem('spectra-pi-address') || 'juanspi5.tailc0f840.ts.net';
-        // If it looks like a domain (has a dot and no port), use https. Otherwise http + port.
         const isUrl = piAddr.includes('.') && !piAddr.match(/^\d+\.\d+\.\d+\.\d+$/);
         const piBase = isUrl ? `https://${piAddr}` : `http://${piAddr}:2414`;
-        const piUrl = `${piBase}/api/chat`;
         orb.className = 'orb thinking';
-        responseEl.textContent = `Connecting to Pi…`;
-        // Show elapsed time so the user knows it's still working (Pi is slow)
         const piStartTime = Date.now();
-        const piTimer = setInterval(() => {
-            const elapsed = Math.round((Date.now() - piStartTime) / 1000);
-            if (orb.className.includes('thinking')) {
-                responseEl.textContent = `Pi is thinking… ${elapsed}s`;
-            }
-        }, 1000);
+        responseEl.textContent = 'Sending to Pi…';
+
         try {
-            const res = await fetch(piUrl, {
+            // Step 1: POST the message — returns immediately with a job ID
+            const startRes = await fetch(`${piBase}/api/chat`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ message: text }),
-                signal: AbortSignal.timeout(180000), // Pi is slow, 3 min timeout (cold start can take 60s+)
+                signal: AbortSignal.timeout(15000),
             });
-            let raw = (await res.text()).trim();
-            // The Pi's keep-alive sends chunked heartbeat spaces before the
-            // JSON payload. Strip everything before the first { character.
-            const jsonStart = raw.indexOf('{');
-            if (jsonStart > 0) raw = raw.slice(jsonStart);
-            let data;
-            try { data = JSON.parse(raw); } catch(e) { data = { reply: raw.slice(0, 600) || '(no response from Pi)' }; }
-            clearInterval(piTimer);
-            const reply = data.reply || 'No response from Pi.';
+            const startData = await startRes.json();
+            const jobId = startData.id;
+            if (!jobId) throw new Error('No job ID returned');
+
+            // Step 2: Poll for the result every 2s
+            responseEl.textContent = 'Pi is thinking…';
+            let result = null;
+            for (let attempt = 0; attempt < 90; attempt++) { // 90 × 2s = 3 min max
+                await new Promise(r => setTimeout(r, 2000));
+                const elapsed = Math.round((Date.now() - piStartTime) / 1000);
+                responseEl.textContent = `Pi is thinking… ${elapsed}s`;
+                try {
+                    const pollRes = await fetch(`${piBase}/api/chat/status?id=${jobId}`, {
+                        signal: AbortSignal.timeout(10000),
+                    });
+                    const pollData = await pollRes.json();
+                    if (pollData.status === 'done') {
+                        result = pollData;
+                        break;
+                    }
+                    if (pollData.status === 'not_found') {
+                        throw new Error('Job lost — Pi may have restarted');
+                    }
+                } catch(pollErr) {
+                    // Single poll failure is OK — keep trying
+                    console.warn('poll error:', pollErr);
+                }
+            }
+
+            if (!result) throw new Error('Pi never finished (3 min limit)');
+
+            const reply = result.reply || 'No response from Pi.';
             responseEl.textContent = reply;
             try { responseEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch(e) {}
-            // TTS — if Pi returned audio_url, play that; otherwise use selected TTS provider
-            if (data.audio_url) {
+
+            // TTS
+            if (result.audio_url) {
                 try {
-                    const audioUrl = `${piBase}${data.audio_url}`;
                     persistentAudio.pause(); persistentAudio.currentTime = 0;
-                    persistentAudio.src = audioUrl;
+                    persistentAudio.src = `${piBase}${result.audio_url}`;
                     orb.className = 'orb speaking';
                     persistentAudio.onended = () => { orb.className = 'orb'; };
                     await persistentAudio.play();
                 } catch(e) {
-                    speakText(reply);
+                    try { speakText(reply); } catch(e2) { browserSpeak(reply); }
                 }
             } else {
-                speakText(reply);
+                try { speakText(reply); } catch(e) { browserSpeak(reply); }
             }
             orb.className = orb.className.includes('speaking') ? orb.className : 'orb';
         } catch(e) {
-            clearInterval(piTimer);
             const elapsed = Math.round((Date.now() - piStartTime) / 1000);
-            responseEl.textContent = `Pi timed out after ${elapsed}s at ${piBase}. The Pi's Ollama may need a restart — try asking the Pi's Claude to run: sudo systemctl restart ollama`;
+            responseEl.textContent = `Pi error after ${elapsed}s: ${e?.message || e}`;
             orb.className = 'orb';
         }
         return;
@@ -2156,6 +2174,62 @@ async function send() {
     }
 
     if (currentAudio) { persistentAudio.pause(); persistentAudio.currentTime = 0; currentAudio = null; }
+
+    // ── TTS utility functions — defined here so ALL mode paths can use them ──
+    // (Previously these were inside the classic try block, making them invisible
+    // to OpenRouter/Local Pi/Gemini modes in Safari's strict block scoping.)
+    if (typeof window._spectraTtsDefined === 'undefined') {
+        window._spectraTtsDefined = true;
+        window._ttsFetch = async function(text) {
+            const provider = localStorage.getItem('spectra-tts-provider') || 'browser';
+            const voice = localStorage.getItem('spectra-tts-voice') || '';
+            if (provider === 'browser') return null;
+            if (provider === 'azure') return fetch('/api/tts-azure', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ voice: voice || 'en-GB-RyanNeural', text }) });
+            if (provider === 'edge') return fetch('/api/tts-edge', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ voice: voice || 'en-GB', text }) });
+            if (provider === 'streamelements') return fetch('/api/tts-stream', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider: 'streamelements', voice: voice || 'Brian', text }) });
+            return fetch('/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
+        };
+        window._browserSpeak = function(text) {
+            return new Promise((resolve) => {
+                try {
+                    speechSynthesis.cancel();
+                    const u = new SpeechSynthesisUtterance(text.replace(/```[\s\S]*?```/g, '').slice(0, 1500));
+                    const pick = pickBestBrowserVoice();
+                    if (pick) u.voice = pick;
+                    u.rate = 1.0; u.pitch = 1.0; u.volume = 1.0;
+                    u.onend = () => { orb.className = 'orb'; resolve(true); };
+                    u.onerror = () => { orb.className = 'orb'; resolve(false); };
+                    orb.className = 'orb speaking';
+                    speechSynthesis.speak(u);
+                } catch(e) { resolve(false); }
+            });
+        };
+        window._speakText = async function(text) {
+            const provider = localStorage.getItem('spectra-tts-provider') || 'browser';
+            if (provider === 'browser') return window._browserSpeak(text);
+            try {
+                const ttsRes = await window._ttsFetch(text);
+                if (!ttsRes) return window._browserSpeak(text);
+                const ct = ttsRes.headers.get('content-type') || '';
+                if (ttsRes.ok && ct.includes('audio')) {
+                    const blob = await ttsRes.blob();
+                    if (blob.size > 100) {
+                        const url = URL.createObjectURL(blob);
+                        persistentAudio.pause(); persistentAudio.currentTime = 0;
+                        persistentAudio.src = url; currentAudio = persistentAudio;
+                        orb.className = 'orb speaking';
+                        try { await persistentAudio.play(); } catch(e) { orb.className = 'orb'; return window._browserSpeak(text); }
+                        await new Promise(r => { persistentAudio.onended = () => { URL.revokeObjectURL(url); currentAudio = null; r(); }; persistentAudio.onerror = () => { orb.className = 'orb'; r(); }; });
+                        return true;
+                    }
+                }
+                return window._browserSpeak(text);
+            } catch(e) { return window._browserSpeak(text); }
+        };
+    }
+    // Aliases so all mode paths can call speakText/browserSpeak directly
+    const speakText = window._speakText;
+    const browserSpeak = window._browserSpeak;
 
     let pendingTab = null;
     if (looksLikeOpenRequest(text)) {

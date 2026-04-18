@@ -592,6 +592,9 @@ inputEl.focus();
 </html>"""
 
 
+# Pending chat jobs — background threads write results here, GET /api/chat/status polls them
+_pending_jobs = {}
+
 class SpectraHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         pass  # Suppress request logs
@@ -609,6 +612,25 @@ class SpectraHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
+        # ── Poll endpoint for async chat jobs ──
+        if self.path.startswith('/api/chat/status'):
+            from urllib.parse import urlparse, parse_qs
+            qs = parse_qs(urlparse(self.path).query)
+            job_id = qs.get('id', [None])[0]
+            job = _pending_jobs.get(job_id) if job_id else None
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self._cors()
+            self.end_headers()
+            if job:
+                self.wfile.write(json.dumps(job).encode())
+                # Clean up done jobs after they're read
+                if job.get('status') == 'done':
+                    _pending_jobs.pop(job_id, None)
+            else:
+                self.wfile.write(json.dumps({"status": "not_found"}).encode())
+            return
+
         if self.path == '/' or self.path == '/index.html':
             self.send_response(200)
             self.send_header('Content-Type', 'text/html')
@@ -671,65 +693,39 @@ class SpectraHandler(BaseHTTPRequestHandler):
             body = json.loads(self.rfile.read(length))
             message = body.get('message', '')
 
-            # Send headers IMMEDIATELY so the browser knows the connection
-            # is alive while Ollama thinks (55s+ on a Pi). Without this,
-            # Safari's cross-origin fetch timeout kills the request at ~16s.
+            # ── Polling approach — avoids ALL timeout issues ──
+            # POST starts the job in a background thread, returns immediately
+            # with a job ID. The browser polls GET /api/chat/status?id=<id>
+            # every 2s until the reply is ready. Every request completes in
+            # <1s so Safari/Tailscale never time out.
+            import uuid as _uuid
+            job_id = str(_uuid.uuid4())[:8]
+            _pending_jobs[job_id] = {"status": "thinking", "reply": None, "audio_url": None}
+
+            def _run_job():
+                try:
+                    reply = call_ollama(message)
+                except Exception as e:
+                    reply = f"Error: {e}"
+                audio_url = None
+                try:
+                    audio_data = tts_audio(reply)
+                    if audio_data:
+                        tmp = tempfile.NamedTemporaryFile(suffix='.mp3', dir=tempfile.gettempdir(), delete=False)
+                        tmp.write(audio_data)
+                        tmp.close()
+                        audio_url = f'/audio/{Path(tmp.name).name}'
+                except Exception:
+                    pass
+                _pending_jobs[job_id] = {"status": "done", "reply": reply, "audio_url": audio_url}
+
+            threading.Thread(target=_run_job, daemon=True).start()
+
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
-            self.send_header('Transfer-Encoding', 'chunked')
             self._cors()
             self.end_headers()
-
-            # Send a keep-alive space every 5s in a background thread so
-            # the browser doesn't think the connection died.
-            import threading
-            keep_alive = True
-            def _keepalive():
-                while keep_alive:
-                    try:
-                        # Properly-framed 1-byte chunk: "1\r\n \r\n"
-                        self.wfile.write(b'1\r\n \r\n')
-                        self.wfile.flush()
-                    except Exception:
-                        break
-                    for _ in range(50):  # 5 seconds in 0.1s ticks
-                        if not keep_alive:
-                            break
-                        import time; time.sleep(0.1)
-            ka_thread = threading.Thread(target=_keepalive, daemon=True)
-            ka_thread.start()
-
-            try:
-                reply = call_ollama(message)
-            except Exception as e:
-                reply = f"Error: {e}"
-
-            # Generate TTS
-            audio_url = None
-            try:
-                audio_data = tts_audio(reply)
-                if audio_data:
-                    tmp = tempfile.NamedTemporaryFile(suffix='.mp3', dir=tempfile.gettempdir(), delete=False)
-                    tmp.write(audio_data)
-                    tmp.close()
-                    audio_url = f'/audio/{Path(tmp.name).name}'
-            except Exception:
-                pass
-
-            # Stop keepalive and send the real payload
-            keep_alive = False
-            ka_thread.join(timeout=1)
-
-            try:
-                payload = json.dumps({
-                    'reply': reply,
-                    'audio_url': audio_url,
-                }).encode()
-                # Frame the payload as one chunk, then send the zero-length terminator.
-                self.wfile.write(f'{len(payload):x}\r\n'.encode() + payload + b'\r\n0\r\n\r\n')
-                self.wfile.flush()
-            except Exception:
-                pass
+            self.wfile.write(json.dumps({"status": "thinking", "id": job_id}).encode())
 
         elif self.path == '/api/set_model':
             length = int(self.headers.get('Content-Length', 0))

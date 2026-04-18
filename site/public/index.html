@@ -591,9 +591,9 @@ body::after {
   .header-btn .glyph { font-size: 19px; }
   .header-btn > span:not(.glyph) { font-size: 7px; letter-spacing: 0.16em; }
 
-  /* Orb — slightly smaller on phones */
-  .orb-area { padding: 6px 10px; justify-content: flex-start; padding-top: 14px; }
-  .orb-wrap { width: min(78vw, 300px); height: min(78vw, 300px); }
+  /* Orb — slightly smaller on phones, no overflow scroll (fights native) */
+  .orb-area { padding: 6px 10px; justify-content: flex-start; padding-top: 10px; overflow: visible; }
+  .orb-wrap { width: min(68vw, 260px); height: min(68vw, 260px); flex-shrink: 0; }
   #orbCanvas { width: 100%; height: 100%; }
 
   /* Response area — larger reading size, better scroll */
@@ -662,7 +662,61 @@ body::after {
   .settings-panel code {
     word-break: break-all;
     white-space: pre-wrap;
+    font-size: 11px !important;
   }
+
+  /* OpenRouter model list — shorter on mobile so it doesn't eat the panel */
+  #openrouterModelSelect {
+    font-size: 13px !important;
+    min-height: 120px !important;
+    max-height: 180px !important;
+  }
+  #openrouterSearch {
+    font-size: 16px !important;
+    min-height: 44px !important;
+    padding: 10px 12px !important;
+    border: 1px solid var(--gilt-dark) !important;
+    background: var(--paper) !important;
+    color: var(--ink) !important;
+  }
+
+  /* Local Pi address */
+  #localPiAddress {
+    font-size: 14px !important;
+    min-height: 44px !important;
+    padding: 10px !important;
+  }
+
+  /* Azure voice dropdown */
+  #azureVoiceSelect {
+    font-size: 14px !important;
+    min-height: 46px !important;
+  }
+
+  /* Falcon Eye button at the bottom of settings */
+  .settings-panel button[onclick="fe_open()"] {
+    min-height: 48px !important;
+    font-size: 13px !important;
+    border-radius: 0 !important;
+  }
+
+  /* All sub-panels inside settings — proper width + touch sizing */
+  #localPiSettings, #openrouterSettings, #azureSettings,
+  #edgeSettings, #streamelementsSettings, #browserVoiceSettings,
+  #classicSettings, #geminiVoiceSettings {
+    width: 100% !important;
+  }
+  #localPiSettings select, #openrouterSettings select,
+  #azureSettings select, #edgeSettings select,
+  #streamelementsSettings select, #browserVoiceSettings select,
+  #classicSettings select, #geminiVoiceSettings select {
+    font-size: 15px !important;
+    min-height: 44px !important;
+    padding: 10px !important;
+  }
+
+  /* Transcript label — smaller on mobile */
+  .response-area::before { font-size: 7px; letter-spacing: 0.22em; }
 
   /* Agent / situation / wiki modals */
   .agent-panel, .situation-panel {

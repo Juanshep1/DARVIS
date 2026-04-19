@@ -9,8 +9,8 @@ compatibility_flags = ["nodejs_compat"]
 # Then paste the returned id below.
 [[kv_namespaces]]
 binding = "KV"
-id = "REPLACE_WITH_KV_ID"
-preview_id = "REPLACE_WITH_PREVIEW_KV_ID"
+id = "d03f57135c61417799ae9295f723018f"
+preview_id = "eee0a734c14a4896bc1940aab9dae392"
 
 # ── Observability ──────────────────────────────────────────────────────────
 [observability]

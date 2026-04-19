@@ -62,13 +62,20 @@ class APIClient {
         let provider = UserDefaults.standard.string(forKey: "ttsProvider") ?? "browser"
         switch provider {
         case "elevenlabs":
-            let voiceId = UserDefaults.standard.string(forKey: "elevenLabsVoiceId") ?? "21m00Tcm4TlvDq8ikWAM"
+            // Canonical voice id lives in AppSettings (same place the
+            // Settings screen writes via setVoice). Fall back to the
+            // legacy "elevenLabsVoiceId" key, then to a sensible default.
+            let settingsVoice = LocalStore.loadSettings().voice_id
+            let voiceId = !settingsVoice.isEmpty
+                ? settingsVoice
+                : (UserDefaults.standard.string(forKey: "elevenLabsVoiceId")
+                    ?? "21m00Tcm4TlvDq8ikWAM")
             return try await DirectAPI.elevenLabsTTS(text: text, voiceId: voiceId)
         case "streamelements":
-            let voice = UserDefaults.standard.string(forKey: "ttsVoice") ?? "Brian"
+            let voice = UserDefaults.standard.string(forKey: "streamElementsVoice") ?? "Brian"
             return try await DirectAPI.streamElementsTTS(text: text, voice: voice)
         default:
-            // "browser" / "edge" / "azure" → fall back to iOS native speech
+            // "browser" / unknown → fall back to iOS native speech
             throw URLError(.cancelled)
         }
     }

@@ -27,10 +27,21 @@ class SettingsViewModel: ObservableObject {
 
     static let ttsProviders = [
         ("browser", "Apple / System Voice"),
-        ("edge", "Google Translate (free)"),
         ("streamelements", "StreamElements (free)"),
         ("elevenlabs", "ElevenLabs (paid)"),
     ]
+
+    // StreamElements voices — free, no key, same catalog the web backend uses.
+    static let streamElementsVoices = [
+        "Brian", "Amy", "Emma", "Russell", "Nicole", "Joey", "Justin",
+        "Matthew", "Joanna", "Salli", "Kimberly", "Kendra", "Ivy",
+        "Geraint", "Raveena", "Chantal", "Celine", "Hans", "Vicki",
+        "Conchita", "Enrique", "Cristiano", "Vitoria", "Astrid",
+    ]
+
+    @Published var streamElementsVoice: String = UserDefaults.standard.string(forKey: "streamElementsVoice") ?? "Brian" {
+        didSet { UserDefaults.standard.set(streamElementsVoice, forKey: "streamElementsVoice") }
+    }
 
     func load() async {
         do {
@@ -214,9 +225,44 @@ struct SettingsView: View {
                     .almanacCard()
                     .padding(.horizontal, 4)
 
-                    // ── Classic model + voice (when in classic mode) ──
+                    // ── Voice picker — shown based on TTS provider, not mode ──
+                    if vm.ttsProvider == "elevenlabs" {
+                        AlmanacSectionHeader(number: "03", title: "ElevenLabs Voice")
+                        if vm.voices.isEmpty {
+                            Text("Add your ElevenLabs key below, then reopen this screen to load voices.")
+                                .font(.almanacBodyItalic(11))
+                                .foregroundColor(.inkGhost)
+                                .padding(.horizontal, 4)
+                        } else {
+                            Picker("Voice", selection: Binding(
+                                get: { vm.settings.voice_id },
+                                set: { val in vm.settings.voice_id = val; Task { await vm.setVoice(val) } }
+                            )) {
+                                ForEach(vm.voices) { v in
+                                    Text(v.name).tag(v.id)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .tint(.gilt)
+                            .almanacCard()
+                            .padding(.horizontal, 4)
+                        }
+                    } else if vm.ttsProvider == "streamelements" {
+                        AlmanacSectionHeader(number: "03", title: "StreamElements Voice")
+                        Picker("Voice", selection: $vm.streamElementsVoice) {
+                            ForEach(SettingsViewModel.streamElementsVoices, id: \.self) { name in
+                                Text(name).tag(name)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .tint(.gilt)
+                        .almanacCard()
+                        .padding(.horizontal, 4)
+                    }
+
+                    // ── Classic mode: Ollama model picker ──
                     if vm.settings.audio_mode == "classic" {
-                        AlmanacSectionHeader(number: "03", title: "Ollama Model")
+                        AlmanacSectionHeader(number: "04", title: "Ollama Model")
                         Picker("Model", selection: Binding(
                             get: { vm.settings.model },
                             set: { val in vm.settings.model = val; Task { await vm.setModel(val) } }
@@ -227,22 +273,6 @@ struct SettingsView: View {
                         .tint(.gilt)
                         .almanacCard()
                         .padding(.horizontal, 4)
-
-                        if vm.ttsProvider == "elevenlabs" {
-                            AlmanacSectionHeader(number: "04", title: "ElevenLabs Voice")
-                            Picker("Voice", selection: Binding(
-                                get: { vm.settings.voice_id },
-                                set: { val in vm.settings.voice_id = val; Task { await vm.setVoice(val) } }
-                            )) {
-                                ForEach(vm.voices) { v in
-                                    Text("\(v.name)").tag(v.id)
-                                }
-                            }
-                            .pickerStyle(.menu)
-                            .tint(.gilt)
-                            .almanacCard()
-                            .padding(.horizontal, 4)
-                        }
                     }
 
                     // ── API Keys (iOS runs direct — no Netlify) ──

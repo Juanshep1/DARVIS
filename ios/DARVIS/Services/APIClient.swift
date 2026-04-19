@@ -1,5 +1,7 @@
 import Foundation
 
+// ── Data models used across the iOS app ────────────────────────────────
+
 struct ChatResponse: Codable {
     let reply: String
     let actions: [ChatAction]?
@@ -28,157 +30,174 @@ struct HistoryResponse: Codable {
     let messages: [ChatMessage]
 }
 
+/// Facade that used to call Netlify Functions. Everything now runs locally:
+/// - Chat → BrainService (Ollama direct + Tavily + local memory/history)
+/// - TTS  → DirectAPI (ElevenLabs / StreamElements direct; Apple Voice local)
+/// - Memory/History/Settings → LocalStore (JSON in Documents)
+/// - Gemini token → local Gemini key (no ephemeral exchange needed)
+/// - Vision → OnDeviceLLM.analyzeImage (Gemini 2.5 Flash direct)
+///
+/// Cross-device sync is dropped — this is an iOS-only store now. Can be
+/// wired to Cloudflare Workers later when we finish the backend migration.
+@MainActor
 class APIClient {
     static let shared = APIClient()
-    private let baseURL = "https://darvis1.netlify.app"
-    private let session: URLSession
+    private init() {}
 
-    private init() {
-        let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 90
-        config.timeoutIntervalForResource = 120
-        config.waitsForConnectivity = false
-        session = URLSession(configuration: config)
-    }
-
-    private func request(_ path: String, method: String = "GET", body: Data? = nil, retries: Int = 1) async throws -> Data {
-        guard let url = URL(string: "\(baseURL)\(path)") else {
-            throw URLError(.badURL)
-        }
-        var lastError: Error?
-        for attempt in 0...retries {
-            do {
-                var req = URLRequest(url: url)
-                req.httpMethod = method
-                req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                req.httpBody = body
-                let (data, response) = try await session.data(for: req)
-                if let http = response as? HTTPURLResponse, http.statusCode >= 400 {
-                    throw URLError(.badServerResponse)
-                }
-                return data
-            } catch {
-                lastError = error
-                if attempt < retries {
-                    try? await Task.sleep(nanoseconds: 2_000_000_000) // 2s before retry
-                }
-            }
-        }
-        throw lastError ?? URLError(.unknown)
-    }
+    // MARK: - Chat
 
     func sendChat(message: String) async throws -> ChatResponse {
-        // Send device timezone so the server injects the correct local time
-        // into the system prompt (otherwise falls back to Central).
-        let body = try JSONEncoder().encode(["message": message, "tz": TimeZone.current.identifier])
-        let data = try await request("/api/chat", method: "POST", body: body, retries: 2)
-        return try JSONDecoder().decode(ChatResponse.self, from: data)
+        let reply = try await BrainService.shared.classicChat(message: message)
+        // Save to local history (user + assistant)
+        LocalStore.appendHistory([
+            ChatMessage(role: "user", content: message),
+            ChatMessage(role: "assistant", content: reply)
+        ])
+        return ChatResponse(reply: reply, actions: nil)
     }
 
-    /// Fetch TTS audio from the user's selected provider.
-    /// Routes to the correct endpoint based on the ttsProvider UserDefault.
+    // MARK: - TTS — routes by provider, all direct or native
+
     func fetchTTS(text: String) async throws -> Data {
         let provider = UserDefaults.standard.string(forKey: "ttsProvider") ?? "browser"
-
         switch provider {
-        case "edge":
-            // Google Translate neural TTS
-            let voice = UserDefaults.standard.string(forKey: "ttsVoice") ?? "en-GB"
-            let body = try JSONEncoder().encode(["text": text, "voice": voice])
-            return try await request("/api/tts-edge", method: "POST", body: body)
-
+        case "elevenlabs":
+            let voiceId = UserDefaults.standard.string(forKey: "elevenLabsVoiceId") ?? "21m00Tcm4TlvDq8ikWAM"
+            return try await DirectAPI.elevenLabsTTS(text: text, voiceId: voiceId)
         case "streamelements":
             let voice = UserDefaults.standard.string(forKey: "ttsVoice") ?? "Brian"
-            let body = try JSONEncoder().encode(["text": text, "voice": voice, "provider": "streamelements"])
-            return try await request("/api/tts-stream", method: "POST", body: body)
-
-        case "azure":
-            let voice = UserDefaults.standard.string(forKey: "ttsVoice") ?? "en-GB-RyanNeural"
-            let body = try JSONEncoder().encode(["text": text, "voice": voice])
-            return try await request("/api/tts-azure", method: "POST", body: body)
-
-        case "elevenlabs":
-            let body = try JSONEncoder().encode(["text": text])
-            return try await request("/api/tts", method: "POST", body: body)
-
+            return try await DirectAPI.streamElementsTTS(text: text, voice: voice)
         default:
-            // "browser" → use AVSpeechSynthesizer locally, no network call
-            throw URLError(.cancelled) // Signal to playTTS to use local speech
+            // "browser" / "edge" / "azure" → fall back to iOS native speech
+            throw URLError(.cancelled)
         }
     }
 
+    // MARK: - Vision
+
     func sendVision(imageBase64: String, prompt: String? = nil) async throws -> String {
-        var dict: [String: String] = ["image": imageBase64]
-        if let p = prompt { dict["prompt"] = p }
-        let body = try JSONSerialization.data(withJSONObject: dict)
-        let data = try await request("/api/vision", method: "POST", body: body)
-        let resp = try JSONDecoder().decode(VisionResponse.self, from: data)
-        return resp.description
+        let llm = OnDeviceLLM()
+        let p = prompt ?? "Describe what you see in the image. Be concise and direct."
+        guard let result = await llm.analyzeImage(base64JPEG: imageBase64, prompt: p) else {
+            throw URLError(.badServerResponse)
+        }
+        return result
     }
 
+    // MARK: - Memory (local)
+
     func getMemories() async throws -> [Memory] {
-        let data = try await request("/api/memory")
-        return try JSONDecoder().decode(MemoryResponse.self, from: data).memories
+        return LocalStore.loadMemories()
     }
 
     func addMemory(content: String, category: String = "general") async throws {
-        let dict: [String: String] = ["content": content, "category": category]
-        let body = try JSONSerialization.data(withJSONObject: dict)
-        _ = try await request("/api/memory", method: "POST", body: body)
+        _ = LocalStore.addMemory(content: content, category: category)
     }
 
     func deleteMemory(id: Int) async throws {
-        let body = try JSONSerialization.data(withJSONObject: ["id": id])
-        _ = try await request("/api/memory", method: "DELETE", body: body)
+        LocalStore.deleteMemory(id: id)
     }
 
+    // MARK: - History (local)
+
     func getHistory() async throws -> [ChatMessage] {
-        let data = try await request("/api/history")
-        return try JSONDecoder().decode(HistoryResponse.self, from: data).messages
+        return LocalStore.loadHistory()
     }
 
     func appendHistory(messages: [ChatMessage]) async throws {
-        let body = try JSONEncoder().encode(["messages": messages])
-        _ = try await request("/api/history", method: "POST", body: body)
+        LocalStore.appendHistory(messages)
     }
 
+    // MARK: - Settings (local)
+
     func getSettings() async throws -> AppSettings {
-        let data = try await request("/api/settings")
-        return try JSONDecoder().decode(AppSettings.self, from: data)
+        return LocalStore.loadSettings()
     }
 
     func updateSettings(_ settings: AppSettings) async throws {
-        let body = try JSONEncoder().encode(settings)
-        _ = try await request("/api/settings", method: "POST", body: body)
+        LocalStore.saveSettings(settings)
     }
 
+    // MARK: - Models / Voices (from provider direct)
+
     func getModels() async throws -> ModelsResponse {
-        let data = try await request("/api/models")
-        return try JSONDecoder().decode(ModelsResponse.self, from: data)
+        do {
+            let models = try await DirectAPI.ollamaModels()
+            let current = LocalStore.loadSettings().model
+            return ModelsResponse(models: models, current: current.isEmpty ? APIKeys.defaultOllamaModel : current)
+        } catch {
+            // Fallback to a curated list if we can't reach Ollama Cloud
+            let fallback = [
+                "gpt-oss:120b-cloud",
+                "gpt-oss:20b-cloud",
+                "qwen3-coder:480b-cloud",
+                "deepseek-v3.1:671b-cloud",
+                "glm-4.6:cloud",
+            ]
+            return ModelsResponse(models: fallback, current: APIKeys.defaultOllamaModel)
+        }
     }
 
     func getVoices() async throws -> VoicesResponse {
-        let data = try await request("/api/voices")
-        return try JSONDecoder().decode(VoicesResponse.self, from: data)
+        do {
+            let voices = try await DirectAPI.elevenLabsVoices()
+            let current = UserDefaults.standard.string(forKey: "elevenLabsVoiceId") ?? ""
+            return VoicesResponse(
+                voices: voices.map { VoiceOption(id: $0.id, name: $0.name, category: $0.category) },
+                current: current
+            )
+        } catch {
+            return VoicesResponse(voices: [], current: "")
+        }
     }
+
+    // MARK: - Gemini token (local key — no server exchange)
 
     func getGeminiToken() async throws -> GeminiTokenResponse {
-        let data = try await request("/api/gemini-token")
-        return try JSONDecoder().decode(GeminiTokenResponse.self, from: data)
+        guard let key = APIKeys.get(.gemini) else {
+            throw DirectAPI.DirectError.missingKey(.gemini)
+        }
+        return GeminiTokenResponse(
+            token: key,
+            model: "gemini-2.5-flash-native-audio-latest",
+            useAsKey: true
+        )
     }
 
+    // MARK: - Agent (disabled on iOS — needs terminal daemon)
+
     func getAgentStatus() async throws -> AgentStatus {
-        let data = try await request("/api/agent/status")
-        return try JSONDecoder().decode(AgentStatus.self, from: data)
+        // Browser-agent status requires a terminal daemon. On iOS-only
+        // deployments this is inert.
+        return AgentStatus(active: false, goal: "", step: 0, thinking: "Agent requires desktop terminal.", done: true)
     }
 
     func getAgentScreenshot() async throws -> Data {
-        return try await request("/api/agent/screenshot")
+        throw URLError(.unsupportedURL)
     }
 
+    // MARK: - Briefing (built on-device from Ollama + Tavily)
+
     func getBriefing() async throws -> String {
-        let data = try await request("/api/briefing")
-        struct R: Codable { let briefing: String }
-        return try JSONDecoder().decode(R.self, from: data).briefing
+        // Compose a brief news summary using Tavily + Ollama on-device.
+        let query = "top US and world news headlines today"
+        var sources = ""
+        if let sr = try? await DirectAPI.tavilySearch(query: query, maxResults: 10) {
+            sources = sr.render()
+        }
+        let prompt = """
+        Give a spoken morning briefing for the user, sir. 5 top stories with one substantive sentence each. British tone, subtle wit, no throat-clearing.
+
+        \(BrainService.currentTimeBlock())
+
+        News sources:
+        \(sources)
+        """
+        let model = LocalStore.loadSettings().model.isEmpty ? APIKeys.defaultOllamaModel : LocalStore.loadSettings().model
+        return try await DirectAPI.ollamaChat(
+            model: model,
+            messages: [.init(role: "user", content: prompt)]
+        )
     }
 }
+

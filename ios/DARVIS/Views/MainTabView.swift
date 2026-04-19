@@ -36,7 +36,13 @@ struct MainTabView: View {
                 }
                 .tag(4)
                 .onAppear {
-                    if let url = URL(string: "https://darvis1.netlify.app/falcon-eye/") {
+                    // Falcon Eye is a web-only feature. URL is configurable
+                    // so the user can point it at whichever host is live
+                    // (Netlify, Cloudflare Pages, etc.) via UserDefaults key
+                    // "falconEyeURL".
+                    let urlStr = UserDefaults.standard.string(forKey: "falconEyeURL")
+                        ?? "https://darvis1.netlify.app/falcon-eye/"
+                    if let url = URL(string: urlStr) {
                         UIApplication.shared.open(url)
                     }
                     // Switch back to the previous tab

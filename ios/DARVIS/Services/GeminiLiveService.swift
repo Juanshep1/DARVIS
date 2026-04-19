@@ -56,29 +56,17 @@ class GeminiLiveService: ObservableObject {
             webSocket = session?.webSocketTask(with: url)
             webSocket?.resume()
 
-            // Fetch memories + wiki for context
+            // Fetch memories + wiki for context (both local now, no Netlify)
             var memoryCtx = ""
             var wikiCtx = ""
-            if let memories = try? await APIClient.shared.getMemories(), !memories.isEmpty {
+            let memories = LocalStore.loadMemories()
+            if !memories.isEmpty {
                 memoryCtx = "\n\nUser memories:\n" + memories.map { "- [\($0.category)] \($0.content)" }.joined(separator: "\n")
             }
-
-            // Fetch wiki index for context
-            if let wikiUrl = URL(string: "https://darvis1.netlify.app/api/wiki") {
-                if let (data, _) = try? await URLSession.shared.data(from: wikiUrl),
-                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                   let index = json["index"] as? [String: Any],
-                   let pages = index["pages"] as? [String: [String: Any]], !pages.isEmpty {
-                    var lines: [String] = []
-                    for (_, page) in pages {
-                        let title = page["title"] as? String ?? ""
-                        let summary = page["summary"] as? String ?? ""
-                        if !title.isEmpty { lines.append("- \(title): \(summary)") }
-                    }
-                    if !lines.isEmpty {
-                        wikiCtx = "\n\nWiki knowledge base (\(pages.count) pages):\n" + lines.joined(separator: "\n")
-                    }
-                }
+            let wikiPages = LocalStore.loadWikiPages()
+            if !wikiPages.isEmpty {
+                let lines = wikiPages.prefix(40).map { "- \($0.title): \($0.summary)" }
+                wikiCtx = "\n\nWiki knowledge base (\(wikiPages.count) pages):\n" + lines.joined(separator: "\n")
             }
 
             // Send setup

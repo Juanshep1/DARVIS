@@ -44,15 +44,20 @@ class SettingsViewModel: ObservableObject {
 
     func loadOpenRouterModels() async {
         guard openRouterModels.isEmpty else { return }
-        do {
-            let url = URL(string: "https://darvis1.netlify.app/api/openrouter/models")!
-            let (data, _) = try await URLSession.shared.data(from: url)
-            struct ORResponse: Decodable { let models: [ORModel]; let current: String }
-            struct ORModel: Decodable { let id: String; let name: String; let isFree: Bool }
-            let resp = try JSONDecoder().decode(ORResponse.self, from: data)
-            openRouterModels = resp.models.map { ($0.id, $0.name, $0.isFree) }
-            openRouterModel = resp.current
-        } catch {}
+        // Curated list — a small set of solid OpenRouter models. Matches the
+        // previous server-curated list; user can pick any of these.
+        openRouterModels = [
+            ("anthropic/claude-sonnet-4", "Claude Sonnet 4", false),
+            ("anthropic/claude-opus-4.1", "Claude Opus 4.1", false),
+            ("openai/gpt-5", "GPT-5", false),
+            ("openai/gpt-5-mini", "GPT-5 Mini", false),
+            ("google/gemini-2.5-pro", "Gemini 2.5 Pro", false),
+            ("google/gemini-2.5-flash", "Gemini 2.5 Flash", false),
+            ("meta-llama/llama-4-maverick", "Llama 4 Maverick", false),
+            ("deepseek/deepseek-chat-v3.1:free", "DeepSeek V3.1 (free)", true),
+            ("qwen/qwen3-235b-a22b:free", "Qwen3 235B (free)", true),
+            ("mistralai/mistral-small-3.2-24b-instruct:free", "Mistral Small 3.2 (free)", true),
+        ]
     }
 
     func setModel(_ model: String) async {
@@ -78,13 +83,7 @@ class SettingsViewModel: ObservableObject {
     func saveOpenRouterModel(_ m: String) {
         openRouterModel = m
         UserDefaults.standard.set(m, forKey: "openRouterModel")
-        Task {
-            var req = URLRequest(url: URL(string: "https://darvis1.netlify.app/api/openrouter/set-model")!)
-            req.httpMethod = "POST"
-            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            req.httpBody = try? JSONEncoder().encode(["model": m])
-            _ = try? await URLSession.shared.data(for: req)
-        }
+        // Model choice lives locally; DirectAPI.openRouterChat reads it at call time.
     }
 }
 
@@ -246,25 +245,15 @@ struct SettingsView: View {
                         }
                     }
 
-                    // ── Falcon Eye ──
-                    AlmanacSectionHeader(number: "05", title: "Falcon Eye")
-                    Button(action: {
-                        if let url = URL(string: "https://darvis1.netlify.app/falcon-eye/") {
-                            UIApplication.shared.open(url)
+                    // ── API Keys (iOS runs direct — no Netlify) ──
+                    AlmanacSectionHeader(number: "05", title: "API Keys")
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("This iOS app talks to every provider directly. Paste your keys below. They stay in UserDefaults on this device only.")
+                            .font(.almanacBodyItalic(11))
+                            .foregroundColor(.inkGhost)
+                        ForEach(APIKey.allCases, id: \.rawValue) { k in
+                            APIKeyField(key: k)
                         }
-                    }) {
-                        HStack {
-                            Text("♆")
-                                .font(.almanacDisplay(20))
-                            Text("Open Falcon Eye Command Center")
-                                .font(.almanacMono(11, weight: .medium))
-                                .tracking(1)
-                        }
-                        .foregroundColor(.gilt)
-                        .frame(maxWidth: .infinity)
-                        .padding(14)
-                        .background(Color.paperWarm)
-                        .overlay(Rectangle().stroke(Color.gilt.opacity(0.4), lineWidth: 0.5))
                     }
                     .padding(.horizontal, 4)
 
@@ -272,9 +261,12 @@ struct SettingsView: View {
                     AlmanacSectionHeader(number: "06", title: "System Status")
                     VStack(alignment: .leading, spacing: 6) {
                         infoRow("Platform", "iOS")
-                        infoRow("Backend", "darvis1.netlify.app")
+                        infoRow("Backend", "Direct (no server)")
                         infoRow("Audio", vm.settings.audio_mode)
                         infoRow("TTS", vm.ttsProvider)
+                        infoRow("Ollama key", APIKeys.has(.ollama) ? "✓ set" : "✗ missing")
+                        infoRow("Gemini key", APIKeys.has(.gemini) ? "✓ set" : "✗ missing")
+                        infoRow("Tavily key", APIKeys.has(.tavily) ? "✓ set" : "✗ missing")
                     }
                     .padding(12)
                     .almanacCard()
@@ -299,5 +291,58 @@ struct SettingsView: View {
                 .font(.almanacMono(11))
                 .foregroundColor(.ink)
         }
+    }
+}
+
+struct APIKeyField: View {
+    let key: APIKey
+    @State private var value: String = ""
+    @State private var reveal: Bool = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(key.displayName.uppercased())
+                    .font(.almanacMono(8, weight: .medium))
+                    .foregroundColor(.gilt)
+                    .tracking(2)
+                if key.isCore {
+                    Text("REQUIRED")
+                        .font(.almanacMono(7, weight: .medium))
+                        .foregroundColor(.stateWarn)
+                        .tracking(1.5)
+                }
+                Spacer()
+                Button(reveal ? "Hide" : "Show") { reveal.toggle() }
+                    .font(.almanacMono(9))
+                    .foregroundColor(.inkFaint)
+            }
+            HStack(spacing: 6) {
+                Group {
+                    if reveal {
+                        TextField("paste key", text: $value)
+                            .autocapitalization(.none)
+                            .disableAutocorrection(true)
+                    } else {
+                        SecureField(value.isEmpty ? "paste key" : "••••••••", text: $value)
+                    }
+                }
+                .font(.almanacMono(11))
+                .foregroundColor(.ink)
+                .padding(8)
+                .background(Color.paperWarm)
+                .overlay(Rectangle().stroke(Color.gilt.opacity(0.3), lineWidth: 0.5))
+                Button("Save") { APIKeys.set(key, value) }
+                    .font(.almanacMono(10, weight: .medium))
+                    .foregroundColor(.gilt)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .overlay(Rectangle().stroke(Color.gilt.opacity(0.5), lineWidth: 0.5))
+            }
+            Text("get from " + key.hint)
+                .font(.almanacBodyItalic(10))
+                .foregroundColor(.inkGhost)
+        }
+        .onAppear { value = APIKeys.get(key) ?? "" }
     }
 }

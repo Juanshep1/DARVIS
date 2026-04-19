@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 63;
+	objectVersion = 77;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -11,9 +11,11 @@
 		0367C5F49427F2724A77880F /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C349C8EB0223E2864E8C451 /* ChatView.swift */; };
 		044E8F3F2F4AFD104D165D8E /* OnDeviceLLM.swift in Sources */ = {isa = PBXBuildFile; fileRef = D67A076FD3C8DD3FC8FFC95F /* OnDeviceLLM.swift */; };
 		107F00A8E9EF39B9DBA12607 /* AgentStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EE457E8A83C8518F2D04A1C /* AgentStatus.swift */; };
+		1BE649F07C637FCC6ABFD60C /* APIKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6E0596054B3C6ADE829FE82 /* APIKeys.swift */; };
 		1DEC2FCD03FF363BF1DDB589 /* InputBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24DB81440FEA13BC34DA1563 /* InputBar.swift */; };
 		1FBC67F3267313BF74E74B0F /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91A86AD774262FD1B10D7352 /* ChatViewModel.swift */; };
 		2E978154AD1D846FC3940523 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B6B622EA9A9A91096DF2695 /* SettingsView.swift */; };
+		38BFE488E802D835C57738B7 /* LocalStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17FD241D72C740398F5EDAEB /* LocalStore.swift */; };
 		3A7F16730BF19825E9820412 /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14CD49F8C9CDAFEB75CDA43E /* MainTabView.swift */; };
 		41F1BD7C5D93FB328376E434 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07FFD2D7D25830247F3268D1 /* AppSettings.swift */; };
 		42F66B9BD3DEF4E594C7BF58 /* Memory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 812AC60C57A91DF5C9309CB5 /* Memory.swift */; };
@@ -24,6 +26,8 @@
 		7A5ED8E621DC81CD14901875 /* MemoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FEFD354307DB1E6E4635287 /* MemoryView.swift */; };
 		7B9A438F30C939C6278F8C4C /* OrbView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89B3A8E19F62DDFF548B0A0A /* OrbView.swift */; };
 		8CCD4E9D58FBEBDFF9C8623E /* AudioService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28C520675AED1176CD5623DA /* AudioService.swift */; };
+		92712E5639A36749D284A064 /* DirectAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63A5FF2F3F6BCA4BAD871D86 /* DirectAPI.swift */; };
+		9C90C2233FBDDE330CD97D1C /* BrainService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BDF4A8D4622869AD6BC59BD /* BrainService.swift */; };
 		AE5E8DF86C65DA34907025F2 /* DARVISApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A56A3B062FFB5E699C752225 /* DARVISApp.swift */; };
 		B5F3C6A75B80A7F454B7B7C1 /* iPhoneControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3709E3FFAF91749586B95D7C /* iPhoneControl.swift */; };
 		C569DDD89B038147B9452A3E /* OnDeviceModelSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7690C6A5E7900C4EB2BA920 /* OnDeviceModelSection.swift */; };
@@ -34,14 +38,17 @@
 /* Begin PBXFileReference section */
 		07FFD2D7D25830247F3268D1 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		14CD49F8C9CDAFEB75CDA43E /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
+		17FD241D72C740398F5EDAEB /* LocalStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalStore.swift; sourceTree = "<group>"; };
 		1B6B622EA9A9A91096DF2695 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		24DB81440FEA13BC34DA1563 /* InputBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputBar.swift; sourceTree = "<group>"; };
 		28C520675AED1176CD5623DA /* AudioService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioService.swift; sourceTree = "<group>"; };
 		2C349C8EB0223E2864E8C451 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		3709E3FFAF91749586B95D7C /* iPhoneControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iPhoneControl.swift; sourceTree = "<group>"; };
+		3BDF4A8D4622869AD6BC59BD /* BrainService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrainService.swift; sourceTree = "<group>"; };
 		3FEFD354307DB1E6E4635287 /* MemoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryView.swift; sourceTree = "<group>"; };
 		4BB8B395EAFB415A83AF0DC0 /* ChatMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatMessage.swift; sourceTree = "<group>"; };
 		5BB77D4AA1C392C2E7A0D2FF /* AgentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentView.swift; sourceTree = "<group>"; };
+		63A5FF2F3F6BCA4BAD871D86 /* DirectAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DirectAPI.swift; sourceTree = "<group>"; };
 		7690A944B9D8D0AD43C540B0 /* JARVISTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JARVISTheme.swift; sourceTree = "<group>"; };
 		7EE457E8A83C8518F2D04A1C /* AgentStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentStatus.swift; sourceTree = "<group>"; };
 		812AC60C57A91DF5C9309CB5 /* Memory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Memory.swift; sourceTree = "<group>"; };
@@ -52,8 +59,9 @@
 		C593753D851D269E7D1F224B /* GeminiLiveService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeminiLiveService.swift; sourceTree = "<group>"; };
 		CE4B8156BCCE7D1B336F5B39 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
 		D67A076FD3C8DD3FC8FFC95F /* OnDeviceLLM.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnDeviceLLM.swift; sourceTree = "<group>"; };
+		E6E0596054B3C6ADE829FE82 /* APIKeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIKeys.swift; sourceTree = "<group>"; };
 		EAAC5913B03FBA4F6DA8DC48 /* CameraService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraService.swift; sourceTree = "<group>"; };
-		F165F40D77684EA2C4518B5E /* DARVIS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DARVIS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F165F40D77684EA2C4518B5E /* DARVIS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = DARVIS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F263F0DB28CC9CF7BEC34C4B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -62,10 +70,14 @@
 			isa = PBXGroup;
 			children = (
 				CE4B8156BCCE7D1B336F5B39 /* APIClient.swift */,
+				E6E0596054B3C6ADE829FE82 /* APIKeys.swift */,
 				28C520675AED1176CD5623DA /* AudioService.swift */,
+				3BDF4A8D4622869AD6BC59BD /* BrainService.swift */,
 				EAAC5913B03FBA4F6DA8DC48 /* CameraService.swift */,
+				63A5FF2F3F6BCA4BAD871D86 /* DirectAPI.swift */,
 				C593753D851D269E7D1F224B /* GeminiLiveService.swift */,
 				3709E3FFAF91749586B95D7C /* iPhoneControl.swift */,
+				17FD241D72C740398F5EDAEB /* LocalStore.swift */,
 				D67A076FD3C8DD3FC8FFC95F /* OnDeviceLLM.swift */,
 			);
 			path = Services;
@@ -182,6 +194,7 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					0C01E3BF914BDFE2D2A37CD6 = {
+						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -196,6 +209,7 @@
 			);
 			mainGroup = B6A70156C1B55396E447CCAF;
 			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -221,18 +235,22 @@
 			buildActionMask = 2147483647;
 			files = (
 				020501B840026022FE61C7E3 /* APIClient.swift in Sources */,
+				1BE649F07C637FCC6ABFD60C /* APIKeys.swift in Sources */,
 				107F00A8E9EF39B9DBA12607 /* AgentStatus.swift in Sources */,
 				ED71C94A77A0BC618927082A /* AgentView.swift in Sources */,
 				41F1BD7C5D93FB328376E434 /* AppSettings.swift in Sources */,
 				8CCD4E9D58FBEBDFF9C8623E /* AudioService.swift in Sources */,
+				9C90C2233FBDDE330CD97D1C /* BrainService.swift in Sources */,
 				DDE5CC9B988467FFDF9538AD /* CameraService.swift in Sources */,
 				64F8310BB90B380759389A5F /* ChatMessage.swift in Sources */,
 				0367C5F49427F2724A77880F /* ChatView.swift in Sources */,
 				1FBC67F3267313BF74E74B0F /* ChatViewModel.swift in Sources */,
 				AE5E8DF86C65DA34907025F2 /* DARVISApp.swift in Sources */,
+				92712E5639A36749D284A064 /* DirectAPI.swift in Sources */,
 				4A9294DD3CE4B1E0E7B62347 /* GeminiLiveService.swift in Sources */,
 				1DEC2FCD03FF363BF1DDB589 /* InputBar.swift in Sources */,
 				480F9A80A85BD1F7ABF1769B /* JARVISTheme.swift in Sources */,
+				38BFE488E802D835C57738B7 /* LocalStore.swift in Sources */,
 				3A7F16730BF19825E9820412 /* MainTabView.swift in Sources */,
 				42F66B9BD3DEF4E594C7BF58 /* Memory.swift in Sources */,
 				7A5ED8E621DC81CD14901875 /* MemoryView.swift in Sources */,
@@ -295,8 +313,7 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
-				PRODUCT_NAME = SPECTRA;
-				INFOPLIST_KEY_CFBundleDisplayName = SPECTRA;
+				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
@@ -310,12 +327,13 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = 78RJ6F9JL2;
+				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSCameraUsageDescription = "DARVIS uses the camera for visual analysis";
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "DARVIS connects to local AI servers on your network";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "DARVIS needs microphone access for voice commands";
-				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "DARVIS uses speech recognition for voice commands";
+				INFOPLIST_KEY_CFBundleDisplayName = SPECTRA;
+				INFOPLIST_KEY_NSCameraUsageDescription = "SPECTRA uses the camera for visual analysis";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "SPECTRA connects to local AI servers on your network";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "SPECTRA needs microphone access for voice commands";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "SPECTRA uses speech recognition for voice commands";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortraitUpsideDown";
 				"INFOPLIST_KEY_UISupportedInterfaceOrientations~ipad" = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortraitUpsideDown";
@@ -324,7 +342,8 @@
 					"@executable_path/Frameworks",
 				);
 				NSAppTransportSecurity = "{'NSAllowsLocalNetworking': true, 'NSAllowsArbitraryLoads': true}";
-				PRODUCT_BUNDLE_IDENTIFIER = com.darvis.app;
+				PRODUCT_BUNDLE_IDENTIFIER = com.spectra.app;
+				PRODUCT_NAME = SPECTRA;
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.9;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -386,8 +405,7 @@
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
-				PRODUCT_NAME = SPECTRA;
-				INFOPLIST_KEY_CFBundleDisplayName = SPECTRA;
+				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -401,12 +419,13 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = 78RJ6F9JL2;
+				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSCameraUsageDescription = "DARVIS uses the camera for visual analysis";
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "DARVIS connects to local AI servers on your network";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "DARVIS needs microphone access for voice commands";
-				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "DARVIS uses speech recognition for voice commands";
+				INFOPLIST_KEY_CFBundleDisplayName = SPECTRA;
+				INFOPLIST_KEY_NSCameraUsageDescription = "SPECTRA uses the camera for visual analysis";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "SPECTRA connects to local AI servers on your network";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "SPECTRA needs microphone access for voice commands";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "SPECTRA uses speech recognition for voice commands";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortraitUpsideDown";
 				"INFOPLIST_KEY_UISupportedInterfaceOrientations~ipad" = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortraitUpsideDown";
@@ -415,7 +434,8 @@
 					"@executable_path/Frameworks",
 				);
 				NSAppTransportSecurity = "{'NSAllowsLocalNetworking': true, 'NSAllowsArbitraryLoads': true}";
-				PRODUCT_BUNDLE_IDENTIFIER = com.darvis.app;
+				PRODUCT_BUNDLE_IDENTIFIER = com.spectra.app;
+				PRODUCT_NAME = SPECTRA;
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.9;
 				TARGETED_DEVICE_FAMILY = "1,2";

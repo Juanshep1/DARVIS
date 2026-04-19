@@ -81,43 +81,8 @@ class ChatViewModel: ObservableObject {
         setupNotificationReply()
         Task { await loadSettings() }
         startBriefingSchedule()
-        startAlertPolling()
-    }
-
-    // Poll for triggered alerts every 60s
-    private func startAlertPolling() {
-        // Request notification permission
+        // Alert polling is disabled on iOS-only deployments (no backend cron).
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
-
-        Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                guard let self = self else { return }
-                do {
-                    let (data, _) = try await URLSession.shared.data(from: URL(string: "https://darvis1.netlify.app/api/alerts/triggered")!)
-                    struct Triggered: Codable { let triggered: [AlertItem] }
-                    struct AlertItem: Codable { let id: String; let type: String; let message: String }
-                    let result = try JSONDecoder().decode(Triggered.self, from: data)
-                    for alert in result.triggered {
-                        self.statusMessage = "⚡ " + alert.message
-                        self.responseText = "ALERT: " + alert.message
-
-                        // Push notification (works even when app is in background)
-                        let content = UNMutableNotificationContent()
-                        content.title = "SPECTRA Alert"
-                        content.body = alert.message
-                        content.sound = .default
-                        let request = UNNotificationRequest(
-                            identifier: "spectra-alert-\(alert.id)",
-                            content: content,
-                            trigger: nil  // Deliver immediately
-                        )
-                        try? await UNUserNotificationCenter.current().add(request)
-
-                        await self.playTTS(alert.message)
-                    }
-                } catch {}
-            }
-        }
     }
 
     // Check every 30s if it's 8:00 AM or 9:30 PM
@@ -276,23 +241,28 @@ class ChatViewModel: ObservableObject {
             if audioMode == "openrouter" {
                 do {
                     let orModel = UserDefaults.standard.string(forKey: "openRouterModel") ?? "anthropic/claude-sonnet-4"
-                    var req = URLRequest(url: URL(string: "https://darvis1.netlify.app/api/openrouter/chat")!)
-                    req.httpMethod = "POST"
-                    req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                    req.httpBody = try JSONEncoder().encode(["message": text, "model": orModel, "tz": TimeZone.current.identifier])
-                    req.timeoutInterval = 60
-                    let (data, _) = try await URLSession.shared.data(for: req)
-                    struct ORReply: Decodable { let reply: String? }
-                    let reply = (try? JSONDecoder().decode(ORReply.self, from: data))?.reply ?? "No response."
+                    // Build system + user messages with time + memory + recent history
+                    let mems = LocalStore.loadMemories()
+                    let memCtx = mems.isEmpty ? "" : "\n\nUser memories:\n" + mems.map { "- [\($0.category)] \($0.content)" }.joined(separator: "\n")
+                    let recentHistory = Array(LocalStore.loadHistory().suffix(12))
+                    let sys = """
+                    You are the user's personal AI assistant. NEVER say "Spectra" unless directly asked "who are you?". NEVER describe your personality. British tone, concise, address user as "sir". Running on \(orModel) via OpenRouter direct from the iOS app.
+
+                    \(BrainService.currentTimeBlock())\(memCtx)
+                    """
+                    var msgs: [DirectAPI.OllamaMessage] = [.init(role: "system", content: sys)]
+                    for m in recentHistory {
+                        msgs.append(.init(role: m.role, content: m.content))
+                    }
+                    msgs.append(.init(role: "user", content: text))
+                    let (reply, actualModel) = try await DirectAPI.openRouterChat(model: orModel, messages: msgs)
                     responseText = reply
                     messages.append(ChatMessage(role: "assistant", content: reply))
-                    // Save to shared history so Spectra remembers across all surfaces
-                    Task.detached {
-                        try? await APIClient.shared.appendHistory(messages: [
-                            ChatMessage(role: "user", content: text),
-                            ChatMessage(role: "assistant", content: reply)
-                        ])
-                    }
+                    LocalStore.appendHistory([
+                        ChatMessage(role: "user", content: text),
+                        ChatMessage(role: "assistant", content: reply)
+                    ])
+                    statusMessage = "via \(actualModel)"
                     await sendResponseNotificationIfBackgrounded(reply)
                     await playTTS(reply)
                 } catch {

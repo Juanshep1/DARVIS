@@ -9,7 +9,12 @@ struct ChatView: View {
     var body: some View {
         ZStack {
             // ── Leather ground — tap to dismiss keyboard ──
-            Color.paper.ignoresSafeArea()
+            // Restrict ignoresSafeArea to the container region so the
+            // background fills behind the status bar & tab bar but does
+            // NOT swallow the keyboard safe area. Without this scope the
+            // content VStack never gets pushed up when the keyboard opens
+            // and the input bar ends up hidden under it.
+            Color.paper.ignoresSafeArea(.container)
                 .onTapGesture {
                     UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                 }
@@ -21,7 +26,7 @@ struct ChatView: View {
                 startRadius: 0,
                 endRadius: 400
             )
-            .ignoresSafeArea()
+            .ignoresSafeArea(.container)
 
             VStack(spacing: 0) {
                 // ── Almanac Masthead ──
@@ -116,18 +121,6 @@ struct ChatView: View {
                     }
                 }
                 .frame(maxHeight: .infinity)
-
-                // ── Input bar ──
-                InputBar(
-                    text: $vm.inputText,
-                    isRecording: vm.isRecording,
-                    cameraActive: vm.cameraActive,
-                    isFixing: vm.isFixing,
-                    onSend: { vm.send() },
-                    onMicToggle: { vm.toggleMic() },
-                    onCameraToggle: { vm.toggleCamera() },
-                    onFixYourself: { vm.fixYourself() }
-                )
             }
 
             // ── Camera preview — bottom left ──
@@ -178,6 +171,22 @@ struct ChatView: View {
                     }
                 }
             }
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            // Pinning the input bar as a safe-area inset means SwiftUI
+            // will automatically float it above the keyboard whenever
+            // the TextField gains focus.
+            InputBar(
+                text: $vm.inputText,
+                isRecording: vm.isRecording,
+                cameraActive: vm.cameraActive,
+                isFixing: vm.isFixing,
+                onSend: { vm.send() },
+                onMicToggle: { vm.toggleMic() },
+                onCameraToggle: { vm.toggleCamera() },
+                onFixYourself: { vm.fixYourself() }
+            )
+            .background(Color.paper)
         }
         .onAppear {
             vm.requestPermissions()

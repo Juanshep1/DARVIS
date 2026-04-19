@@ -31,6 +31,7 @@
 		AE5E8DF86C65DA34907025F2 /* DARVISApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A56A3B062FFB5E699C752225 /* DARVISApp.swift */; };
 		B5F3C6A75B80A7F454B7B7C1 /* iPhoneControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3709E3FFAF91749586B95D7C /* iPhoneControl.swift */; };
 		C569DDD89B038147B9452A3E /* OnDeviceModelSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7690C6A5E7900C4EB2BA920 /* OnDeviceModelSection.swift */; };
+		C8FD0173A7EA8A96BCD1690B /* Secrets.plist in Resources */ = {isa = PBXBuildFile; fileRef = 29445C85B0D5AF46E6F317A1 /* Secrets.plist */; };
 		DDE5CC9B988467FFDF9538AD /* CameraService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EAAC5913B03FBA4F6DA8DC48 /* CameraService.swift */; };
 		ED71C94A77A0BC618927082A /* AgentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BB77D4AA1C392C2E7A0D2FF /* AgentView.swift */; };
 /* End PBXBuildFile section */
@@ -42,6 +43,7 @@
 		1B6B622EA9A9A91096DF2695 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		24DB81440FEA13BC34DA1563 /* InputBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputBar.swift; sourceTree = "<group>"; };
 		28C520675AED1176CD5623DA /* AudioService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioService.swift; sourceTree = "<group>"; };
+		29445C85B0D5AF46E6F317A1 /* Secrets.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Secrets.plist; sourceTree = "<group>"; };
 		2C349C8EB0223E2864E8C451 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		3709E3FFAF91749586B95D7C /* iPhoneControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iPhoneControl.swift; sourceTree = "<group>"; };
 		3BDF4A8D4622869AD6BC59BD /* BrainService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrainService.swift; sourceTree = "<group>"; };
@@ -124,6 +126,7 @@
 				F263F0DB28CC9CF7BEC34C4B /* Assets.xcassets */,
 				A56A3B062FFB5E699C752225 /* DARVISApp.swift */,
 				455A10536A7625CD84EA8F24 /* Models */,
+				E4248790F926A87CFED13539 /* Resources */,
 				08B143EC7A931B1E99EBDC9D /* Services */,
 				15B3AD7D5188808D73C82925 /* ViewModels */,
 				E98D7EB241A5DAF7C44148F0 /* Views */,
@@ -147,6 +150,14 @@
 				89B3A8E19F62DDFF548B0A0A /* OrbView.swift */,
 			);
 			path = Chat;
+			sourceTree = "<group>";
+		};
+		E4248790F926A87CFED13539 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				29445C85B0D5AF46E6F317A1 /* Secrets.plist */,
+			);
+			path = Resources;
 			sourceTree = "<group>";
 		};
 		E98D7EB241A5DAF7C44148F0 /* Views */ = {
@@ -224,6 +235,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				680FADB1B66AFDD1024B059E /* Assets.xcassets in Resources */,
+				C8FD0173A7EA8A96BCD1690B /* Secrets.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

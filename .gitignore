@@ -17,3 +17,6 @@ site/package-lock.json
 .claude/
 ios/DARVIS.xcodeproj/xcuserdata/
 ios/build/
+
+# iOS bundled secrets — never commit
+ios/DARVIS/Resources/Secrets.plist

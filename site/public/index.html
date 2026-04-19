@@ -1032,17 +1032,16 @@ const camPreview = document.getElementById('camPreview');
 const statusBar = document.getElementById('statusBar');
 
 // ── API base URL ─────────────────────────────────────────────────────
-// Override via localStorage key "apiBase" (e.g. the Cloudflare Workers
-// URL like https://spectra-api.<account>.workers.dev). Falls back to
-// same-origin so the current Netlify deploy keeps working until the
-// flip. Every fetch to /api/* in this file uses `api()` so the switch
-// is a one-line change from DevTools.
+// Default → Cloudflare Workers. Override via localStorage "apiBase" for
+// local dev. Every /api/* fetch routes through api() so flipping hosts
+// is a one-line change.
+const DEFAULT_API_BASE = 'https://spectra-api.shephard-juan.workers.dev';
 const API_BASE = (() => {
     try {
         const v = localStorage.getItem('apiBase');
         if (v && /^https?:\/\//.test(v)) return v.replace(/\/$/, '');
     } catch (e) {}
-    return ''; // empty = same origin
+    return DEFAULT_API_BASE;
 })();
 function api(path) {
     // path is expected to start with "/api/..." — join with API_BASE so

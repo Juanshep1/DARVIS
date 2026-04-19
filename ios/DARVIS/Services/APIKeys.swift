@@ -42,36 +42,41 @@ enum APIKey: String, CaseIterable {
 }
 
 enum APIKeys {
-    /// Seed UserDefaults from a bundled Secrets.plist on first launch so
-    /// the app works out of the box without manually pasting keys in
-    /// Settings. The plist is git-ignored and only present on the
-    /// developer's machine — CI / fresh clones get an empty bundle and
-    /// fall back to the Settings screen flow.
-    private static var didSeedBundledKeys = false
-    static func seedFromBundleIfNeeded() {
-        if didSeedBundledKeys { return }
-        didSeedBundledKeys = true
+    /// Bundled Secrets.plist parsed once and memoised. The plist is
+    /// git-ignored and only present on the developer's machine — fresh
+    /// clones get an empty bundle and fall back to the Settings screen.
+    private static let bundled: [String: String] = {
         guard let url = Bundle.main.url(forResource: "Secrets", withExtension: "plist"),
               let data = try? Data(contentsOf: url),
-              let plist = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: String]
-        else { return }
-        for key in APIKey.allCases {
-            let shortName = key.rawValue.replacingOccurrences(of: "apiKey.", with: "").uppercased() + "_API_KEY"
-            let altName = key.rawValue.replacingOccurrences(of: "apiKey.", with: "").uppercased()
-            let already = UserDefaults.standard.string(forKey: key.rawValue)
-            if already == nil || already?.isEmpty == true {
-                if let v = plist[shortName] ?? plist[altName], !v.isEmpty {
-                    UserDefaults.standard.set(v, forKey: key.rawValue)
-                }
-            }
+              let any = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil),
+              let dict = any as? [String: Any]
+        else {
+            NSLog("[APIKeys] No Secrets.plist bundled — keys must be entered in Settings")
+            return [:]
         }
+        var out: [String: String] = [:]
+        for (k, v) in dict {
+            if let s = v as? String, !s.isEmpty { out[k] = s }
+        }
+        NSLog("[APIKeys] Loaded \(out.count) keys from Secrets.plist")
+        return out
+    }()
+
+    private static func bundledValue(for key: APIKey) -> String? {
+        // Plist keys look like "OLLAMA_API_KEY". Map back from enum raw values.
+        let short = key.rawValue.replacingOccurrences(of: "apiKey.", with: "").uppercased()
+        return bundled["\(short)_API_KEY"] ?? bundled[short]
     }
 
     static func get(_ key: APIKey) -> String? {
-        seedFromBundleIfNeeded()
-        let v = UserDefaults.standard.string(forKey: key.rawValue)
-        guard let v, !v.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
-        return v
+        // User-set value (via Settings) wins; otherwise fall through to
+        // the bundled plist. This makes the app self-seeding AND keeps
+        // user overrides working.
+        if let v = UserDefaults.standard.string(forKey: key.rawValue),
+           !v.trimmingCharacters(in: .whitespaces).isEmpty {
+            return v
+        }
+        return bundledValue(for: key)
     }
 
     static func set(_ key: APIKey, _ value: String) {

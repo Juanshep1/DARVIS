@@ -425,8 +425,19 @@ class ChatViewModel: ObservableObject {
                 await sendResponseNotificationIfBackgrounded("Request timed out. Try again.")
                 orbState = .idle
             } catch {
-                responseText = "Connection error, sir. (\(error.localizedDescription))"
-                await sendResponseNotificationIfBackgrounded("Connection error: \(error.localizedDescription)")
+                // Surface the underlying cause so missing-key / auth / parse
+                // failures are distinguishable from generic network drops.
+                let reason: String
+                if let d = error as? DirectAPI.DirectError {
+                    reason = d.errorDescription ?? "\(d)"
+                } else if let u = error as? URLError {
+                    reason = "Network \(u.code.rawValue): \(u.localizedDescription)"
+                } else {
+                    reason = error.localizedDescription
+                }
+                NSLog("[Spectra] classic chat error: \(reason)")
+                responseText = "Connection error, sir. \(reason)"
+                await sendResponseNotificationIfBackgrounded("Error: \(reason)")
                 orbState = .idle
             }
         }

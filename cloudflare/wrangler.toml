@@ -1,0 +1,38 @@
+name = "spectra-api"
+main = "src/index.ts"
+compatibility_date = "2025-01-15"
+compatibility_flags = ["nodejs_compat"]
+
+# ── KV namespace (single bucket; keys are prefixed by store name) ───────────
+# Create the namespace once with:
+#   wrangler kv:namespace create SPECTRA
+# Then paste the returned id below.
+[[kv_namespaces]]
+binding = "KV"
+id = "REPLACE_WITH_KV_ID"
+preview_id = "REPLACE_WITH_PREVIEW_KV_ID"
+
+# ── Observability ──────────────────────────────────────────────────────────
+[observability]
+enabled = true
+
+# ── Secrets (set with `wrangler secret put <NAME>`) ────────────────────────
+# - OLLAMA_API_KEY      (required for classic /api/chat)
+# - GEMINI_API_KEY      (required for /api/gemini-token, vision, query rewrite)
+# - ELEVENLABS_API_KEY  (optional — /api/tts + /api/voices)
+# - OPENROUTER_API_KEY  (optional — /api/openrouter/chat)
+# - TAVILY_API_KEY      (required — web search in /api/chat)
+# - AZURE_SPEECH_KEY    (optional — /api/tts-azure)
+# - AZURE_SPEECH_REGION (optional)
+# - CESIUM_ION_TOKEN    (optional — Falcon Eye 3D globe)
+#
+# Non-secret defaults (set via `wrangler env` or [vars]):
+[vars]
+DARVIS_MODEL = "gpt-oss:120b-cloud"
+DARVIS_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"
+DEFAULT_TZ = "America/Chicago"
+
+# ── Scheduled triggers (cron) for data-refresh jobs ────────────────────────
+# Uncomment after porting the cron-driven Falcon Eye jobs.
+# [triggers]
+# crons = ["*/15 * * * *"]

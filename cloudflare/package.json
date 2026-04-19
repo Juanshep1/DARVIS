@@ -1,0 +1,22 @@
+{
+  "name": "spectra-workers",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Cloudflare Workers backend for SPECTRA — replaces the Netlify Functions layer.",
+  "main": "src/index.ts",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail",
+    "logs": "wrangler tail --format=pretty"
+  },
+  "dependencies": {
+    "hono": "^4.6.14"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250109.0",
+    "typescript": "^5.7.2",
+    "wrangler": "^3.99.0"
+  }
+}

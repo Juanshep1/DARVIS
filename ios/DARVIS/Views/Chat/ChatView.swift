@@ -3,8 +3,11 @@ import SwiftUI
 struct ChatView: View {
     @StateObject private var vm = ChatViewModel()
     @State private var currentTime = ""
+    @State private var keyboardHeight: CGFloat = 0
 
     let dateTimer = Timer.publish(every: 15, on: .main, in: .common).autoconnect()
+    private let keyboardWillShow = NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)
+    private let keyboardWillHide = NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)
 
     var body: some View {
         ZStack {
@@ -121,7 +124,21 @@ struct ChatView: View {
                     }
                 }
                 .frame(maxHeight: .infinity)
+
+                // ── Input bar lives inside the VStack so the transcript
+                // space shrinks naturally when the keyboard lifts it up. ──
+                InputBar(
+                    text: $vm.inputText,
+                    isRecording: vm.isRecording,
+                    cameraActive: vm.cameraActive,
+                    isFixing: vm.isFixing,
+                    onSend: { vm.send() },
+                    onMicToggle: { vm.toggleMic() },
+                    onCameraToggle: { vm.toggleCamera() },
+                    onFixYourself: { vm.fixYourself() }
+                )
             }
+            .padding(.bottom, keyboardHeight)
 
             // ── Camera preview — bottom left ──
             if vm.cameraActive {
@@ -172,27 +189,33 @@ struct ChatView: View {
                 }
             }
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            // Pinning the input bar as a safe-area inset means SwiftUI
-            // will automatically float it above the keyboard whenever
-            // the TextField gains focus.
-            InputBar(
-                text: $vm.inputText,
-                isRecording: vm.isRecording,
-                cameraActive: vm.cameraActive,
-                isFixing: vm.isFixing,
-                onSend: { vm.send() },
-                onMicToggle: { vm.toggleMic() },
-                onCameraToggle: { vm.toggleCamera() },
-                onFixYourself: { vm.fixYourself() }
-            )
-            .background(Color.paper)
-        }
+        .animation(.easeOut(duration: 0.25), value: keyboardHeight)
         .onAppear {
             vm.requestPermissions()
             updateTime()
         }
         .onReceive(dateTimer) { _ in updateTime() }
+        .onReceive(keyboardWillShow) { note in
+            guard let end = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
+            // The keyboard frame is in screen coordinates; its height
+            // includes the area from the screen bottom up to its top.
+            // Subtract the bottom safe-area inset (tab bar / home
+            // indicator) so we don't lift the bar twice.
+            let bottomInset = UIApplication.shared
+                .connectedScenes
+                .compactMap { $0 as? UIWindowScene }
+                .flatMap { $0.windows }
+                .first { $0.isKeyWindow }?
+                .safeAreaInsets.bottom ?? 0
+            let height = max(0, end.height - bottomInset)
+            // keyboardWillChangeFrame fires on hide too with an offscreen
+            // frame. Detect that and reset.
+            let screenHeight = UIScreen.main.bounds.height
+            keyboardHeight = end.origin.y >= screenHeight ? 0 : height
+        }
+        .onReceive(keyboardWillHide) { _ in
+            keyboardHeight = 0
+        }
     }
 
     private func updateTime() {

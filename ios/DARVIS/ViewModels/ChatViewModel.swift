@@ -893,21 +893,39 @@ class ChatViewModel: ObservableObject {
     // MARK: - Memory
 
     private func detectAndSaveMemory(_ text: String) {
+        let lower = text.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        // Skip questions about memory — "do you remember...", "what do you remember"
+        // would otherwise falsely match the save regex and store the question text
+        // itself as a memory.
+        if lower.hasPrefix("do you remember")
+            || lower.hasPrefix("what do you remember")
+            || lower.hasPrefix("what did i")
+            || lower.hasPrefix("can you remember")
+            || lower.hasPrefix("remember when")
+            || lower == "remember" {
+            return
+        }
+
         let range = NSRange(text.startIndex..., in: text)
         if let regex = Self.saveRegex, let match = regex.firstMatch(in: text, range: range),
            let r = Range(match.range(at: 1), in: text) {
             let content = String(text[r]).trimmingCharacters(in: .whitespacesAndNewlines)
-            Task { try? await APIClient.shared.addMemory(content: content) }
+            guard !content.isEmpty else { return }
+            // Synchronous save — LocalStore.addMemory writes straight to disk on
+            // the main actor. This way the BrainService call that follows sees
+            // the memory in the same turn.
+            let mem = LocalStore.addMemory(content: content)
+            NSLog("[Spectra.memory] saved: [\(mem.id)] \(content)")
             return
         }
         if let regex = Self.forgetRegex, let match = regex.firstMatch(in: text, range: range),
            let r = Range(match.range(at: 1), in: text) {
             let content = String(text[r]).trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            Task {
-                if let mems = try? await APIClient.shared.getMemories(),
-                   let mem = mems.first(where: { $0.content.lowercased().contains(content) }) {
-                    try? await APIClient.shared.deleteMemory(id: mem.id)
-                }
+            guard !content.isEmpty else { return }
+            let mems = LocalStore.loadMemories()
+            if let mem = mems.first(where: { $0.content.lowercased().contains(content) }) {
+                LocalStore.deleteMemory(id: mem.id)
+                NSLog("[Spectra.memory] deleted [\(mem.id)]")
             }
         }
     }

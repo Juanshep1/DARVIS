@@ -40,11 +40,14 @@ enum LocalStore {
     // MARK: - Memory
 
     static func loadMemories() -> [Memory] {
-        return readJSON("memory", as: [Memory].self) ?? []
+        let memories = readJSON("memory", as: [Memory].self) ?? []
+        NSLog("[LocalStore.memory] load → \(memories.count) entries from \(url(for: "memory").path)")
+        return memories
     }
 
     static func saveMemories(_ m: [Memory]) {
         writeJSON("memory", m)
+        NSLog("[LocalStore.memory] wrote \(m.count) entries to \(url(for: "memory").path)")
     }
 
     static func addMemory(content: String, category: String = "general") -> Memory {

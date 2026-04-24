@@ -2,6 +2,7 @@ import Foundation
 import AVFoundation
 import UIKit
 import SwiftUI
+import CoreImage
 
 class CameraService: NSObject, ObservableObject {
     @Published var isActive = false
@@ -9,7 +10,13 @@ class CameraService: NSObject, ObservableObject {
     let captureSession = AVCaptureSession()
     private let sessionQueue = DispatchQueue(label: "com.spectra.camera")
     private var photoOutput = AVCapturePhotoOutput()
-    private var lastImage: UIImage?
+
+    // Keep the raw CIImage — UIImage(ciImage:) has no cgImage backing, so
+    // jpegData(compressionQuality:) returns nil. Render through CIContext
+    // in captureFrame() instead.
+    private let ciContext = CIContext(options: [.useSoftwareRenderer: false])
+    private let frameLock = NSLock()
+    private var lastCIImage: CIImage?
 
     func start() {
         guard !isActive else { return }
@@ -74,26 +81,33 @@ class CameraService: NSObject, ObservableObject {
             for input in self.captureSession.inputs { self.captureSession.removeInput(input) }
             for output in self.captureSession.outputs { self.captureSession.removeOutput(output) }
         }
-        DispatchQueue.main.async {
-            self.isActive = false
-            self.lastImage = nil
-        }
+        DispatchQueue.main.async { self.isActive = false }
+        frameLock.lock(); lastCIImage = nil; frameLock.unlock()
     }
 
     /// Capture current frame as base64 JPEG for vision API
     func captureFrame() -> String? {
-        guard let image = lastImage else { return nil }
-        guard let data = image.jpegData(compressionQuality: 0.8) else { return nil }
-        return data.base64EncodedString()
+        frameLock.lock()
+        let ciImage = lastCIImage
+        frameLock.unlock()
+        guard let ciImage = ciImage else { return nil }
+        let colorSpace = ciImage.colorSpace ?? CGColorSpaceCreateDeviceRGB()
+        guard let jpeg = ciContext.jpegRepresentation(of: ciImage,
+                                                      colorSpace: colorSpace,
+                                                      options: [kCGImageDestinationLossyCompressionQuality as CIImageRepresentationOption: 0.8]) else {
+            return nil
+        }
+        return jpeg.base64EncodedString()
     }
 }
 
 extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
-        // Only grab every ~10th frame for the capture buffer (not for preview — preview layer handles that)
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
         let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
-        lastImage = UIImage(ciImage: ciImage)
+        frameLock.lock()
+        lastCIImage = ciImage
+        frameLock.unlock()
     }
 }
 

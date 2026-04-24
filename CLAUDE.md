@@ -44,12 +44,9 @@ S.P.E.C.T.R.A. (Smart Personal Executive for Cognitive Tasks & Real-time Assista
 - Agent pending goal: `/api/agent/goal`
 
 ## How to deploy after making changes
-After editing files, always deploy to Netlify:
-```bash
-cd site && netlify deploy --prod --dir=public --functions=netlify/functions
-```
+The browser app (`site/public/`) is deployed via **GitHub Pages** — a push
+to `main` is the deploy. Do NOT run `netlify deploy`.
 
-## How to commit and push
 ```bash
 git add -A && git commit -m "description of changes" && git push origin main
 ```
@@ -58,9 +55,8 @@ git add -A && git commit -m "description of changes" && git push origin main
 When the user asks you to fix or change something:
 1. Make the code changes
 2. Test if possible (curl the API, run python syntax checks)
-3. Deploy to Netlify if you changed anything in `site/`
-4. Commit and push to GitHub
-5. Tell the user what you did
+3. Commit and push to `main` — that's the GitHub Pages deploy
+4. Tell the user what you did
 
 ## Environment variables (set in Netlify dashboard)
 - `OLLAMA_API_KEY` — Ollama Cloud

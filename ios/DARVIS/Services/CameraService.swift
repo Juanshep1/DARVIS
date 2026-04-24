@@ -90,13 +90,20 @@ class CameraService: NSObject, ObservableObject {
         frameLock.lock()
         let ciImage = lastCIImage
         frameLock.unlock()
-        guard let ciImage = ciImage else { return nil }
-        let colorSpace = ciImage.colorSpace ?? CGColorSpaceCreateDeviceRGB()
-        guard let jpeg = ciContext.jpegRepresentation(of: ciImage,
-                                                      colorSpace: colorSpace,
-                                                      options: [kCGImageDestinationLossyCompressionQuality as CIImageRepresentationOption: 0.8]) else {
+        guard let ciImage = ciImage else {
+            NSLog("[CameraService] captureFrame: no frame yet")
             return nil
         }
+        // Always render to sRGB — the source pixel buffer is usually
+        // YCbCr, and jpegRepresentation returns nil for non-RGB spaces.
+        let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
+        guard let jpeg = ciContext.jpegRepresentation(of: ciImage,
+                                                      colorSpace: colorSpace,
+                                                      options: [:]) else {
+            NSLog("[CameraService] jpegRepresentation nil (extent: \(ciImage.extent))")
+            return nil
+        }
+        NSLog("[CameraService] captured frame: \(jpeg.count) bytes")
         return jpeg.base64EncodedString()
     }
 }

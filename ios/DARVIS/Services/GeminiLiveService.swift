@@ -144,6 +144,20 @@ class GeminiLiveService: ObservableObject {
         }
     }
 
+    /// Push a JPEG frame to Gemini Live via realtimeInput so the model has
+    /// live video context when the user asks "what do you see?".
+    func sendImage(jpegBase64: String) {
+        guard let ws = webSocket else { return }
+        let msg: [String: Any] = [
+            "realtimeInput": [
+                "mediaChunks": [["data": jpegBase64, "mimeType": "image/jpeg"]]
+            ]
+        ]
+        if let data = try? JSONSerialization.data(withJSONObject: msg) {
+            ws.send(.data(data)) { _ in }
+        }
+    }
+
     func disconnect() {
         webSocket?.cancel(with: .normalClosure, reason: nil)
         webSocket = nil

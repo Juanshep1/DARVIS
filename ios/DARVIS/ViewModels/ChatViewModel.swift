@@ -30,6 +30,7 @@ class ChatViewModel: ObservableObject {
     private let silenceDelay: TimeInterval = 2.0  // Auto-send 2s after user stops speaking
     private var lastTranscript = ""
     private var stableCount = 0  // How many times the same transcript was seen
+    private var geminiVideoTimer: Timer?  // Pushes camera frames to Gemini Live
 
     // Cached regex
     private static let saveRegex = try? NSRegularExpression(pattern: "(?:remember|don'?t forget|save|note|memorize)\\s+(?:that\\s+)?(.+)", options: .caseInsensitive)
@@ -474,6 +475,7 @@ class ChatViewModel: ObservableObject {
                     self.geminiLive.sendAudio(pcmBase64: b64)
                 }
                 audioService.startCapture()
+                startGeminiVideoTimer()
             }
         } else {
             startSpeechRecognition()
@@ -484,6 +486,7 @@ class ChatViewModel: ObservableObject {
         isRecording = false
         if audioMode == "gemini" {
             audioService.stopCapture()
+            stopGeminiVideoTimer()
         } else {
             stopSpeechRecognition()
             let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -605,18 +608,46 @@ class ChatViewModel: ObservableObject {
         if cameraActive {
             cameraService.stop()
             cameraActive = false
+            stopGeminiVideoTimer()
         } else {
             if isRecording && audioMode != "gemini" { stopSpeechRecognition(); isRecording = false; orbState = .idle }
             cameraService.start()
             Task {
                 for _ in 0..<20 {
                     try? await Task.sleep(nanoseconds: 100_000_000)
-                    if cameraService.isActive { cameraActive = true; return }
+                    if cameraService.isActive {
+                        cameraActive = true
+                        startGeminiVideoTimer()
+                        return
+                    }
                 }
                 cameraActive = cameraService.isActive
-                if !cameraActive { statusMessage = "Camera failed" }
+                if cameraActive { startGeminiVideoTimer() }
+                else { statusMessage = "Camera failed" }
             }
         }
+    }
+
+    // Stream camera frames to Gemini Live while both the camera and a voice
+    // session are active. Gemini Live's native-audio model otherwise can't
+    // answer "what do you see?" because no image ever reaches it.
+    private func startGeminiVideoTimer() {
+        guard audioMode == "gemini", cameraActive, isRecording else { return }
+        stopGeminiVideoTimer()
+        geminiVideoTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                guard let self = self else { return }
+                guard self.cameraActive, self.geminiLive.isConnected else { return }
+                if let frame = self.cameraService.captureFrame() {
+                    self.geminiLive.sendImage(jpegBase64: frame)
+                }
+            }
+        }
+    }
+
+    private func stopGeminiVideoTimer() {
+        geminiVideoTimer?.invalidate()
+        geminiVideoTimer = nil
     }
 
     func analyzeCamera(prompt: String) {

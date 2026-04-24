@@ -8,26 +8,38 @@ class AudioService: NSObject, ObservableObject {
     private var pcmPlayerNode: AVAudioPlayerNode?
     private var playbackEngine: AVAudioEngine?
     private var pcmFormat: AVAudioFormat?
-    private var sessionReady = false
+
+    // Tracks scheduled-but-not-yet-finished PCM buffers so callers can gate
+    // mic capture while Gemini is still speaking (prevents self-interruption
+    // when the loudspeaker leaks into the mic).
+    private let bufferLock = NSLock()
+    private var _pendingBuffers = 0
 
     @Published var isCapturing = false
 
     var onPCMChunk: ((String) -> Void)? // base64 PCM chunk callback
 
-    // MARK: - Audio Session (call once, not per chunk)
+    // MARK: - Audio Session
 
-    func setupSession() {
-        guard !sessionReady else { return }
+    // Voice-chat mode enables hardware echo cancellation + AGC so the mic
+    // doesn't re-capture speaker output. Default mode is used for one-off
+    // TTS playback where the mic is idle.
+    func setupSession(forVoiceChat: Bool) {
         let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetoothA2DP])
-        try? session.setActive(true)
-        sessionReady = true
+        do {
+            try session.setCategory(.playAndRecord,
+                                    mode: forVoiceChat ? .voiceChat : .default,
+                                    options: [.defaultToSpeaker, .allowBluetoothA2DP])
+            try session.setActive(true)
+        } catch {
+            NSLog("[AudioService] session setup error: \(error)")
+        }
     }
 
     // MARK: - Mic Capture (16kHz Int16 PCM → base64)
 
     func startCapture() {
-        setupSession()
+        setupSession(forVoiceChat: true)
         audioEngine = AVAudioEngine()
         guard let engine = audioEngine else { return }
 
@@ -70,7 +82,7 @@ class AudioService: NSObject, ObservableObject {
     // MARK: - Play MP3 (ElevenLabs TTS)
 
     func playMP3(_ data: Data) {
-        setupSession()
+        setupSession(forVoiceChat: false)
         audioPlayer = try? AVAudioPlayer(data: data)
         audioPlayer?.play()
     }
@@ -91,7 +103,7 @@ class AudioService: NSObject, ObservableObject {
 
         // Create engine once, reuse for all chunks
         if playbackEngine == nil {
-            setupSession()
+            setupSession(forVoiceChat: true)
             pcmFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: sampleRate, channels: 1, interleaved: false)!
             playbackEngine = AVAudioEngine()
             pcmPlayerNode = AVAudioPlayerNode()
@@ -113,8 +125,23 @@ class AudioService: NSObject, ObservableObject {
             }
         }
 
-        // Schedule buffer (queues automatically for gapless playback)
-        pcmPlayerNode?.scheduleBuffer(buffer)
+        incrementPendingBuffers()
+        pcmPlayerNode?.scheduleBuffer(buffer) { [weak self] in
+            self?.decrementPendingBuffers()
+        }
+    }
+
+    var isPlayingPCM: Bool {
+        bufferLock.lock(); defer { bufferLock.unlock() }
+        return _pendingBuffers > 0
+    }
+
+    private func incrementPendingBuffers() {
+        bufferLock.lock(); _pendingBuffers += 1; bufferLock.unlock()
+    }
+
+    private func decrementPendingBuffers() {
+        bufferLock.lock(); _pendingBuffers = max(0, _pendingBuffers - 1); bufferLock.unlock()
     }
 
     func stopPCM() {
@@ -123,6 +150,7 @@ class AudioService: NSObject, ObservableObject {
         playbackEngine = nil
         pcmPlayerNode = nil
         pcmFormat = nil
+        bufferLock.lock(); _pendingBuffers = 0; bufferLock.unlock()
     }
 
     func stopAll() {

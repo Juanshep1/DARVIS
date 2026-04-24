@@ -465,8 +465,13 @@ class ChatViewModel: ObservableObject {
                         return
                     }
                 }
+                // Gate: don't forward mic audio to Gemini while it's still
+                // playing back TTS — otherwise the loudspeaker leaks into
+                // the mic and Gemini interrupts its own speech.
                 audioService.onPCMChunk = { [weak self] b64 in
-                    self?.geminiLive.sendAudio(pcmBase64: b64)
+                    guard let self = self else { return }
+                    if self.audioService.isPlayingPCM { return }
+                    self.geminiLive.sendAudio(pcmBase64: b64)
                 }
                 audioService.startCapture()
             }

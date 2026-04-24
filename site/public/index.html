@@ -1432,6 +1432,11 @@ async function startGeminiMic() {
         processor.onaudioprocess = (e) => {
             if (!geminiWs || geminiWs.readyState !== WebSocket.OPEN) return;
 
+            // Mic gate: skip uploading while Gemini is still speaking,
+            // otherwise the loudspeaker leaks back into the mic and
+            // Gemini's VAD interrupts its own voice.
+            if (geminiPlaying) return;
+
             const inputData = e.inputBuffer.getChannelData(0);
 
             // Resample from native rate to 16kHz
